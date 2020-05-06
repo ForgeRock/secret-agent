@@ -1,0 +1,76 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: secrets-config
+  namespace: default
+  labels:
+    app: secret-agent
+data:
+  secretsConfig.yaml: |
+    ---
+    config:
+      createKubernetesObjects: false
+      secretsManager: none  # none, AWS, or GCP
+      # gcpProjectID: example-projectID
+      # awsRegion: example-region
+    secrets:
+    - name: am-boot
+      namespace: fr-platform
+      keys:
+      - name: .keypass
+        type: jceks
+      - name: .storepass
+        type: jceks
+      - name: authorized_keys
+        type: publicKeySSH
+        privateKeyPath: ["amster", "id_rsa"]
+    - name: am-runtime
+      namespace: fr-platform
+      keys:
+      - name: username
+        type: literal
+        value: amadmin
+      - name: keypass
+        type: password
+        length: 16
+    - name: amster
+      namespace: fr-platform
+      keys:
+      - name: id_rsa
+        type: privateKey
+      - name: authorized_keys
+        type: publicKeySSH
+        privateKeyPath: ["amster", "id_rsa"]
+    - name: ds
+      namespace: fr-platform
+      keys:
+      - name: keystore
+        type: pkcs12  # jks, jceks
+        storePassPath: ["ds", "keystore.pin"]
+        keyPassPath: ["ds", "keystore.pin"]
+        keystoreAliases:
+        - alias: deployment-ca
+          type: ca
+          algorithm: ECDSAWithSHA256
+          commonName: ForgeRock.com
+        - alias: ssl-key-pair
+          type: keyPair  # hmacKey, aesKey
+          algorithm: ECDSAWithSHA256
+          commonName: ds
+          sans:
+          - "*.ds"
+          - "*.ds-idrepo"
+          - "*.ds-cts"
+          signedWithPath: ["ds", "keystore", "deployment-ca"]
+        - alias: master-key
+          type: keyPair
+          algorithm: SHA256withRSA
+          commonName: master-key
+      - name: keystore.pin
+        type: password
+        length: 32
+      - name: deployment-ca.pin
+        type: password
+        length: 24
+
