@@ -1,3 +1,4 @@
+# For building gcr.io/forgerock-io/secret-agent:latest
 FROM gcr.io/forgerock-io/ds-empty/pit1:latest AS ds
 
 FROM golang:1.13.10-alpine3.11 AS build
