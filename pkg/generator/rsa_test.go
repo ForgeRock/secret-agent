@@ -16,7 +16,7 @@ func TestGenerateRSAPublicKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
-	_, err = generatePublicKey(privateKey)
+	_, err = generateRSAPublicKey(privateKey)
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
 	}

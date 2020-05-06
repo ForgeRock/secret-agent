@@ -88,7 +88,6 @@ func Generate(node *types.Node) error {
 		switch length := len(node.Path); length {
 		case 2:
 			// compiled keystore
-			// TODO ensure all aliases are children in dependency tree, might have missed this, it's an easy fix
 
 			// get value for each alias
 			// run keytool, passing args
@@ -97,6 +96,8 @@ func Generate(node *types.Node) error {
 			switch node.AliasConfig.Type {
 			case types.TypeCA:
 				// opendj/bin/dskeymgr create-deployment-key -f /opt/gen/secrets/generic/ds-deployment-key/deploymentkey.key -w secretValue
+				// TODO placeholder
+				node.Value = []byte("temp-placeholder")
 			case types.TypeKeyPair:
 				// dskey_wrapper create-tls-key-pair -a ssl-key-pair -h openam -s CN=am
 				// opendj/bin/dskeymgr create-tls-key-pair -k secretvalue -w secretvalue -K secrets/generic/am-https/keystore.p12 -W secretvalue -a ssl-key-pair -h openam -s CN=am
@@ -106,10 +107,14 @@ func Generate(node *types.Node) error {
 					return err
 				}
 				node.Value = contents
+				// TODO placeholder
+				node.Value = []byte("temp-placeholder")
 			case types.TypeHmacKey:
-				// TODO
+				// TODO placeholder
+				node.Value = []byte("temp-placeholder")
 			case types.TypeAESKey:
-				// TODO
+				// TODO placeholder
+				node.Value = []byte("temp-placeholder")
 			default:
 				return errors.WithStack(fmt.Errorf("Unexpected aliasConfig.Type: '%v', in %v", node.AliasConfig.Type, node.Path))
 			}

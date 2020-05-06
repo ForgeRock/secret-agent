@@ -149,20 +149,20 @@ func GetExpectedNodesConfiguration1() ([]*types.Node, *types.Configuration) {
 	amsterAuthorizedKeys.Children = nil
 	nodes = append(nodes, amsterAuthorizedKeys)
 	// dsKeystore
-	dsKeystore.Parents = []*types.Node{dsKeystorePin, dsKeystorePin}
+	dsKeystore.Parents = []*types.Node{dsKeystoreDeploymentCa, dsKeystoreMasterKey, dsKeystoreSslKeyPair, dsKeystorePin, dsKeystorePin}
 	dsKeystore.Children = nil
 	nodes = append(nodes, dsKeystore)
 	// dsKeystoreDeploymentCa
 	dsKeystoreDeploymentCa.Parents = nil
-	dsKeystoreDeploymentCa.Children = []*types.Node{dsKeystoreSslKeyPair}
+	dsKeystoreDeploymentCa.Children = []*types.Node{dsKeystore, dsKeystoreSslKeyPair}
 	nodes = append(nodes, dsKeystoreDeploymentCa)
 	// dsKeystoreMasterKey
 	dsKeystoreMasterKey.Parents = []*types.Node{dsKeystoreSslKeyPair}
-	dsKeystoreMasterKey.Children = nil
+	dsKeystoreMasterKey.Children = []*types.Node{dsKeystore}
 	nodes = append(nodes, dsKeystoreMasterKey)
 	// dsKeystoreSslKeyPair
 	dsKeystoreSslKeyPair.Parents = []*types.Node{dsKeystoreDeploymentCa}
-	dsKeystoreSslKeyPair.Children = []*types.Node{dsKeystoreMasterKey}
+	dsKeystoreSslKeyPair.Children = []*types.Node{dsKeystore, dsKeystoreMasterKey}
 	nodes = append(nodes, dsKeystoreSslKeyPair)
 	// dsKeystorePin
 	dsKeystorePin.Parents = nil

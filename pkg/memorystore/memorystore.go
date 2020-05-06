@@ -80,8 +80,25 @@ func addParentsAndChildren(parent, path []string, secretConfig *types.SecretConf
 					if Equal(node.Path, path) {
 						node.Parents = append(node.Parents, parentNode)
 						parentNode.Children = append(parentNode.Children, node)
+						break
 					}
 				}
+			}
+		}
+	}
+	// all aliases should be parents of the relevant secret key
+	for _, node := range nodes {
+		if node.KeyConfig.Type == types.TypePKCS12 && len(node.Path) == 2 {
+		aliasConfigs:
+			for _, aConfig := range node.KeyConfig.AliasConfigs {
+				// make sure it doesn't already exist
+				for _, parentNode := range node.Parents {
+					if Equal(parentNode.Path, aConfig.Node.Path) {
+						continue aliasConfigs
+					}
+				}
+				node.Parents = append(node.Parents, aConfig.Node)
+				aConfig.Node.Children = append(aConfig.Node.Children, node)
 			}
 		}
 	}
