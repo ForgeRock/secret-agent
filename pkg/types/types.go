@@ -70,6 +70,7 @@ type AliasConfig struct {
 	CommonName     string   `yaml:"commonName" validate:"required"`
 	Sans           []string `yaml:"sans"`
 	SignedWithPath []string `yaml:"signedWithPath"`
+	PasswordPath   []string `yaml:"passwordPath" validate:"required"`
 	Node           *Node
 }
 
@@ -130,7 +131,7 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 				for _, s := range config.Secrets {
 					if s.Name == key.PrivateKeyPath[0] {
 						for _, k := range s.Keys {
-							if k.Type == "privateKey" && k.Name == key.PrivateKeyPath[1] {
+							if k.Type == TypePrivateKey && k.Name == key.PrivateKeyPath[1] {
 								found = true
 								break privateKey
 							}
@@ -139,6 +140,47 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 				}
 				if !found {
 					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].PrivateKeyPath, name, "PrivateKeyPath", "privateKeyPathNotFound", "")
+				}
+			// if type pkcs12, must have keystoreAliases
+			case TypePKCS12:
+				name := fmt.Sprintf("Secrets.%s.%s",
+					config.Secrets[secretIndex].Name,
+					config.Secrets[secretIndex].Keys[keyIndex].Name,
+				)
+				if len(key.AliasConfigs) == 0 {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs, name, "AliasConfigs", "keystoreAliasesNotSet", "")
+					return
+				}
+				for aliasIndex, alias := range key.AliasConfigs {
+					switch alias.Type {
+					// if type CA, must have passwordPath
+					case TypeCA:
+						name := fmt.Sprintf("Secrets.%s.%s.%s",
+							config.Secrets[secretIndex].Name,
+							config.Secrets[secretIndex].Keys[keyIndex].Name,
+							config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].Alias,
+						)
+						if len(alias.PasswordPath) == 0 {
+							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].Alias, name, "CA", "passwordPathNotSet", "")
+							return
+						}
+						found := false
+					password:
+						for _, s := range config.Secrets {
+							if s.Name == alias.PasswordPath[0] {
+								for _, k := range s.Keys {
+									if k.Type == TypePassword && k.Name == alias.PasswordPath[1] {
+										found = true
+										break password
+									}
+								}
+							}
+						}
+						if !found {
+							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].Alias, name, "CA", "passwordPathNotFound", "")
+							return
+						}
+					}
 				}
 			}
 		}
