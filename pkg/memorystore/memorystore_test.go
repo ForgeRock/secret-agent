@@ -17,11 +17,11 @@ func TestGetDependencyNodes(t *testing.T) {
 	if !reflect.DeepEqual(nodes, expectedNodes) {
 		expectedN := ""
 		for _, s := range expectedNodes {
-			expectedN = fmt.Sprintf("%v\n%v", expectedN, s)
+			expectedN = fmt.Sprintf("%v\n%p: %v", expectedN, s, s)
 		}
 		gotN := ""
 		for _, s := range nodes {
-			gotN = fmt.Sprintf("%v\n%v", gotN, s)
+			gotN = fmt.Sprintf("%v\n%p: %v", gotN, s, s)
 		}
 		t.Errorf("Expected \n%s, got \n%s", expectedN, gotN)
 	}
@@ -34,11 +34,11 @@ func TestGetDependencyNodes(t *testing.T) {
 	if !reflect.DeepEqual(nodes, expectedNodes) {
 		expectedN := ""
 		for _, s := range expectedNodes {
-			expectedN = fmt.Sprintf("%v\n%v", expectedN, s)
+			expectedN = fmt.Sprintf("%v\n%p: %v", expectedN, s, s)
 		}
 		gotN := ""
 		for _, s := range nodes {
-			gotN = fmt.Sprintf("%v\n%v", gotN, s)
+			gotN = fmt.Sprintf("%v\n%p: %v", gotN, s, s)
 		}
 		t.Errorf("Expected \n%s, got \n%s", expectedN, gotN)
 	}

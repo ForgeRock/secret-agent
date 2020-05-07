@@ -35,6 +35,8 @@ func rangeOverSecrets(secretsConfig []*types.SecretConfig, nodes []*types.Node, 
 			for _, aliasConfig := range keyConfig.AliasConfigs {
 				// key alias signedWithPath
 				nodes = fn(aliasConfig.SignedWithPath, []string{secretConfig.Name, keyConfig.Name, aliasConfig.Alias}, secretConfig, keyConfig, aliasConfig, nodes)
+				// key passwordPath
+				nodes = fn(aliasConfig.PasswordPath, []string{secretConfig.Name, keyConfig.Name, aliasConfig.Alias}, secretConfig, keyConfig, aliasConfig, nodes)
 			}
 		}
 	}
@@ -75,9 +77,16 @@ func addParentsAndChildren(parent, path []string, secretConfig *types.SecretConf
 		// find the parent node(s) of the path
 		for _, parentNode := range nodes {
 			if Equal(parentNode.Path, parent) {
+			parentNodes:
 				// find the node of the path
 				for _, node := range nodes {
 					if Equal(node.Path, path) {
+						// make sure it doesn't already exist
+						for _, n := range node.Parents {
+							if Equal(n.Path, parentNode.Path) {
+								continue parentNodes
+							}
+						}
 						node.Parents = append(node.Parents, parentNode)
 						parentNode.Children = append(parentNode.Children, node)
 						break
