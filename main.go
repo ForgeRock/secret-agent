@@ -6,13 +6,13 @@ import (
 	"io/ioutil"
 	"log"
 
-	"github.com/go-playground/validator/v10"
-	"gopkg.in/yaml.v2"
 	"github.com/ForgeRock/secret-agent/pkg/generator"
 	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
 	"github.com/ForgeRock/secret-agent/pkg/memorystore"
 	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
 	"github.com/ForgeRock/secret-agent/pkg/types"
+	"github.com/go-playground/validator/v10"
+	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -46,6 +46,13 @@ func main() {
 	}
 
 	nodes := memorystore.GetDependencyNodes(config)
+	err = memorystore.EnsureAcyclic(nodes)
+	if err != nil {
+		log.Fatalf("%+v", err)
+	}
+	// EnsureAcyclic works by removing leaf nodes from the set of nodes, so we need to regenerate the set
+	//   copy(src, dst) is not good enough, because the nodes get modified along the way
+	nodes = memorystore.GetDependencyNodes(config)
 
 	if config.AppConfig.SecretsManager != types.SecretsManagerNone {
 		ctx := context.Background()
