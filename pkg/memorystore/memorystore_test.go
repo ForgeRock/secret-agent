@@ -6,7 +6,37 @@ import (
 	"testing"
 
 	"github.com/ForgeRock/secret-agent/pkg/memorystore/test"
+	"github.com/ForgeRock/secret-agent/pkg/types"
 )
+
+func TestEnsureAcyclic(t *testing.T) {
+	nodes, _ := memorystore_test.GetExpectedNodesConfiguration2()
+	err := EnsureAcyclic(nodes)
+	if err != nil {
+		t.Errorf("Expected no error, got \n%s", err)
+	}
+
+	// create circular dependency
+	nodes, _ = memorystore_test.GetExpectedNodesConfiguration2()
+	// find the secretAkeyA node
+	secretAkeyA := &types.Node{}
+	for _, node := range nodes {
+		if Equal(node.Path, []string{"SecretA", "KeyA"}) {
+			secretAkeyA = node
+		}
+	}
+	// find the secretCkeyCalias1 node and make it depend on secretAkeyA
+	//   secretAkeyA already depends on secretCkeyCalias1 through secretBkeyB
+	for _, node := range nodes {
+		if Equal(node.Path, []string{"SecretC", "KeyC", "Alias1"}) {
+			node.Parents = append(node.Parents, secretAkeyA)
+		}
+	}
+	err = EnsureAcyclic(nodes)
+	if err == nil {
+		t.Error("Expected error, got none")
+	}
+}
 
 func TestGetDependencyNodes(t *testing.T) {
 	// setup

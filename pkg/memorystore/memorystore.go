@@ -2,10 +2,52 @@ package memorystore
 
 import (
 	"github.com/ForgeRock/secret-agent/pkg/types"
+	"github.com/pkg/errors"
 )
 
-// TODO EnsureAcyclic ensures the defined dependencies are acycilic,
+// EnsureAcyclic ensures the defined dependencies are acycilic,
 //   meaning there are no cirular dependencies
+func EnsureAcyclic(nodes []*types.Node) error {
+	// has no nodes, is acyclic
+	if len(nodes) == 0 {
+		return nil
+	}
+
+	// has no leaf, is cyclic
+	//   a leaf is a node with no parents
+	foundCount := 0
+	for _, node := range nodes {
+		if len(node.Parents) == 0 {
+			foundCount++
+		}
+	}
+	if foundCount == 0 {
+		return errors.WithStack(errors.New("There are circular dependencies in the config, cannot generate"))
+	}
+
+	// remove a leaf
+	for index, node := range nodes {
+		if len(node.Parents) == 0 {
+			// remove node from nodes
+			nodes[index] = nodes[len(nodes)-1] // copy last node to index
+			nodes[len(nodes)-1] = nil          // set last node to nil
+			nodes = nodes[:len(nodes)-1]       // truncate
+			// remove node from all other nodes' list of parents
+			for _, n := range nodes {
+				for parentIndex, parentNode := range n.Parents {
+					if node == parentNode {
+						n.Parents[parentIndex] = n.Parents[len(n.Parents)-1]
+						n.Parents[len(n.Parents)-1] = nil
+						n.Parents = n.Parents[:len(n.Parents)-1]
+					}
+				}
+			}
+			break // break loop since nodes slice has changed
+		}
+	}
+
+	return EnsureAcyclic(nodes)
+}
 
 // GetDependencyNodes generates the dependency tree(s)
 func GetDependencyNodes(config *types.Configuration) []*types.Node {

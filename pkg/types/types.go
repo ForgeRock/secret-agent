@@ -70,7 +70,7 @@ type AliasConfig struct {
 	CommonName     string   `yaml:"commonName" validate:"required"`
 	Sans           []string `yaml:"sans"`
 	SignedWithPath []string `yaml:"signedWithPath"`
-	PasswordPath   []string `yaml:"passwordPath" validate:"required"`
+	PasswordPath   []string `yaml:"passwordPath"`
 	Node           *Node
 }
 
