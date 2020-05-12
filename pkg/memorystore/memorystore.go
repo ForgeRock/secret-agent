@@ -114,43 +114,87 @@ func createNode(parent, path []string, secretConfig *types.SecretConfig, keyConf
 }
 
 // addParentsAndChildren is a rangeFunc that sets the parents and children for dependency nodes
-func addParentsAndChildren(parent, path []string, secretConfig *types.SecretConfig, keyConfig *types.KeyConfig, aliasConfig *types.AliasConfig, nodes []*types.Node) []*types.Node {
-	if len(parent) > 0 {
+func addParentsAndChildren(parentPath, path []string, secretConfig *types.SecretConfig, keyConfig *types.KeyConfig, aliasConfig *types.AliasConfig, nodes []*types.Node) []*types.Node {
+	if len(parentPath) > 0 {
 		// find the parent node(s) of the path
+	parentNodes:
 		for _, parentNode := range nodes {
-			if Equal(parentNode.Path, parent) {
-			parentNodes:
-				// find the node of the path
-				for _, node := range nodes {
-					if Equal(node.Path, path) {
-						// make sure it doesn't already exist
-						for _, n := range node.Parents {
-							if Equal(n.Path, parentNode.Path) {
-								continue parentNodes
-							}
-						}
-						node.Parents = append(node.Parents, parentNode)
-						parentNode.Children = append(parentNode.Children, node)
-						break
+			if Equal(parentNode.Path, parentPath) {
+				node := &types.Node{}
+				if aliasConfig != nil {
+					node = aliasConfig.Node
+				} else {
+					node = keyConfig.Node
+				}
+				// make sure it doesn't already exist in parents
+				for _, n := range node.Parents {
+					if Equal(n.Path, parentNode.Path) {
+						continue parentNodes
 					}
 				}
+				// add the parents and children
+				node.Parents = append(node.Parents, parentNode)
+				parentNode.Children = append(parentNode.Children, node)
+				break
 			}
 		}
 	}
+
 	// all aliases should be parents of the relevant secret key
-	for _, node := range nodes {
-		if node.KeyConfig.Type == types.TypePKCS12 && len(node.Path) == 2 {
-		aliasConfigs:
-			for _, aConfig := range node.KeyConfig.AliasConfigs {
-				// make sure it doesn't already exist
-				for _, parentNode := range node.Parents {
-					if Equal(parentNode.Path, aConfig.Node.Path) {
-						continue aliasConfigs
-					}
-				}
-				node.Parents = append(node.Parents, aConfig.Node)
-				aConfig.Node.Children = append(aConfig.Node.Children, node)
+	if keyConfig.Type == types.TypePKCS12 && aliasConfig != nil {
+		// make sure it doesn't already exist
+		alreadyExists := false
+		for _, parentNode := range keyConfig.Node.Parents {
+			if Equal(parentNode.Path, aliasConfig.Node.Path) {
+				alreadyExists = true
 			}
+		}
+		if !alreadyExists {
+			// add the parents and children
+			keyConfig.Node.Parents = append(keyConfig.Node.Parents, aliasConfig.Node)
+			aliasConfig.Node.Children = append(aliasConfig.Node.Children, keyConfig.Node)
+		}
+	}
+
+	// storePassPath and keyPassPath should be parents of all aliases
+	if keyConfig.Type == types.TypePKCS12 && aliasConfig != nil {
+		// find keyPassPath node
+		keyPassNode := &types.Node{}
+		for _, n := range nodes {
+			if Equal(n.Path, keyConfig.KeyPassPath) {
+				keyPassNode = n
+				break
+			}
+		}
+		// make sure it doesn't already exist
+		alreadyExists := false
+		for _, parentNode := range aliasConfig.Node.Parents {
+			if Equal(parentNode.Path, keyPassNode.Path) {
+				alreadyExists = true
+			}
+		}
+		if !alreadyExists {
+			aliasConfig.Node.Parents = append(aliasConfig.Node.Parents, keyPassNode)
+			keyPassNode.Children = append(keyPassNode.Children, aliasConfig.Node)
+		}
+		// find storePassPath node
+		storePassNode := &types.Node{}
+		for _, n := range nodes {
+			if Equal(n.Path, keyConfig.StorePassPath) {
+				storePassNode = n
+				break
+			}
+		}
+		// make sure it doesn't already exist
+		alreadyExists = false
+		for _, parentNode := range aliasConfig.Node.Parents {
+			if Equal(parentNode.Path, storePassNode.Path) {
+				alreadyExists = true
+			}
+		}
+		if !alreadyExists {
+			aliasConfig.Node.Parents = append(aliasConfig.Node.Parents, storePassNode)
+			storePassNode.Children = append(storePassNode.Children, aliasConfig.Node)
 		}
 	}
 
