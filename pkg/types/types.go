@@ -66,8 +66,8 @@ type KeyConfig struct {
 type AliasConfig struct {
 	Alias          string   `yaml:"alias" validate:"required"`
 	Type           string   `yaml:"type" validate:"required,oneof=ca keyPair hmacKey aesKey"`
-	Algorithm      string   `yaml:"algorithm" validate:"required,oneof=ECDSAWithSHA256 SHA256withRSA"`
-	CommonName     string   `yaml:"commonName" validate:"required"`
+	Algorithm      string   `yaml:"algorithm" validate:"oneof='' ECDSAWithSHA256 SHA256withRSA"`
+	CommonName     string   `yaml:"commonName"`
 	Sans           []string `yaml:"sans"`
 	SignedWithPath []string `yaml:"signedWithPath"`
 	PasswordPath   []string `yaml:"passwordPath"`
@@ -106,13 +106,13 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 	for secretIndex, secret := range config.Secrets {
 		for keyIndex, key := range secret.Keys {
 			switch key.Type {
-			// if type literal, must have Value
 			case TypeLiteral:
+				// must have Value
 				if key.Value == "" {
 					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Value, "value", "Value", "literalValueEmpty", "")
 				}
-			// if type password, must have Length
 			case TypePassword:
+				// must have Length
 				if key.Length == 0 {
 					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Length, "length", "Length", "passwordLengthZero", "")
 				}
@@ -122,61 +122,60 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 					config.Secrets[secretIndex].Name,
 					config.Secrets[secretIndex].Keys[keyIndex].Name,
 				)
+				// must have privateKeyPath
 				if len(key.PrivateKeyPath) == 0 {
 					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].PrivateKeyPath, name, "PrivateKeyPath", "privateKeyPathNotSet", "")
 					return
 				}
-				found := false
-			privateKey:
-				for _, s := range config.Secrets {
-					if s.Name == key.PrivateKeyPath[0] {
-						for _, k := range s.Keys {
-							if k.Type == TypePrivateKey && k.Name == key.PrivateKeyPath[1] {
-								found = true
-								break privateKey
-							}
-						}
-					}
-				}
-				if !found {
+				// privateKeyPath must be valid
+				if !pathExistsInSecretConfigs(key.PrivateKeyPath, config.Secrets) {
 					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].PrivateKeyPath, name, "PrivateKeyPath", "privateKeyPathNotFound", "")
 				}
-			// if type pkcs12, must have keystoreAliases
 			case TypePKCS12:
 				name := fmt.Sprintf("Secrets.%s.%s",
 					config.Secrets[secretIndex].Name,
 					config.Secrets[secretIndex].Keys[keyIndex].Name,
 				)
+				// must have keystoreAliases
 				if len(key.AliasConfigs) == 0 {
 					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs, name, "AliasConfigs", "keystoreAliasesNotSet", "")
 					return
 				}
+				// must have keyPassPath
+				if len(key.KeyPassPath) == 0 {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].KeyPassPath, name, "KeyPassPath", "keyPassPathNotFound", "")
+					return
+				}
+				// keyPassPath must be valid
+				if !pathExistsInSecretConfigs(key.KeyPassPath, config.Secrets) {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].KeyPassPath, name, "KeyPassPath", "keyPassPathNotValid", "")
+					return
+				}
+				// must have storePassPath
+				if len(key.StorePassPath) == 0 {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].StorePassPath, name, "StorePassPath", "storePassPathNotFound", "")
+					return
+				}
+				// storePassPath must be valid
+				if !pathExistsInSecretConfigs(key.StorePassPath, config.Secrets) {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].KeyPassPath, name, "StorePassPath", "storePassPathNotValid", "")
+					return
+				}
 				for aliasIndex, alias := range key.AliasConfigs {
 					switch alias.Type {
-					// if type CA, must have passwordPath
 					case TypeCA:
 						name := fmt.Sprintf("Secrets.%s.%s.%s",
 							config.Secrets[secretIndex].Name,
 							config.Secrets[secretIndex].Keys[keyIndex].Name,
 							config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].Alias,
 						)
+						// must have passwordPath
 						if len(alias.PasswordPath) == 0 {
 							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].Alias, name, "CA", "passwordPathNotSet", "")
 							return
 						}
-						found := false
-					password:
-						for _, s := range config.Secrets {
-							if s.Name == alias.PasswordPath[0] {
-								for _, k := range s.Keys {
-									if k.Type == TypePassword && k.Name == alias.PasswordPath[1] {
-										found = true
-										break password
-									}
-								}
-							}
-						}
-						if !found {
+						// passwordPath must be valid
+						if !pathExistsInSecretConfigs(alias.PasswordPath, config.Secrets) {
 							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].Alias, name, "CA", "passwordPathNotFound", "")
 							return
 						}
@@ -185,4 +184,29 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 			}
 		}
 	}
+}
+
+func pathExistsInSecretConfigs(path []string, secrets []*SecretConfig) bool {
+	found := false
+path:
+	for _, secret := range secrets {
+		if secret.Name == path[0] {
+			for _, key := range secret.Keys {
+				if key.Name == path[1] {
+					if len(path) == 2 {
+						found = true
+						break path
+					}
+					for _, alias := range key.AliasConfigs {
+						if alias.Alias == path[2] {
+							found = true
+							break path
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return found
 }

@@ -3,6 +3,7 @@ package memorystore
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/ForgeRock/secret-agent/pkg/memorystore/test"
@@ -39,11 +40,10 @@ func TestEnsureAcyclic(t *testing.T) {
 }
 
 func TestGetDependencyNodes(t *testing.T) {
-	// setup
+	// configuration 1
 	expectedNodes, config := memorystore_test.GetExpectedNodesConfiguration1()
-
-	// test
-	nodes := GetDependencyNodes(config)
+	expectedNodes = sortParentsAndChildren(expectedNodes)
+	nodes := sortParentsAndChildren(GetDependencyNodes(config))
 	if !reflect.DeepEqual(nodes, expectedNodes) {
 		expectedN := ""
 		for _, s := range expectedNodes {
@@ -56,11 +56,10 @@ func TestGetDependencyNodes(t *testing.T) {
 		t.Errorf("Expected \n%s, got \n%s", expectedN, gotN)
 	}
 
-	// setup
+	// configuration 2
 	expectedNodes, config = memorystore_test.GetExpectedNodesConfiguration2()
-
-	// test
-	nodes = GetDependencyNodes(config)
+	expectedNodes = sortParentsAndChildren(expectedNodes)
+	nodes = sortParentsAndChildren(GetDependencyNodes(config))
 	if !reflect.DeepEqual(nodes, expectedNodes) {
 		expectedN := ""
 		for _, s := range expectedNodes {
@@ -92,4 +91,27 @@ func TestEqual(t *testing.T) {
 	if truthy {
 		t.Errorf("Expected false, got %t", truthy)
 	}
+}
+
+type nodeSorter []*types.Node
+
+func (nodes nodeSorter) Len() int {
+	return len(nodes)
+}
+
+func (nodes nodeSorter) Swap(i, j int) {
+	nodes[i], nodes[j] = nodes[j], nodes[i]
+}
+
+func (nodes nodeSorter) Less(i, j int) bool {
+	return fmt.Sprintf("%p", nodes[i]) < fmt.Sprintf("%p", nodes[j])
+}
+
+func sortParentsAndChildren(nodes []*types.Node) []*types.Node {
+	for _, node := range nodes {
+		sort.Sort(nodeSorter(node.Parents))
+		sort.Sort(nodeSorter(node.Children))
+	}
+
+	return nodes
 }

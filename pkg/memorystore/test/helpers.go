@@ -165,20 +165,20 @@ func GetExpectedNodesConfiguration1() ([]*types.Node, *types.Configuration) {
 	dsKeystore.Children = nil
 	nodes = append(nodes, dsKeystore)
 	// dsKeystoreDeploymentCa
-	dsKeystoreDeploymentCa.Parents = []*types.Node{dsDeploymentCAPin}
+	dsKeystoreDeploymentCa.Parents = []*types.Node{dsKeystorePin, dsDeploymentCAPin}
 	dsKeystoreDeploymentCa.Children = []*types.Node{dsKeystore, dsKeystoreSslKeyPair}
 	nodes = append(nodes, dsKeystoreDeploymentCa)
 	// dsKeystoreMasterKey
-	dsKeystoreMasterKey.Parents = []*types.Node{dsKeystoreSslKeyPair}
+	dsKeystoreMasterKey.Parents = []*types.Node{dsKeystorePin, dsKeystoreSslKeyPair}
 	dsKeystoreMasterKey.Children = []*types.Node{dsKeystore}
 	nodes = append(nodes, dsKeystoreMasterKey)
 	// dsKeystoreSslKeyPair
-	dsKeystoreSslKeyPair.Parents = []*types.Node{dsKeystoreDeploymentCa}
+	dsKeystoreSslKeyPair.Parents = []*types.Node{dsKeystorePin, dsKeystoreDeploymentCa}
 	dsKeystoreSslKeyPair.Children = []*types.Node{dsKeystore, dsKeystoreMasterKey}
 	nodes = append(nodes, dsKeystoreSslKeyPair)
 	// dsKeystorePin
 	dsKeystorePin.Parents = nil
-	dsKeystorePin.Children = []*types.Node{dsKeystore}
+	dsKeystorePin.Children = []*types.Node{dsKeystoreDeploymentCa, dsKeystoreMasterKey, dsKeystoreSslKeyPair, dsKeystore}
 	nodes = append(nodes, dsKeystorePin)
 	// dsDeploymentCAPin
 	dsDeploymentCAPin.Parents = nil
@@ -368,28 +368,28 @@ func GetExpectedNodesConfiguration2() ([]*types.Node, *types.Configuration) {
 	secretCkeyC.Children = nil
 	nodes = append(nodes, secretCkeyC)
 	// secretCkeyCalias1
-	secretCkeyCalias1.Parents = nil
-	secretCkeyCalias1.Children = []*types.Node{secretCkeyC, secretBkeyB, secretCkeyCalias2}
+	secretCkeyCalias1.Parents = []*types.Node{secretCkeyD, secretDkeyD}
+	secretCkeyCalias1.Children = []*types.Node{secretBkeyB, secretCkeyC, secretCkeyCalias2}
 	nodes = append(nodes, secretCkeyCalias1)
 	// secretCkeyCalias2
-	secretCkeyCalias2.Parents = []*types.Node{secretCkeyCalias1}
+	secretCkeyCalias2.Parents = []*types.Node{secretCkeyD, secretDkeyD, secretCkeyCalias1}
 	secretCkeyCalias2.Children = []*types.Node{secretCkeyC, secretCkeyCalias3}
 	nodes = append(nodes, secretCkeyCalias2)
 	// secretCkeyCalias3
-	secretCkeyCalias3.Parents = []*types.Node{secretCkeyCalias2}
+	secretCkeyCalias3.Parents = []*types.Node{secretCkeyD, secretDkeyD, secretCkeyCalias2}
 	secretCkeyCalias3.Children = []*types.Node{secretCkeyC}
 	nodes = append(nodes, secretCkeyCalias3)
 	// secretCkeyCalias4
-	secretCkeyCalias4.Parents = []*types.Node{secretCkeyD}
+	secretCkeyCalias4.Parents = []*types.Node{secretCkeyD, secretDkeyD}
 	secretCkeyCalias4.Children = []*types.Node{secretCkeyC}
 	nodes = append(nodes, secretCkeyCalias4)
 	// secretCkeyD
 	secretCkeyD.Parents = nil
-	secretCkeyD.Children = []*types.Node{secretCkeyC, secretCkeyCalias4}
+	secretCkeyD.Children = []*types.Node{secretCkeyCalias1, secretCkeyCalias2, secretCkeyCalias3, secretCkeyCalias4, secretCkeyC}
 	nodes = append(nodes, secretCkeyD)
 	// secretDkeyD
 	secretDkeyD.Parents = []*types.Node{secretEkeyE}
-	secretDkeyD.Children = []*types.Node{secretCkeyC}
+	secretDkeyD.Children = []*types.Node{secretCkeyCalias1, secretCkeyCalias2, secretCkeyCalias3, secretCkeyCalias4, secretCkeyC}
 	nodes = append(nodes, secretDkeyD)
 	// secretEkeyE
 	secretEkeyE.Parents = nil
