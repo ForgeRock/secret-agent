@@ -91,7 +91,7 @@ func TestConfigurationStructLevelValidatorPublicKeySSH(t *testing.T) {
 func TestConfigurationStructLevelValidatorPKCS12(t *testing.T) {
 	alias := &AliasConfig{
 		Alias:        "fdsaAlias",
-		Type:         TypeCA,
+		Type:         TypeDeploymentKey,
 		PasswordPath: []string{"asdfSecret", "fdsaPassword"},
 	}
 	passwordKey := &KeyConfig{
@@ -153,7 +153,7 @@ func TestConfigurationStructLevelValidatorPKCS12(t *testing.T) {
 func TestConfigurationStructLevelValidatorCA(t *testing.T) {
 	alias := &AliasConfig{
 		Alias: "fdsaAlias",
-		Type:  TypeCA,
+		Type:  TypeDeploymentKey,
 	}
 	passwordKey := &KeyConfig{
 		Name:   "fdsaPassword",

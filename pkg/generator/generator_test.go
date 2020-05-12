@@ -6,6 +6,7 @@ import (
 
 	"github.com/ForgeRock/secret-agent/pkg/memorystore/test"
 	"github.com/ForgeRock/secret-agent/pkg/types"
+	"github.com/pkg/errors"
 )
 
 func TestRecursivelyGenerateIfMissing(t *testing.T) {
@@ -16,7 +17,7 @@ func TestRecursivelyGenerateIfMissing(t *testing.T) {
 	for _, node := range nodes {
 		err := RecursivelyGenerateIfMissing(config, node)
 		if err != nil {
-			t.Errorf("Expected no error, got: %+v", err)
+			t.Fatalf("Expected no error, got: %+v", err)
 		}
 		for _, parentNode := range node.Parents {
 			if len(parentNode.Value) == 0 {
@@ -170,6 +171,36 @@ func TestGenerate_PrivateKey(t *testing.T) {
 	//   ensure there's only 2
 	if len(asdfPrivateKeyNode.Children) != 2 {
 		t.Errorf("Expected 2, got: %d", len(asdfPrivateKeyNode.Children))
+	}
+}
+
+func TestGetValueFromParent(t *testing.T) {
+	// parent not found
+	dsKeystore := &types.Node{
+		Path: []string{"ds", "keystore"},
+	}
+	_, err := getValueFromParent([]string{"ds", "keystore.pin"}, dsKeystore)
+	np := &noParentWithPathError{}
+	if !errors.As(err, &np) {
+		t.Errorf("Expected noParentWithPathError error, got: %T", errors.Cause(err))
+	}
+
+	// parent found, but empty
+	dsKeystorePin := &types.Node{
+		Path: []string{"ds", "keystore.pin"},
+	}
+	dsKeystore.Parents = []*types.Node{dsKeystorePin}
+	_, err = getValueFromParent([]string{"ds", "keystore.pin"}, dsKeystore)
+	ev := &emptyValueError{}
+	if !errors.As(err, &ev) {
+		t.Errorf("Expected emptyValueError error, got: %T", errors.Cause(err))
+	}
+
+	// no error
+	dsKeystorePin.Value = []byte("asdf")
+	_, err = getValueFromParent([]string{"ds", "keystore.pin"}, dsKeystore)
+	if err != nil {
+		t.Errorf("Expected no error, got: %+v", err)
 	}
 }
 

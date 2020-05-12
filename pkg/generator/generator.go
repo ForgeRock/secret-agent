@@ -3,7 +3,6 @@ package generator
 import (
 	"fmt"
 
-	"github.com/ForgeRock/secret-agent/pkg/keytool"
 	"github.com/ForgeRock/secret-agent/pkg/memorystore"
 	"github.com/ForgeRock/secret-agent/pkg/types"
 	"github.com/pkg/errors"
@@ -86,33 +85,58 @@ func Generate(node *types.Node) error {
 		// TODO
 	case types.TypePKCS12:
 		switch length := len(node.Path); length {
-		case 2:
-			// compiled keystore
-
+		case 2: // compiled keystore
 			// get value for each alias
 			// run keytool, passing args
-		case 3:
-			// individual aliases
+		case 3: // individual aliases
 			switch node.AliasConfig.Type {
-			case types.TypeCA:
-				// opendj/bin/dskeymgr create-deployment-key -f /opt/gen/secrets/generic/ds-deployment-key/deploymentkey.key -w secretValue
-				// TODO placeholder
-				node.Value = []byte("temp-placeholder")
-			case types.TypeKeyPair:
-				// dskey_wrapper create-tls-key-pair -a ssl-key-pair -h openam -s CN=am
-				// opendj/bin/dskeymgr create-tls-key-pair -k secretvalue -w secretvalue -K secrets/generic/am-https/keystore.p12 -W secretvalue -a ssl-key-pair -h openam -s CN=am
-				// export as x509 format using dskeymgr or keytool
-				contents, err := keytool.GenerateKeyPair(node)
+			case types.TypeDeploymentKey:
+				password, err := getValueFromParent(node.AliasConfig.PasswordPath, node)
+				if err != nil {
+					return err
+				}
+
+				value, err := GenerateDeploymentKey(password)
+				if err != nil {
+					return err
+				}
+				node.Value = value
+			case types.TypeTLSKeyPair:
+				// fetch the storepass password
+				storePassword, err := getValueFromParent(node.KeyConfig.StorePassPath, node)
+				if err != nil {
+					return err
+				}
+
+				// fetch the deployment key
+				deploymentKey, err := getValueFromParent(node.AliasConfig.SignedWithPath, node)
+				if err != nil {
+					return err
+				}
+
+				// fetch the deployment key password
+				deploymentKeyPassword := []byte{}
+				found := false
+				for _, parentNode := range node.Parents {
+					if memorystore.Equal(parentNode.Path, node.AliasConfig.SignedWithPath) {
+						deploymentKeyPassword, err = getValueFromParent(parentNode.AliasConfig.PasswordPath, parentNode)
+						if err != nil {
+							return err
+						}
+						found = true
+						break
+					}
+				}
+				if !found {
+					return errors.WithStack(fmt.Errorf("Deployment Key Password not found for: %v", node.Path))
+				}
+
+				contents, err := GenerateTLSKeyPair(storePassword, deploymentKey, deploymentKeyPassword, node.AliasConfig)
 				if err != nil {
 					return err
 				}
 				node.Value = contents
-				// TODO placeholder
-				node.Value = []byte("temp-placeholder")
-			case types.TypeHmacKey:
-				// TODO placeholder
-				node.Value = []byte("temp-placeholder")
-			case types.TypeAESKey:
+			case types.TypeMasterKeyPair:
 				// TODO placeholder
 				node.Value = []byte("temp-placeholder")
 			default:
@@ -124,4 +148,40 @@ func Generate(node *types.Node) error {
 	}
 
 	return nil
+}
+
+// noParentWithPathError allows for type checking in tests
+type noParentWithPathError []string
+
+func (path *noParentWithPathError) Error() string {
+	return fmt.Sprintf("No parent node found with path: %v", []string(*path))
+}
+
+// emptyValueError allows for type checking in tests
+type emptyValueError []string
+
+func (path *emptyValueError) Error() string {
+	return fmt.Sprintf("Expected value length to be non-zero for node: %v", []string(*path))
+}
+
+func getValueFromParent(path []string, node *types.Node) ([]byte, error) {
+	value := []byte{}
+	found := false
+	for _, parentNode := range node.Parents {
+		if memorystore.Equal(parentNode.Path, path) {
+			value = parentNode.Value
+			found = true
+			break
+		}
+	}
+	if !found {
+		err := noParentWithPathError(path)
+		return value, errors.WithStack(&err)
+	}
+	if len(value) == 0 {
+		err := emptyValueError(path)
+		return value, errors.WithStack(&err)
+	}
+
+	return value, nil
 }

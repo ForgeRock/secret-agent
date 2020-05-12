@@ -8,16 +8,15 @@ import (
 
 // Config Type Strings
 const (
-	TypeLiteral      = "literal"
-	TypePassword     = "password"
-	TypePrivateKey   = "privateKey"
-	TypePublicKeySSH = "publicKeySSH"
-	TypeJCEKS        = "jceks"
-	TypePKCS12       = "pkcs12"
-	TypeCA           = "ca"
-	TypeKeyPair      = "keyPair"
-	TypeHmacKey      = "hmacKey"
-	TypeAESKey       = "aesKey"
+	TypeLiteral       = "literal"
+	TypePassword      = "password"
+	TypePrivateKey    = "privateKey"
+	TypePublicKeySSH  = "publicKeySSH"
+	TypeJCEKS         = "jceks"
+	TypePKCS12        = "pkcs12"
+	TypeDeploymentKey = "deploymentKey"
+	TypeTLSKeyPair    = "tlsKeyPair"
+	TypeMasterKeyPair = "masterKeyPair"
 )
 
 // SecretsManager Strings
@@ -65,8 +64,7 @@ type KeyConfig struct {
 // AliasConfig is the configuration for a keystore alias
 type AliasConfig struct {
 	Alias          string   `yaml:"alias" validate:"required"`
-	Type           string   `yaml:"type" validate:"required,oneof=ca keyPair hmacKey aesKey"`
-	Algorithm      string   `yaml:"algorithm" validate:"oneof='' ECDSAWithSHA256 SHA256withRSA"`
+	Type           string   `yaml:"type" validate:"required,oneof=deploymentKey masterKeyPair tlsKeyPair"`
 	CommonName     string   `yaml:"commonName"`
 	Sans           []string `yaml:"sans"`
 	SignedWithPath []string `yaml:"signedWithPath"`
@@ -163,7 +161,7 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 				}
 				for aliasIndex, alias := range key.AliasConfigs {
 					switch alias.Type {
-					case TypeCA:
+					case TypeDeploymentKey:
 						name := fmt.Sprintf("Secrets.%s.%s.%s",
 							config.Secrets[secretIndex].Name,
 							config.Secrets[secretIndex].Keys[keyIndex].Name,
