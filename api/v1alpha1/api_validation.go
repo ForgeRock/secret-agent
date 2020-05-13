@@ -24,7 +24,7 @@ import (
 
 // ConfigurationStructLevelValidator ensures configuration is usable
 func ConfigurationStructLevelValidator(sl validator.StructLevel) {
-	config := sl.Current().Interface().(Configuration)
+	config := sl.Current().Interface().(SecretAgentConfigurationSpec)
 
 	// AppConfig
 	switch config.AppConfig.SecretsManager {

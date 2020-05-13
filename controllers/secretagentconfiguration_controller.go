@@ -18,7 +18,7 @@ package controllers
 
 import (
 	"context"
-	"reflect"
+	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,13 +31,10 @@ import (
 	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
 	"github.com/ForgeRock/secret-agent/pkg/memorystore"
 	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
-	secretagenttypes "github.com/ForgeRock/secret-agent/pkg/types" //TODO: Part of datatype workaround
 	"github.com/go-playground/validator/v10"
-	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 // SecretAgentConfigurationReconciler reconciles a SecretAgentConfiguration object
@@ -52,117 +49,93 @@ type SecretAgentConfigurationReconciler struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile function
-func (r *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	log := r.Log.WithValues("secretagentconfiguration", req.NamespacedName)
+	log := reconciler.Log.WithValues("secretagentconfiguration", req.NamespacedName)
 
 	// your logic here
 	var instance secretagentv1alpha1.SecretAgentConfiguration
-	if err := r.Get(ctx, req.NamespacedName, &instance); err != nil {
+	if err := reconciler.Get(ctx, req.NamespacedName, &instance); err != nil {
+
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
+			return ctrl.Result{}, nil
+		}
 		log.Error(err, "unable to fetch SecretAgentConfiguration")
-		// we'll ignore not-found errors, since they can't be fixed by an immediate
-		// requeue (we'll need to wait for a new notification), and we can get them
-		// on deleted requests.
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, err
 	}
 
 	//Old main.go
 
-	// TODO Datatype workaround
-	data, err := yaml.Marshal(instance.Spec)
-	config := &secretagenttypes.Configuration{}
-	err = yaml.Unmarshal(data, config)
-	//
-
 	//Namespace workaround: Populate the namespace field. Expected by downstream functions.
-	for index := range config.Secrets {
-		config.Secrets[index].Namespace = instance.Namespace
+	for index := range instance.Spec.Secrets {
+		instance.Spec.Secrets[index].Namespace = instance.Namespace
 	}
 
 	//TODO Change to validating webhook: https://book.kubebuilder.io/cronjob-tutorial/webhook-implementation.html
 	validate := validator.New()
-	validate.RegisterStructValidation(secretagentv1alpha1.ConfigurationStructLevelValidator, secretagentv1alpha1.Configuration{})
-	err = validate.Struct(config)
-	if err != nil {
+	validate.RegisterStructValidation(secretagentv1alpha1.ConfigurationStructLevelValidator, secretagentv1alpha1.SecretAgentConfigurationSpec{})
+
+	if err := validate.Struct(&instance.Spec); err != nil {
 		log.Error(err, "error validating configuration file: %+v")
+		return ctrl.Result{}, err
 	}
 
-	clientSet, err := k8ssecrets.GetClientSet()
-	if err != nil {
-		log.Error(err, "error getting Kubernetes ClientSet: %+v")
-	}
-
-	nodes := memorystore.GetDependencyNodes(config)
-	err = memorystore.EnsureAcyclic(nodes)
-	if err != nil {
+	nodes := memorystore.GetDependencyNodes(&instance.Spec)
+	if err := memorystore.EnsureAcyclic(nodes); err != nil {
 		log.Error(err, "%+v")
+		return ctrl.Result{}, err
 	}
 	// EnsureAcyclic works by removing leaf nodes from the set of nodes, so we need to regenerate the set
 	//   copy(src, dst) is not good enough, because the nodes get modified along the way
-	nodes = memorystore.GetDependencyNodes(config)
+	nodes = memorystore.GetDependencyNodes(&instance.Spec)
 
-	if config.AppConfig.SecretsManager != secretagenttypes.SecretsManagerNone {
-		err := secretsmanager.LoadExisting(ctx, config, nodes)
+	if instance.Spec.AppConfig.SecretsManager != secretagentv1alpha1.SecretsManagerNone {
+		err := secretsmanager.LoadExisting(ctx, &instance.Spec, nodes)
 		if err != nil {
 			log.Error(err, "error loading existing secrets from the Secrets Manager: %+v")
+			return ctrl.Result{}, err
 		}
 	}
 
-	err = k8ssecrets.LoadExisting(clientSet, config.Secrets)
-	if err != nil {
+	if err := k8ssecrets.LoadExisting(reconciler.Client, instance.Spec.Secrets); err != nil {
 		log.Error(err, "error loading existing secrets from the Kubernetes API: %+v")
+		return ctrl.Result{}, err
 	}
 
 	for _, node := range nodes {
-		err = generator.RecursivelyGenerateIfMissing(config, node)
-		if err != nil {
+		if err := generator.RecursivelyGenerateIfMissing(&instance.Spec, node); err != nil {
 			log.Error(err, "error generating secrets: %+v")
+			return ctrl.Result{}, err
 		}
 	}
 
-	if config.AppConfig.SecretsManager != secretagenttypes.SecretsManagerNone {
-		err = secretsmanager.EnsureSecrets(ctx, config, nodes)
-		if err != nil {
+	if instance.Spec.AppConfig.SecretsManager != secretagentv1alpha1.SecretsManagerNone {
+		if err := secretsmanager.EnsureSecrets(ctx, &instance.Spec, nodes); err != nil {
 			log.Error(err, "error ensuring secrets in the Secrets Manager: %+v")
+			return ctrl.Result{}, err
 		}
 	}
 
 	//end old main.go
 
-	k8sSecrets := k8ssecrets.GenerateSecretAPIObjects(config.Secrets)
+	k8sSecretList := k8ssecrets.GenerateSecretAPIObjects(instance.Spec.Secrets)
 
 	labelsForSecretAgent := func(name string) map[string]string {
 		return map[string]string{"managed-by-secret-agent": "true", "secret-agent-configuration-name": name}
 	}
 
 	if instance.Spec.AppConfig.CreateKubernetesObjects {
-		for _, secret := range k8sSecrets {
+		for _, secret := range k8sSecretList {
 			// Set SecretAgentConfiguration instance as the owner and controller of the secret
-			if err := ctrl.SetControllerReference(&instance, secret, r.Scheme); err != nil {
+			if err := ctrl.SetControllerReference(&instance, secret, reconciler.Scheme); err != nil {
 				return ctrl.Result{}, err
 			}
+			secret.Labels = labelsForSecretAgent(instance.Name)
+			k8ssecrets.ApplySecrets(reconciler.Client, []*corev1.Secret{secret})
 
-			found := &corev1.Secret{}
-			if err := r.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, found); err == nil { // The secret is there, we just need to update it
-				if !reflect.DeepEqual(secret.Data, found.Data) {
-					log.Info("Secret data has changed. Updating", "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
-					secret.Labels = labelsForSecretAgent(instance.Name) //Update secret labels
-
-					if err := r.Update(ctx, secret); err != nil {
-						return ctrl.Result{}, err
-					}
-				} else {
-					log.Info("Secret data is consistent. Doing nothing", "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
-				}
-			} else if err != nil && errors.IsNotFound(err) {
-				log.Info("Creating a new Secret", "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
-				secret.Labels = labelsForSecretAgent(instance.Name) //Update secret labels
-
-				if err := r.Create(ctx, secret); err != nil {
-					log.Error(err, "unable to create secret", "secret", secret)
-					return ctrl.Result{}, err
-				}
-			}
 		}
 	}
 
@@ -172,7 +145,7 @@ func (r *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.R
 		client.InNamespace(instance.Namespace),
 		client.MatchingLabels(labelsForSecretAgent(instance.Name)),
 	}
-	if err := r.List(ctx, secretList, listOpts...); err != nil {
+	if err := reconciler.List(ctx, secretList, listOpts...); err != nil {
 		log.Error(err, "Failed to list secrets", "Namespace", instance.Namespace, "SecretAgentConfiguration", instance.Name)
 		return ctrl.Result{}, err
 	}
@@ -181,18 +154,18 @@ func (r *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.R
 		secretNames = append(secretNames, secret.Name)
 	}
 	totalManagedObjects := len(secretNames) // TODO Need to add AWS + GCP resources
-	// Update status.k8sSecrets
-	if !reflect.DeepEqual(secretNames, instance.Status.ManagedK8sSecrets) || instance.Status.TotalManagedObjects != totalManagedObjects {
-		instance.Status.ManagedK8sSecrets = secretNames
-		instance.Status.TotalManagedObjects = totalManagedObjects
+	// Always Update status.k8sSecrets
+	instance.Status.ManagedK8sSecrets = secretNames
+	instance.Status.TotalManagedObjects = totalManagedObjects
 
-		if err := r.Status().Update(ctx, &instance); err != nil {
-			log.Error(err, "Failed to update SecretAgentConfiguration status")
-			return ctrl.Result{}, err
-		}
+	if err := reconciler.Status().Update(ctx, &instance); err != nil {
+		log.Error(err, "Failed to update SecretAgentConfiguration status")
+		return ctrl.Result{}, err
 	}
 
-	////
+	//Fix read after write in k8s api. Status updates themselves trigger a reconcile event.
+	//Wait 2 seconds to allow k8s to update before triggeting another reconcile event
+	time.Sleep(2 * time.Second)
 	return ctrl.Result{}, nil
 }
 
@@ -202,7 +175,7 @@ var (
 )
 
 //SetupWithManager is used to register the reconciler to the manager
-func (r *SecretAgentConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (reconciler *SecretAgentConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	if err := mgr.GetFieldIndexer().IndexField(&corev1.Secret{}, jobOwnerKey, func(rawObj runtime.Object) []string {
 		// grab the secret object, extract the owner...
@@ -225,6 +198,6 @@ func (r *SecretAgentConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&secretagentv1alpha1.SecretAgentConfiguration{}).
 		Owns(&corev1.Secret{}).
-		Complete(r)
+		Complete(reconciler)
 
 }

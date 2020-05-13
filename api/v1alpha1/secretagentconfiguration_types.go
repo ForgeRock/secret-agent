@@ -27,18 +27,19 @@ type SecretAgentConfigurationSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	AppConfig AppConfig       `yaml:"appConfig" json:"appConfig" validate:"required,dive,required"`
-	Secrets   []*SecretConfig `yaml:"secrets" json:"secrets" validate:"dive,required,unique=Name,gt=0,dive,required"`
+	AppConfig AppConfig `json:"appConfig" validate:"required,dive,required"`
+	// +kubebuilder:validation:MinItems=1
+	Secrets []*SecretConfig `json:"secrets" validate:"dive,required,unique=Name,gt=0,dive,required"`
 }
 
 // SecretAgentConfigurationStatus defines the observed state of SecretAgentConfiguration
 type SecretAgentConfigurationStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	TotalManagedObjects int      `yaml:"totalManagedObjects,omitempty" json:"totalManagedObjects,omitempty"`
-	ManagedK8sSecrets   []string `yaml:"managedK8sSecrets,omitempty" json:"managedK8sSecrets,omitempty"`
-	ManagedAWSSecrets   []string `yaml:"managedAWSSecrets,omitempty" json:"managedAWSSecrets,omitempty"`
-	ManagedGCPSecrets   []string `yaml:"managedGCPSecrets,omitempty" json:"managedGCPSecrets,omitempty"`
+	TotalManagedObjects int      `json:"totalManagedObjects,omitempty"`
+	ManagedK8sSecrets   []string `json:"managedK8sSecrets,omitempty"`
+	ManagedAWSSecrets   []string `json:"managedAWSSecrets,omitempty"`
+	ManagedGCPSecrets   []string `json:"managedGCPSecrets,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -118,50 +119,42 @@ const (
 
 // AppConfig is the configuration for the forgeops-secrets application
 type AppConfig struct {
-	CreateKubernetesObjects bool           `yaml:"createKubernetesObjects" json:"createKubernetesObjects"`
-	SecretsManager          SecretsManager `yaml:"secretsManager" json:"secretsManager" validate:"required,oneof=none GCP AWS"`
-	GCPProjectID            string         `yaml:"gcpProjectID" json:"gcpProjectID,omitempty"`
-	AWSRegion               string         `yaml:"awsRegion" json:"awsRegion,omitempty"`
-}
-
-// Configuration is the configuration for the forgeops-secrets application
-//   and the secrets it manages
-type Configuration struct {
-	AppConfig AppConfig `yaml:"appConfig" json:"appConfig" validate:"required,dive,required"`
-	// +kubebuilder:validation:MinItems=1
-	Secrets []*SecretConfig `yaml:"secrets" json:"secrets" validate:"dive,required,unique=Name,gt=0,dive,required"`
+	CreateKubernetesObjects bool           `json:"createKubernetesObjects"`
+	SecretsManager          SecretsManager `json:"secretsManager" validate:"required,oneof=none GCP AWS"`
+	GCPProjectID            string         `json:"gcpProjectID,omitempty"`
+	AWSRegion               string         `json:"awsRegion,omitempty"`
 }
 
 // SecretConfig is the configuration for a specific Kubernetes secret
 type SecretConfig struct {
-	Name      string `yaml:"name" json:"name" validate:"required"`
-	Namespace string `yaml:"-" json:"-"`
+	Name      string `json:"name" validate:"required"`
+	Namespace string `json:"-"`
 	// +kubebuilder:validation:MinItems=1
-	Keys []*KeyConfig `yaml:"keys" json:"keys" validate:"dive,required,unique=Name,gt=0,dive,required"`
+	Keys []*KeyConfig `json:"keys" validate:"dive,required,unique=Name,gt=0,dive,required"`
 }
 
 // KeyConfig is the configuration for a specific data key
 type KeyConfig struct {
-	Name           string         `yaml:"name" json:"name" validate:"required"`
-	Type           KeyConfigType  `yaml:"type" json:"type" validate:"required,oneof=jceks literal password privateKey publicKeySSH pkcs12 jks jceks"`
-	Value          string         `yaml:"value,omitempty" json:"value,omitempty"`
-	Length         int            `yaml:"length,omitempty" json:"length,omitempty"`
-	PrivateKeyPath []string       `yaml:"privateKeyPath,omitempty" json:"privateKeyPath,omitempty"`
-	StorePassPath  []string       `yaml:"storePassPath,omitempty" json:"storePassPath,omitempty"`
-	KeyPassPath    []string       `yaml:"keyPassPath,omitempty" json:"keyPassPath,omitempty"`
-	AliasConfigs   []*AliasConfig `yaml:"keystoreAliases,omitempty" json:"keystoreAliases,omitempty" validate:"dive"`
+	Name           string         `json:"name" validate:"required"`
+	Type           KeyConfigType  `json:"type" validate:"required,oneof=jceks literal password privateKey publicKeySSH pkcs12 jks jceks"`
+	Value          string         `json:"value,omitempty"`
+	Length         int            `json:"length,omitempty"`
+	PrivateKeyPath []string       `json:"privateKeyPath,omitempty"`
+	StorePassPath  []string       `json:"storePassPath,omitempty"`
+	KeyPassPath    []string       `json:"keyPassPath,omitempty"`
+	AliasConfigs   []*AliasConfig `json:"keystoreAliases,omitempty" validate:"dive"`
 	Node           *Node          `json:"-"`
 }
 
 // AliasConfig is the configuration for a keystore alias
 type AliasConfig struct {
-	Alias          string          `yaml:"alias" json:"alias" validate:"required"`
-	Type           AliasConfigType `yaml:"type"  json:"type" validate:"required,oneof=ca keyPair hmacKey aesKey"`
-	Algorithm      Algorithm       `yaml:"algorithm" json:"algorithm" validate:"oneof='' ECDSAWithSHA256 SHA256withRSA"`
-	CommonName     string          `yaml:"commonName" json:"commonName"`
-	Sans           []string        `yaml:"sans" json:"sans,omitempty"`
-	SignedWithPath []string        `yaml:"signedWithPath" json:"signedWithPath,omitempty"`
-	PasswordPath   []string        `yaml:"passwordPath" json:"passwordPath,omitempty"`
+	Alias          string          `json:"alias" validate:"required"`
+	Type           AliasConfigType `json:"type" validate:"required,oneof=ca keyPair hmacKey aesKey"`
+	Algorithm      Algorithm       `json:"algorithm" validate:"oneof='' ECDSAWithSHA256 SHA256withRSA"`
+	CommonName     string          `json:"commonName"`
+	Sans           []string        `json:"sans,omitempty"`
+	SignedWithPath []string        `json:"signedWithPath,omitempty"`
+	PasswordPath   []string        `json:"passwordPath,omitempty"`
 	Node           *Node           `json:"-"`
 }
 
