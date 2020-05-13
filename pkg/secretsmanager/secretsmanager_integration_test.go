@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"cloud.google.com/go/secretmanager/apiv1beta1"
-	secretspb "google.golang.org/genproto/googleapis/cloud/secrets/v1beta1"
 	"github.com/ForgeRock/secret-agent/pkg/types"
+	secretspb "google.golang.org/genproto/googleapis/cloud/secrets/v1beta1"
 )
 
 const (

@@ -3,11 +3,11 @@ package k8ssecrets
 import (
 	"testing"
 
+	"github.com/ForgeRock/secret-agent/pkg/types"
 	k8sApiv1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
-	"github.com/ForgeRock/secret-agent/pkg/types"
 )
 
 func TestLoadExisting(t *testing.T) {

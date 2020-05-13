@@ -8,6 +8,7 @@ import (
 	// Allow kubeconfig auth providers such as "GCP"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"github.com/ForgeRock/secret-agent/pkg/types"
 	"github.com/pkg/errors"
 	k8sApiv1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -15,7 +16,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"github.com/ForgeRock/secret-agent/pkg/types"
 )
 
 var (
@@ -90,6 +90,27 @@ func ApplySecrets(clientSet kubernetes.Interface, secretsConfig []*types.SecretC
 	}
 
 	return nil
+}
+
+// GenerateSecretAPIObjects generates a list of secrets references that can be used to query the Kubernetes API
+func GenerateSecretAPIObjects(secretsConfig []*types.SecretConfig) []*k8sApiv1.Secret {
+	var k8sSecretList []*k8sApiv1.Secret
+	for _, secretConfig := range secretsConfig {
+		// prepare Kubernetes Secret
+		k8sSecret := &k8sApiv1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: secretConfig.Name, Namespace: secretConfig.Namespace},
+			Data:       map[string][]byte{},
+		}
+		for _, keyConfig := range secretConfig.Keys {
+			encoded := make([]byte, base64.StdEncoding.EncodedLen(len(keyConfig.Node.Value)))
+			base64.StdEncoding.Encode(encoded, keyConfig.Node.Value)
+			k8sSecret.Data[keyConfig.Name] = encoded
+		}
+		k8sSecretList = append(k8sSecretList, k8sSecret)
+
+	}
+	return k8sSecretList
+
 }
 
 // GetClientSet gets an InClusterConfig or kubeconfig ClientSet depending on flag

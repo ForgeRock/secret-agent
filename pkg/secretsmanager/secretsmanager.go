@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"strings"
 
-	"cloud.google.com/go/secretmanager/apiv1beta1"
+	secretmanager "cloud.google.com/go/secretmanager/apiv1beta1"
 	"github.com/ForgeRock/secret-agent/pkg/types"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	awssecretsmanager "github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/pkg/errors"
-	secretspb "google.golang.org/genproto/googleapis/cloud/secrets/v1beta1"
+	secretspb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1beta1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
