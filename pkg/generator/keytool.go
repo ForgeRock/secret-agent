@@ -32,8 +32,14 @@ func init() {
 	keystoreFilePath = fmt.Sprintf("%s/keystore.p12", tempDir)
 }
 
+// GetKeystore reads the keystore file and returns it's contents
+//   it assumes the file was created during the alias commands
+func GetKeystore() ([]byte, error) {
+	return ioutil.ReadFile(keystoreFilePath)
+}
+
 // GenerateDeploymentKey generates a Certificate Authority, AKA deployment key
-func GenerateDeploymentKey(password []byte) ([]byte, error) {
+func GenerateDeploymentKey(deploymentKeyPassword []byte) ([]byte, error) {
 	value := []byte{}
 	file, err := ioutil.TempFile(tempDir, "create-deployment-key")
 	if err != nil {
@@ -47,7 +53,7 @@ func GenerateDeploymentKey(password []byte) ([]byte, error) {
 	cmd := exec.Command(
 		dsKeyMgrPath, "create-deployment-key",
 		"--outputFile", file.Name(),
-		"--deploymentKeyPassword", string(password),
+		"--deploymentKeyPassword", string(deploymentKeyPassword),
 	)
 	stdoutStderr, err := cmd.CombinedOutput()
 	if err != nil {
@@ -82,7 +88,103 @@ func GenerateTLSKeyPair(storePassword, deploymentKey, deploymentKeyPassword []by
 	if err != nil {
 		return value, errors.Wrap(err, string(stdoutStderr))
 	}
-	value, err = ioutil.ReadFile(keystoreFilePath)
+	tlsKeyPairPath := fmt.Sprintf("%s/master-key", tempDir)
+	defer os.Remove(tlsKeyPairPath)
+	args = []string{"-exportcert",
+		"-keystore", keystoreFilePath,
+		"-storepass", string(storePassword), // storepass, not keypass
+		"-alias", aliasConfig.Alias,
+		"-file", tlsKeyPairPath,
+		"-rfc",
+	}
+	cmd = exec.Command(keytoolPath, args...)
+	stdoutStderr, err = cmd.CombinedOutput()
+	if err != nil {
+		return value, errors.Wrap(err, string(stdoutStderr))
+	}
+	value, err = ioutil.ReadFile(tlsKeyPairPath)
+	if err != nil {
+		return value, err
+	}
+
+	return value, nil
+}
+
+// GenerateMasterKeyPair generates a TLS key pair
+func GenerateMasterKeyPair(storePassword, deploymentKey, deploymentKeyPassword []byte, aliasConfig *types.AliasConfig) ([]byte, error) {
+	value := []byte{}
+	args := []string{"export-master-key-pair",
+		"--deploymentKey", string(deploymentKey),
+		"--deploymentKeyPassword", string(deploymentKeyPassword),
+		"--keyStoreFile", keystoreFilePath,
+		"--keyStorePassword", string(storePassword), // storepass, not keypass
+		"--alias", aliasConfig.Alias,
+	}
+	cmd := exec.Command(dsKeyMgrPath, args...)
+	stdoutStderr, err := cmd.CombinedOutput()
+	if err != nil {
+		return value, errors.Wrap(err, string(stdoutStderr))
+	}
+	masterKeyPairPath := fmt.Sprintf("%s/master-key", tempDir)
+	defer os.Remove(masterKeyPairPath)
+	args = []string{"-exportcert",
+		"-keystore", keystoreFilePath,
+		"-storepass", string(storePassword), // storepass, not keypass
+		"-alias", aliasConfig.Alias,
+		"-file", masterKeyPairPath,
+		"-rfc",
+	}
+	cmd = exec.Command(keytoolPath, args...)
+	stdoutStderr, err = cmd.CombinedOutput()
+	if err != nil {
+		return value, errors.Wrap(err, string(stdoutStderr))
+	}
+	value, err = ioutil.ReadFile(masterKeyPairPath)
+	if err != nil {
+		return value, err
+	}
+
+	return value, nil
+}
+
+// GenerateCACert generates a TLS key pair
+func GenerateCACert(storePassword, deploymentKey, deploymentKeyPassword []byte, aliasConfig *types.AliasConfig) ([]byte, error) {
+	// export from deployment key
+	value := []byte{}
+	file, err := ioutil.TempFile(tempDir, "create-ca-cert.pem")
+	if err != nil {
+		return value, err
+	}
+	defer os.Remove(file.Name())
+	err = file.Close()
+	args := []string{"export-ca-cert",
+		"--outputFile", file.Name(),
+		"--deploymentKey", string(deploymentKey),
+		"--deploymentKeyPassword", string(deploymentKeyPassword),
+	}
+	cmd := exec.Command(dsKeyMgrPath, args...)
+	stdoutStderr, err := cmd.CombinedOutput()
+	if err != nil {
+		return value, errors.Wrap(err, string(stdoutStderr))
+	}
+
+	// import into keystore
+	args = []string{"-import",
+		"-alias", aliasConfig.Alias,
+		"-trustcacerts",
+		"-noprompt",
+		"-file", file.Name(),
+		"-destkeystore", keystoreFilePath,
+		"-deststoretype", "pkcs12",
+		"-deststorepass", string(storePassword), // storepass, not keypass
+		"-destkeypass", string(storePassword), // storepass, not keypass
+	}
+	cmd = exec.Command(keytoolPath, args...)
+	stdoutStderr, err = cmd.CombinedOutput()
+	if err != nil {
+		return value, errors.Wrap(err, string(stdoutStderr))
+	}
+	value, err = ioutil.ReadFile(file.Name())
 	if err != nil {
 		return value, err
 	}

@@ -1,13 +1,62 @@
 package generator
 
 import (
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"os"
 	"regexp"
 	"testing"
 
 	"github.com/ForgeRock/secret-agent/pkg/memorystore/test"
 	"github.com/ForgeRock/secret-agent/pkg/types"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
 )
+
+var outputRigs = flag.Bool("outputRigs", false, "Write YAML file versions of the test rigs")
+
+func TestOutputTestRigs(t *testing.T) {
+	flag.Parse()
+	_, config1 := memorystore_test.GetExpectedNodesConfiguration1()
+	_, config2 := memorystore_test.GetExpectedNodesConfiguration2()
+	rigs := []struct {
+		config   *types.Configuration
+		filePath string
+	}{
+		{
+			config:   config1,
+			filePath: "../../testConfiguration1.yaml",
+		},
+		{
+			config:   config2,
+			filePath: "../../testConfiguration2.yaml",
+		},
+	}
+	for _, rig := range rigs {
+		if *outputRigs {
+			file, err := os.Create(rig.filePath)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %+v", err)
+			}
+			defer file.Close()
+			// remove all nodes since they cause circular references
+			for _, secretConfig := range rig.config.Secrets {
+				for _, keyConfig := range secretConfig.Keys {
+					keyConfig.Node = nil
+					for _, aliasConfig := range keyConfig.AliasConfigs {
+						aliasConfig.Node = nil
+					}
+				}
+			}
+			encoder := yaml.NewEncoder(file)
+			err = encoder.Encode(rig.config)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %+v", err)
+			}
+		}
+	}
+}
 
 func TestRecursivelyGenerateIfMissing(t *testing.T) {
 	// setup
@@ -26,10 +75,10 @@ func TestRecursivelyGenerateIfMissing(t *testing.T) {
 		}
 	}
 
-	// doesn't generate new aliases if key existing and not using secrets manager
+	// doesn't generate new aliases if key exists and not using secrets manager
 	// nodes, config = memorystore_test.GetExpectedNodesConfiguration1()
 	// for _, node := range nodes {
-	//     if node.KeyConfig.Type == types.TypeJCEKS {
+	//     if node.KeyConfig.Type == types.TypeJCEKS && node.AliasConfig == nil {
 	//         node.Value = []byte("Asdf")
 	//     }
 	// }
@@ -48,6 +97,29 @@ func TestRecursivelyGenerateIfMissing(t *testing.T) {
 	// }
 
 	// doesn't generate if value already exists
+}
+
+func TestGenerate_PKCS12(t *testing.T) {
+	keystoreFilePath = fmt.Sprintf("%s/keystore.p12", tempDir)
+	err := ioutil.WriteFile(keystoreFilePath, []byte("asdf"), 0644)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
+	defer os.Remove(keystoreFilePath)
+	keyConfig := &types.KeyConfig{
+		Name: "keystore",
+		Type: types.TypePKCS12,
+	}
+	secretConfig := getSecretConfig(keyConfig)
+	node := &types.Node{
+		Path:         []string{"asdfSecret", "keystore"},
+		SecretConfig: secretConfig,
+		KeyConfig:    keyConfig,
+	}
+	err = Generate(node)
+	if err != nil {
+		t.Errorf("Expected no error, got: %+v", err)
+	}
 }
 
 func TestGenerate_Literal(t *testing.T) {

@@ -86,59 +86,62 @@ func Generate(node *types.Node) error {
 	case types.TypePKCS12:
 		switch length := len(node.Path); length {
 		case 2: // compiled keystore
-			// get value for each alias
-			// run keytool, passing args
+			value, err := GetKeystore()
+			if err != nil {
+				return err
+			}
+
+			node.Value = value
 		case 3: // individual aliases
 			switch node.AliasConfig.Type {
 			case types.TypeDeploymentKey:
-				password, err := getValueFromParent(node.AliasConfig.PasswordPath, node)
+				deploymentKeyPassword, err := getValueFromParent(node.KeyConfig.DeployKeyPasswordPath, node)
 				if err != nil {
 					return err
 				}
 
-				value, err := GenerateDeploymentKey(password)
+				value, err := GenerateDeploymentKey(deploymentKeyPassword)
 				if err != nil {
 					return err
 				}
+
 				node.Value = value
 			case types.TypeTLSKeyPair:
-				// fetch the storepass password
-				storePassword, err := getValueFromParent(node.KeyConfig.StorePassPath, node)
+				storePassword, deploymentKey, deploymentKeyPassword, err := getStorePassDeployKeyDeployKeyPassword(node)
 				if err != nil {
 					return err
-				}
-
-				// fetch the deployment key
-				deploymentKey, err := getValueFromParent(node.AliasConfig.SignedWithPath, node)
-				if err != nil {
-					return err
-				}
-
-				// fetch the deployment key password
-				deploymentKeyPassword := []byte{}
-				found := false
-				for _, parentNode := range node.Parents {
-					if memorystore.Equal(parentNode.Path, node.AliasConfig.SignedWithPath) {
-						deploymentKeyPassword, err = getValueFromParent(parentNode.AliasConfig.PasswordPath, parentNode)
-						if err != nil {
-							return err
-						}
-						found = true
-						break
-					}
-				}
-				if !found {
-					return errors.WithStack(fmt.Errorf("Deployment Key Password not found for: %v", node.Path))
 				}
 
 				contents, err := GenerateTLSKeyPair(storePassword, deploymentKey, deploymentKeyPassword, node.AliasConfig)
 				if err != nil {
 					return err
 				}
+
 				node.Value = contents
 			case types.TypeMasterKeyPair:
-				// TODO placeholder
-				node.Value = []byte("temp-placeholder")
+				storePassword, deploymentKey, deploymentKeyPassword, err := getStorePassDeployKeyDeployKeyPassword(node)
+				if err != nil {
+					return err
+				}
+
+				contents, err := GenerateMasterKeyPair(storePassword, deploymentKey, deploymentKeyPassword, node.AliasConfig)
+				if err != nil {
+					return err
+				}
+
+				node.Value = contents
+			case types.TypeCACert:
+				storePassword, deploymentKey, deploymentKeyPassword, err := getStorePassDeployKeyDeployKeyPassword(node)
+				if err != nil {
+					return err
+				}
+
+				contents, err := GenerateCACert(storePassword, deploymentKey, deploymentKeyPassword, node.AliasConfig)
+				if err != nil {
+					return err
+				}
+
+				node.Value = contents
 			default:
 				return errors.WithStack(fmt.Errorf("Unexpected aliasConfig.Type: '%v', in %v", node.AliasConfig.Type, node.Path))
 			}
@@ -150,11 +153,37 @@ func Generate(node *types.Node) error {
 	return nil
 }
 
-// noParentWithPathError allows for type checking in tests
-type noParentWithPathError []string
+func getStorePassDeployKeyDeployKeyPassword(node *types.Node) ([]byte, []byte, []byte, error) {
+	storePassword, deploymentKey, deploymentKeyPassword := []byte{}, []byte{}, []byte{}
+	// fetch the storepass password
+	storePassword, err := getValueFromParent(node.KeyConfig.StorePassPath, node)
+	if err != nil {
+		return storePassword, deploymentKey, deploymentKeyPassword, err
+	}
 
-func (path *noParentWithPathError) Error() string {
-	return fmt.Sprintf("No parent node found with path: %v", []string(*path))
+	// fetch the deployment key
+	deploymentKey, err = getValueFromParent(node.KeyConfig.DeployKeyPath, node)
+	if err != nil {
+		return storePassword, deploymentKey, deploymentKeyPassword, err
+	}
+
+	// fetch the deployment key password
+	deploymentKeyPassword, err = getValueFromParent(node.KeyConfig.DeployKeyPasswordPath, node)
+	if err != nil {
+		return storePassword, deploymentKey, deploymentKeyPassword, err
+	}
+
+	return storePassword, deploymentKey, deploymentKeyPassword, nil
+}
+
+// noParentWithPathError allows for type checking in tests
+type noParentWithPathError struct {
+	nodePath   []string
+	parentPath []string
+}
+
+func (cfg *noParentWithPathError) Error() string {
+	return fmt.Sprintf("%v has no parent node with path: %v", cfg.nodePath, cfg.parentPath)
 }
 
 // emptyValueError allows for type checking in tests
@@ -175,7 +204,7 @@ func getValueFromParent(path []string, node *types.Node) ([]byte, error) {
 		}
 	}
 	if !found {
-		err := noParentWithPathError(path)
+		err := noParentWithPathError{nodePath: node.Path, parentPath: path}
 		return value, errors.WithStack(&err)
 	}
 	if len(value) == 0 {

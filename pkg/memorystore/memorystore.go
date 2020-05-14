@@ -58,6 +58,9 @@ func GetDependencyNodes(config *types.Configuration) []*types.Node {
 	// now set parents and children
 	nodes = rangeOverSecrets(config.Secrets, nodes, addParentsAndChildren)
 
+	// now set parents and children for aliases
+	nodes = rangeOverSecrets(config.Secrets, nodes, addAliasParentsAndChildren)
+
 	return nodes
 }
 
@@ -70,15 +73,23 @@ func rangeOverSecrets(secretsConfig []*types.SecretConfig, nodes []*types.Node, 
 		for _, keyConfig := range secretConfig.Keys {
 			// key privateKeyPath
 			nodes = fn(keyConfig.PrivateKeyPath, []string{secretConfig.Name, keyConfig.Name}, secretConfig, keyConfig, nil, nodes)
+			// key deployKeyPath
+			nodes = fn(keyConfig.DeployKeyPath, []string{secretConfig.Name, keyConfig.Name}, secretConfig, keyConfig, nil, nodes)
+			// key deployPasswordKeyPath
+			nodes = fn(keyConfig.DeployKeyPasswordPath, []string{secretConfig.Name, keyConfig.Name}, secretConfig, keyConfig, nil, nodes)
 			// key storePassPath
 			nodes = fn(keyConfig.StorePassPath, []string{secretConfig.Name, keyConfig.Name}, secretConfig, keyConfig, nil, nodes)
 			// key keyPassPath
 			nodes = fn(keyConfig.KeyPassPath, []string{secretConfig.Name, keyConfig.Name}, secretConfig, keyConfig, nil, nodes)
 			for _, aliasConfig := range keyConfig.AliasConfigs {
-				// key alias signedWithPath
-				nodes = fn(aliasConfig.SignedWithPath, []string{secretConfig.Name, keyConfig.Name, aliasConfig.Alias}, secretConfig, keyConfig, aliasConfig, nodes)
-				// key passwordPath
-				nodes = fn(aliasConfig.PasswordPath, []string{secretConfig.Name, keyConfig.Name, aliasConfig.Alias}, secretConfig, keyConfig, aliasConfig, nodes)
+				// alias deployKeyPath
+				nodes = fn(keyConfig.DeployKeyPath, []string{secretConfig.Name, keyConfig.Name, aliasConfig.Alias}, secretConfig, keyConfig, aliasConfig, nodes)
+				// alias deployKeyPasswordPath
+				nodes = fn(keyConfig.DeployKeyPasswordPath, []string{secretConfig.Name, keyConfig.Name, aliasConfig.Alias}, secretConfig, keyConfig, aliasConfig, nodes)
+				// alias storePassPath
+				nodes = fn(keyConfig.StorePassPath, []string{secretConfig.Name, keyConfig.Name, aliasConfig.Alias}, secretConfig, keyConfig, aliasConfig, nodes)
+				// alias keyPassPath
+				nodes = fn(keyConfig.KeyPassPath, []string{secretConfig.Name, keyConfig.Name, aliasConfig.Alias}, secretConfig, keyConfig, aliasConfig, nodes)
 			}
 		}
 	}
@@ -87,7 +98,7 @@ func rangeOverSecrets(secretsConfig []*types.SecretConfig, nodes []*types.Node, 
 }
 
 // createNode is a rangeFunc that creates dependency nodes without parents or children
-func createNode(parent, path []string, secretConfig *types.SecretConfig, keyConfig *types.KeyConfig, aliasConfig *types.AliasConfig, nodes []*types.Node) []*types.Node {
+func createNode(parentPath, path []string, secretConfig *types.SecretConfig, keyConfig *types.KeyConfig, aliasConfig *types.AliasConfig, nodes []*types.Node) []*types.Node {
 	// make sure it doesn't already exist
 	for _, node := range nodes {
 		if Equal(node.Path, path) {
@@ -132,15 +143,23 @@ func addParentsAndChildren(parentPath, path []string, secretConfig *types.Secret
 						continue parentNodes
 					}
 				}
-				// add the parents and children
-				node.Parents = append(node.Parents, parentNode)
-				parentNode.Children = append(parentNode.Children, node)
-				break
+				// ensure it's not a self-reference
+				if node != parentNode {
+					// add the parents and children
+					node.Parents = append(node.Parents, parentNode)
+					parentNode.Children = append(parentNode.Children, node)
+					break
+				}
 			}
 		}
 	}
 
-	// all aliases should be parents of the relevant secret key
+	return nodes
+}
+
+// addAliasParentsAndChildren is a rangeFunc that sets the parents and children for alias dependency nodes
+//   all aliases should be parents of the relevant secret key
+func addAliasParentsAndChildren(parentPath, path []string, secretConfig *types.SecretConfig, keyConfig *types.KeyConfig, aliasConfig *types.AliasConfig, nodes []*types.Node) []*types.Node {
 	if keyConfig.Type == types.TypePKCS12 && aliasConfig != nil {
 		// make sure it doesn't already exist
 		alreadyExists := false
@@ -153,48 +172,6 @@ func addParentsAndChildren(parentPath, path []string, secretConfig *types.Secret
 			// add the parents and children
 			keyConfig.Node.Parents = append(keyConfig.Node.Parents, aliasConfig.Node)
 			aliasConfig.Node.Children = append(aliasConfig.Node.Children, keyConfig.Node)
-		}
-	}
-
-	// storePassPath and keyPassPath should be parents of all aliases
-	if keyConfig.Type == types.TypePKCS12 && aliasConfig != nil {
-		// find keyPassPath node
-		keyPassNode := &types.Node{}
-		for _, n := range nodes {
-			if Equal(n.Path, keyConfig.KeyPassPath) {
-				keyPassNode = n
-				break
-			}
-		}
-		// make sure it doesn't already exist
-		alreadyExists := false
-		for _, parentNode := range aliasConfig.Node.Parents {
-			if Equal(parentNode.Path, keyPassNode.Path) {
-				alreadyExists = true
-			}
-		}
-		if !alreadyExists {
-			aliasConfig.Node.Parents = append(aliasConfig.Node.Parents, keyPassNode)
-			keyPassNode.Children = append(keyPassNode.Children, aliasConfig.Node)
-		}
-		// find storePassPath node
-		storePassNode := &types.Node{}
-		for _, n := range nodes {
-			if Equal(n.Path, keyConfig.StorePassPath) {
-				storePassNode = n
-				break
-			}
-		}
-		// make sure it doesn't already exist
-		alreadyExists = false
-		for _, parentNode := range aliasConfig.Node.Parents {
-			if Equal(parentNode.Path, storePassNode.Path) {
-				alreadyExists = true
-			}
-		}
-		if !alreadyExists {
-			aliasConfig.Node.Parents = append(aliasConfig.Node.Parents, storePassNode)
-			storePassNode.Children = append(storePassNode.Children, aliasConfig.Node)
 		}
 	}
 
