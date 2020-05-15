@@ -11,10 +11,10 @@ import (
 	"math/big"
 	"time"
 
-	secretagentv1alpha1 "github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 
-func generateCA(alias *secretagentv1alpha1.AliasConfig) ([]byte, error) {
+func generateCA(alias *v1alpha1.AliasConfig) ([]byte, error) {
 	signatureAlgorithm := x509.SignatureAlgorithm(0)
 	switch alias.Algorithm {
 	case "ECDSAWithSHA256":

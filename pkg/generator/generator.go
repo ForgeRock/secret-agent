@@ -3,7 +3,7 @@ package generator
 import (
 	"fmt"
 
-	secretagentv1alpha1 "github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/ForgeRock/secret-agent/pkg/keytool"
 	"github.com/ForgeRock/secret-agent/pkg/memorystore"
 	"github.com/pkg/errors"
@@ -15,7 +15,7 @@ const (
 
 // RecursivelyGenerateIfMissing generates secrets if not in the memory store,
 //   first generating any parents
-func RecursivelyGenerateIfMissing(config *secretagentv1alpha1.SecretAgentConfigurationSpec, node *secretagentv1alpha1.Node) error {
+func RecursivelyGenerateIfMissing(config *v1alpha1.SecretAgentConfigurationSpec, node *v1alpha1.Node) error {
 	// first generate parents, and their parents
 	for _, parent := range node.Parents {
 		err := RecursivelyGenerateIfMissing(config, parent)
@@ -26,7 +26,7 @@ func RecursivelyGenerateIfMissing(config *secretagentv1alpha1.SecretAgentConfigu
 
 	// if we're not using a SecretsManager, for keystores, ignore aliases if key exists.
 	//   this avoids re-creation that would otherwise happen from not being found in SM
-	if config.AppConfig.SecretsManager == secretagentv1alpha1.SecretsManagerNone {
+	if config.AppConfig.SecretsManager == v1alpha1.SecretsManagerNone {
 		if len(node.Path) == 3 { // is an Alias Node
 			if len(node.KeyConfig.Node.Value) != 0 { // Key Node already has Value
 				return nil
@@ -46,11 +46,11 @@ func RecursivelyGenerateIfMissing(config *secretagentv1alpha1.SecretAgentConfigu
 }
 
 // Generate generates a secret node
-func Generate(node *secretagentv1alpha1.Node) error {
+func Generate(node *v1alpha1.Node) error {
 	switch node.KeyConfig.Type {
-	case secretagentv1alpha1.TypeLiteral:
+	case v1alpha1.TypeLiteral:
 		node.Value = []byte(node.KeyConfig.Value)
-	case secretagentv1alpha1.TypePassword:
+	case v1alpha1.TypePassword:
 		if node.KeyConfig.Length == 0 {
 			node.KeyConfig.Length = defaultPasswordLength
 		}
@@ -59,7 +59,7 @@ func Generate(node *secretagentv1alpha1.Node) error {
 			return err
 		}
 		node.Value = password
-	case secretagentv1alpha1.TypePrivateKey:
+	case v1alpha1.TypePrivateKey:
 		// privateKey
 		privateKey, privateKeyBytes, err := generateRSAPrivateKey()
 		if err != nil {
@@ -74,17 +74,17 @@ func Generate(node *secretagentv1alpha1.Node) error {
 		}
 		// find public key node(s)
 		for _, childNode := range node.Children {
-			if childNode.KeyConfig.Type == secretagentv1alpha1.TypePublicKeySSH {
+			if childNode.KeyConfig.Type == v1alpha1.TypePublicKeySSH {
 				if memorystore.Equal(childNode.KeyConfig.PrivateKeyPath, node.Path) {
 					childNode.Value = publicKeyBytes
 				}
 			}
 		}
-	case secretagentv1alpha1.TypePublicKeySSH:
+	case v1alpha1.TypePublicKeySSH:
 		// taken care of by privateKey
-	case secretagentv1alpha1.TypeJCEKS:
+	case v1alpha1.TypeJCEKS:
 		// TODO
-	case secretagentv1alpha1.TypePKCS12:
+	case v1alpha1.TypePKCS12:
 		switch length := len(node.Path); length {
 		case 2:
 			// compiled keystore
@@ -94,11 +94,11 @@ func Generate(node *secretagentv1alpha1.Node) error {
 		case 3:
 			// individual aliases
 			switch node.AliasConfig.Type {
-			case secretagentv1alpha1.TypeCA:
+			case v1alpha1.TypeCA:
 				// opendj/bin/dskeymgr create-deployment-key -f /opt/gen/secrets/generic/ds-deployment-key/deploymentkey.key -w secretValue
 				// TODO placeholder
 				node.Value = []byte("temp-placeholder")
-			case secretagentv1alpha1.TypeKeyPair:
+			case v1alpha1.TypeKeyPair:
 				// dskey_wrapper create-tls-key-pair -a ssl-key-pair -h openam -s CN=am
 				// opendj/bin/dskeymgr create-tls-key-pair -k secretvalue -w secretvalue -K secrets/generic/am-https/keystore.p12 -W secretvalue -a ssl-key-pair -h openam -s CN=am
 				// export as x509 format using dskeymgr or keytool
@@ -109,10 +109,10 @@ func Generate(node *secretagentv1alpha1.Node) error {
 				node.Value = contents
 				// TODO placeholder
 				node.Value = []byte("temp-placeholder")
-			case secretagentv1alpha1.TypeHmacKey:
+			case v1alpha1.TypeHmacKey:
 				// TODO placeholder
 				node.Value = []byte("temp-placeholder")
-			case secretagentv1alpha1.TypeAESKey:
+			case v1alpha1.TypeAESKey:
 				// TODO placeholder
 				node.Value = []byte("temp-placeholder")
 			default:

@@ -6,7 +6,8 @@ import (
 	"encoding/base64"
 
 	// Allow kubeconfig auth providers such as "GCP"
-	secretagentv1alpha1 "github.com/ForgeRock/secret-agent/api/v1alpha1"
+
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -16,7 +17,7 @@ import (
 )
 
 // LoadExisting loads any existing secrets in the Kubernetes API into the memory store
-func LoadExisting(rclient client.Client, secretsConfig []*secretagentv1alpha1.SecretConfig) error {
+func LoadExisting(rclient client.Client, secretsConfig []*v1alpha1.SecretConfig) error {
 	for _, secretConfig := range secretsConfig {
 
 		k8sSecret := &corev1.Secret{}
@@ -75,7 +76,7 @@ func ApplySecrets(rclient client.Client, secrets []*corev1.Secret) error {
 }
 
 // GenerateSecretAPIObjects generates a list of secrets references that can be used to target the Kubernetes API
-func GenerateSecretAPIObjects(secretConfigs []*secretagentv1alpha1.SecretConfig) []*corev1.Secret {
+func GenerateSecretAPIObjects(secretConfigs []*v1alpha1.SecretConfig) []*corev1.Secret {
 	var k8sSecretList []*corev1.Secret
 	for _, secretConfig := range secretConfigs {
 		// prepare Kubernetes Secret

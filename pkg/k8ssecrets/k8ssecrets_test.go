@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	secretagentv1alpha1 "github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,8 +16,8 @@ import (
 
 func TestLoadExisting(t *testing.T) {
 	secretsConfig := getSecretsConfig()
-	node := &secretagentv1alpha1.Node{Path: []string{"asdfSecret", "username"}}
-	key := &secretagentv1alpha1.KeyConfig{
+	node := &v1alpha1.Node{Path: []string{"asdfSecret", "username"}}
+	key := &v1alpha1.KeyConfig{
 		Name:  "username",
 		Type:  "literal",
 		Value: "admin",
@@ -67,13 +67,12 @@ func TestLoadExisting(t *testing.T) {
 }
 
 func TestGenerateSecretAPIObjects(t *testing.T) {
-	// func GenerateSecretAPIObjects(secretsConfig []*secretagentv1alpha1.SecretConfig) []*corev1.Secret
 	secretsConfig := getSecretsConfig()
-	node := &secretagentv1alpha1.Node{
+	node := &v1alpha1.Node{
 		Path:  []string{"asdfSecret", "username"},
 		Value: []byte("admin"),
 	}
-	key := &secretagentv1alpha1.KeyConfig{
+	key := &v1alpha1.KeyConfig{
 		Name: "username",
 		Node: node,
 	}
@@ -145,12 +144,12 @@ func TestApplySecrets(t *testing.T) {
 	}
 }
 
-func getSecretsConfig() []*secretagentv1alpha1.SecretConfig {
-	return []*secretagentv1alpha1.SecretConfig{
+func getSecretsConfig() []*v1alpha1.SecretConfig {
+	return []*v1alpha1.SecretConfig{
 		{
 			Name:      "asdfSecret",
 			Namespace: "default",
-			Keys:      []*secretagentv1alpha1.KeyConfig{},
+			Keys:      []*v1alpha1.KeyConfig{},
 		},
 	}
 }

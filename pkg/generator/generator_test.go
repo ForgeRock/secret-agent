@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"testing"
 
-	secretagentv1alpha1 "github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	memorystore_test "github.com/ForgeRock/secret-agent/pkg/memorystore/test"
 )
 
@@ -28,7 +28,7 @@ func TestRecursivelyGenerateIfMissing(t *testing.T) {
 	// doesn't generate new aliases if key existing and not using secrets manager
 	// nodes, config = memorystore_test.GetExpectedNodesConfiguration1()
 	// for _, node := range nodes {
-	//     if node.KeyConfig.Type == secretagentv1alpha1.TypeJCEKS {
+	//     if node.KeyConfig.Type == v1alpha1.TypeJCEKS {
 	//         node.Value = []byte("Asdf")
 	//     }
 	// }
@@ -50,13 +50,13 @@ func TestRecursivelyGenerateIfMissing(t *testing.T) {
 }
 
 func TestGenerate_Literal(t *testing.T) {
-	keyConfig := &secretagentv1alpha1.KeyConfig{
+	keyConfig := &v1alpha1.KeyConfig{
 		Name:  "username",
-		Type:  secretagentv1alpha1.TypeLiteral,
+		Type:  v1alpha1.TypeLiteral,
 		Value: "admin",
 	}
 	secretConfig := getSecretConfig(keyConfig)
-	node := &secretagentv1alpha1.Node{
+	node := &v1alpha1.Node{
 		Path:         []string{"asdfSecret", "username"},
 		SecretConfig: secretConfig,
 		KeyConfig:    keyConfig,
@@ -71,13 +71,13 @@ func TestGenerate_Literal(t *testing.T) {
 }
 
 func TestGenerate_Password(t *testing.T) {
-	keyConfig := &secretagentv1alpha1.KeyConfig{
+	keyConfig := &v1alpha1.KeyConfig{
 		Name:   "keypass",
-		Type:   secretagentv1alpha1.TypePassword,
+		Type:   v1alpha1.TypePassword,
 		Length: 16,
 	}
 	secretConfig := getSecretConfig(keyConfig)
-	node := &secretagentv1alpha1.Node{
+	node := &v1alpha1.Node{
 		Path:         []string{"asdfSecret", "keypass"},
 		SecretConfig: secretConfig,
 		KeyConfig:    keyConfig,
@@ -94,52 +94,52 @@ func TestGenerate_Password(t *testing.T) {
 
 func TestGenerate_PrivateKey(t *testing.T) {
 	// setup privateKey
-	asdfPrivateKeyKeyConfig := &secretagentv1alpha1.KeyConfig{
+	asdfPrivateKeyKeyConfig := &v1alpha1.KeyConfig{
 		Name: "myPrivateKey",
-		Type: secretagentv1alpha1.TypePrivateKey,
+		Type: v1alpha1.TypePrivateKey,
 	}
 	// setup same secret publicKeySSH
-	asdfPublicKey1KeyConfig := &secretagentv1alpha1.KeyConfig{
+	asdfPublicKey1KeyConfig := &v1alpha1.KeyConfig{
 		Name:           "myPublicKey1",
-		Type:           secretagentv1alpha1.TypePublicKeySSH,
+		Type:           v1alpha1.TypePublicKeySSH,
 		PrivateKeyPath: []string{"asdfSecret", "myPrivateKey"},
 	}
 	asdfSecretConfig := getSecretConfig(asdfPrivateKeyKeyConfig, asdfPublicKey1KeyConfig)
 	// setup other secret publicKeySSH
-	fdsaPublicKey1KeyConfig := &secretagentv1alpha1.KeyConfig{
+	fdsaPublicKey1KeyConfig := &v1alpha1.KeyConfig{
 		Name:           "myPublicKey1",
-		Type:           secretagentv1alpha1.TypePublicKeySSH,
+		Type:           v1alpha1.TypePublicKeySSH,
 		PrivateKeyPath: []string{"noMatch", "myPrivateKey"},
 	}
-	fdsaPublicKey2KeyConfig := &secretagentv1alpha1.KeyConfig{
+	fdsaPublicKey2KeyConfig := &v1alpha1.KeyConfig{
 		Name:           "myPublicKey2",
-		Type:           secretagentv1alpha1.TypePublicKeySSH,
+		Type:           v1alpha1.TypePublicKeySSH,
 		PrivateKeyPath: []string{"asdfSecret", "myPrivateKey"},
 	}
-	fdsaSecretConfig := &secretagentv1alpha1.SecretConfig{
+	fdsaSecretConfig := &v1alpha1.SecretConfig{
 		Name:      "fdsaSecret",
 		Namespace: "default",
-		Keys: []*secretagentv1alpha1.KeyConfig{
+		Keys: []*v1alpha1.KeyConfig{
 			fdsaPublicKey1KeyConfig,
 			fdsaPublicKey2KeyConfig,
 		},
 	}
 
-	asdfPublicKey1Node := &secretagentv1alpha1.Node{
+	asdfPublicKey1Node := &v1alpha1.Node{
 		Path:         []string{"asdfSecret", "myPublicKey1"},
 		SecretConfig: asdfSecretConfig,
 		KeyConfig:    asdfPublicKey1KeyConfig,
 	}
-	fdsaPublicKey2Node := &secretagentv1alpha1.Node{
+	fdsaPublicKey2Node := &v1alpha1.Node{
 		Path:         []string{"fdsaSecret", "myPublicKey2"},
 		SecretConfig: fdsaSecretConfig,
 		KeyConfig:    fdsaPublicKey2KeyConfig,
 	}
-	asdfPrivateKeyNode := &secretagentv1alpha1.Node{
+	asdfPrivateKeyNode := &v1alpha1.Node{
 		Path:         []string{"asdfSecret", "myPrivateKey"},
 		SecretConfig: asdfSecretConfig,
 		KeyConfig:    asdfPrivateKeyKeyConfig,
-		Children: []*secretagentv1alpha1.Node{
+		Children: []*v1alpha1.Node{
 			asdfPublicKey1Node,
 			fdsaPublicKey2Node,
 		},
@@ -173,8 +173,8 @@ func TestGenerate_PrivateKey(t *testing.T) {
 	}
 }
 
-func getSecretConfig(keyConfigs ...*secretagentv1alpha1.KeyConfig) *secretagentv1alpha1.SecretConfig {
-	return &secretagentv1alpha1.SecretConfig{
+func getSecretConfig(keyConfigs ...*v1alpha1.KeyConfig) *v1alpha1.SecretConfig {
+	return &v1alpha1.SecretConfig{
 		Name:      "asdfSecret",
 		Namespace: "default",
 		Keys:      keyConfigs,

@@ -25,7 +25,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	secretagentv1alpha1 "github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 
 	"github.com/ForgeRock/secret-agent/pkg/generator"
 	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
@@ -54,7 +54,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	log := reconciler.Log.WithValues("secretagentconfiguration", req.NamespacedName)
 
 	// your logic here
-	var instance secretagentv1alpha1.SecretAgentConfiguration
+	var instance v1alpha1.SecretAgentConfiguration
 	if err := reconciler.Get(ctx, req.NamespacedName, &instance); err != nil {
 
 		if errors.IsNotFound(err) {
@@ -76,7 +76,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 
 	//TODO Change to validating webhook: https://book.kubebuilder.io/cronjob-tutorial/webhook-implementation.html
 	validate := validator.New()
-	validate.RegisterStructValidation(secretagentv1alpha1.ConfigurationStructLevelValidator, secretagentv1alpha1.SecretAgentConfigurationSpec{})
+	validate.RegisterStructValidation(v1alpha1.ConfigurationStructLevelValidator, v1alpha1.SecretAgentConfigurationSpec{})
 
 	if err := validate.Struct(&instance.Spec); err != nil {
 		log.Error(err, "error validating configuration file: %+v")
@@ -92,7 +92,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	//   copy(src, dst) is not good enough, because the nodes get modified along the way
 	nodes = memorystore.GetDependencyNodes(&instance.Spec)
 
-	if instance.Spec.AppConfig.SecretsManager != secretagentv1alpha1.SecretsManagerNone {
+	if instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone {
 		err := secretsmanager.LoadExisting(ctx, &instance.Spec, nodes)
 		if err != nil {
 			log.Error(err, "error loading existing secrets from the Secrets Manager: %+v")
@@ -112,7 +112,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		}
 	}
 
-	if instance.Spec.AppConfig.SecretsManager != secretagentv1alpha1.SecretsManagerNone {
+	if instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone {
 		if err := secretsmanager.EnsureSecrets(ctx, &instance.Spec, nodes); err != nil {
 			log.Error(err, "error ensuring secrets in the Secrets Manager: %+v")
 			return ctrl.Result{}, err
@@ -171,7 +171,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 
 var (
 	jobOwnerKey = ".metadata.controller"
-	apiGVStr    = secretagentv1alpha1.GroupVersion.String()
+	apiGVStr    = v1alpha1.GroupVersion.String()
 )
 
 //SetupWithManager is used to register the reconciler to the manager
@@ -196,7 +196,7 @@ func (reconciler *SecretAgentConfigurationReconciler) SetupWithManager(mgr ctrl.
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&secretagentv1alpha1.SecretAgentConfiguration{}).
+		For(&v1alpha1.SecretAgentConfiguration{}).
 		Owns(&corev1.Secret{}).
 		Complete(reconciler)
 

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	secretagentv1alpha1 "github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	memorystore_test "github.com/ForgeRock/secret-agent/pkg/memorystore/test"
 )
 
@@ -20,7 +20,7 @@ func TestEnsureAcyclic(t *testing.T) {
 	// create circular dependency
 	nodes, _ = memorystore_test.GetExpectedNodesConfiguration2()
 	// find the secretAkeyA node
-	secretAkeyA := &secretagentv1alpha1.Node{}
+	secretAkeyA := &v1alpha1.Node{}
 	for _, node := range nodes {
 		if Equal(node.Path, []string{"SecretA", "KeyA"}) {
 			secretAkeyA = node
@@ -93,7 +93,7 @@ func TestEqual(t *testing.T) {
 	}
 }
 
-type nodeSorter []*secretagentv1alpha1.Node
+type nodeSorter []*v1alpha1.Node
 
 func (nodes nodeSorter) Len() int {
 	return len(nodes)
@@ -107,7 +107,7 @@ func (nodes nodeSorter) Less(i, j int) bool {
 	return fmt.Sprintf("%p", nodes[i]) < fmt.Sprintf("%p", nodes[j])
 }
 
-func sortParentsAndChildren(nodes []*secretagentv1alpha1.Node) []*secretagentv1alpha1.Node {
+func sortParentsAndChildren(nodes []*v1alpha1.Node) []*v1alpha1.Node {
 	for _, node := range nodes {
 		sort.Sort(nodeSorter(node.Parents))
 		sort.Sort(nodeSorter(node.Children))

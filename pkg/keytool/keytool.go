@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	// "os/exec"
-
 	// "github.com/ForgeRock/secret-agent/pkg/memorystore"
-	secretagentv1alpha1 "github.com/ForgeRock/secret-agent/api/v1alpha1"
 	// "github.com/pkg/errors"
 )
 
@@ -32,7 +31,7 @@ func init() {
 }
 
 // GenerateKeyPair generates a keystore
-func GenerateKeyPair(node *secretagentv1alpha1.Node) ([]byte, error) {
+func GenerateKeyPair(node *v1alpha1.Node) ([]byte, error) {
 	// // fetch the keystore password
 	// keystorePassword := ""
 	// for _, parentNode := range node.Parents {
@@ -46,7 +45,7 @@ func GenerateKeyPair(node *secretagentv1alpha1.Node) ([]byte, error) {
 	// }
 
 	// // fetch the deployment key
-	// deploymentKeyNode := &secretagentv1alpha1.Node{}
+	// deploymentKeyNode := &v1alpha1.Node{}
 	// found := false
 	// for _, parentNode := range node.Parents {
 	//     if memorystore.Equal(parentNode.Path, node.AliasConfig.SignedWithPath) {
