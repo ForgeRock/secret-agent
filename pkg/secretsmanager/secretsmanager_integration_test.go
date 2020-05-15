@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"testing"
 
-	"cloud.google.com/go/secretmanager/apiv1beta1"
-	secretspb "google.golang.org/genproto/googleapis/cloud/secrets/v1beta1"
-	"github.com/ForgeRock/secret-agent/pkg/types"
+	secretmanager "cloud.google.com/go/secretmanager/apiv1beta1"
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	secretspb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1beta1"
 )
 
 const (
@@ -17,19 +17,19 @@ const (
 )
 
 func TestLoadGCPSecrets(t *testing.T) {
-	keyConfig := &types.KeyConfig{
+	keyConfig := &v1alpha1.KeyConfig{
 		Name: "username",
 	}
-	secretConfig := &types.SecretConfig{
+	secretConfig := &v1alpha1.SecretConfig{
 		Name:      "load-gcp-secrets",
 		Namespace: "default",
-		Keys:      []*types.KeyConfig{keyConfig},
+		Keys:      []*v1alpha1.KeyConfig{keyConfig},
 	}
-	node := &types.Node{
+	node := &v1alpha1.Node{
 		Path:         []string{"load-gcp-secrets", "username"},
 		SecretConfig: secretConfig,
 	}
-	nodes := []*types.Node{node}
+	nodes := []*v1alpha1.Node{node}
 
 	// expect nothing found
 	ctx := context.Background()
@@ -101,20 +101,20 @@ func TestLoadGCPSecrets(t *testing.T) {
 }
 
 func TestEnsureGCPSecrets(t *testing.T) {
-	keyConfig := &types.KeyConfig{
+	keyConfig := &v1alpha1.KeyConfig{
 		Name: "username",
 	}
-	secretConfig := &types.SecretConfig{
+	secretConfig := &v1alpha1.SecretConfig{
 		Name:      "ensure-gcp-secrets",
 		Namespace: "default",
-		Keys:      []*types.KeyConfig{keyConfig},
+		Keys:      []*v1alpha1.KeyConfig{keyConfig},
 	}
-	node := &types.Node{
+	node := &v1alpha1.Node{
 		Path:         []string{"ensure-gcp-secrets", "username"},
 		SecretConfig: secretConfig,
 		Value:        []byte("admin"),
 	}
-	nodes := []*types.Node{node}
+	nodes := []*v1alpha1.Node{node}
 
 	// ensure default_ensure-gcp-secrets
 	ctx := context.Background()

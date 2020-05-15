@@ -1,4 +1,4 @@
-package types
+package v1alpha1
 
 import (
 	"testing"
@@ -14,7 +14,7 @@ func TestConfigurationStructLevelValidatorLiteral(t *testing.T) {
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
 	validate := validator.New()
-	validate.RegisterStructValidation(ConfigurationStructLevelValidator, Configuration{})
+	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
 	// missing Value
 	err := validate.Struct(config)
 	if err == nil {
@@ -36,7 +36,7 @@ func TestConfigurationStructLevelValidatorPassword(t *testing.T) {
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
 	validate := validator.New()
-	validate.RegisterStructValidation(ConfigurationStructLevelValidator, Configuration{})
+	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
 	// missing Length
 	err := validate.Struct(config)
 	if err == nil {
@@ -58,7 +58,7 @@ func TestConfigurationStructLevelValidatorPublicKeySSH(t *testing.T) {
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
 	validate := validator.New()
-	validate.RegisterStructValidation(ConfigurationStructLevelValidator, Configuration{})
+	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
 	// missing PrivateKeyPath
 	err := validate.Struct(config)
 	if err == nil {
@@ -75,7 +75,7 @@ func TestConfigurationStructLevelValidatorPublicKeySSH(t *testing.T) {
 		Name:      "myPrivateKey",
 		Namespace: "default",
 		Keys: []*KeyConfig{
-			&KeyConfig{
+			{
 				Name: "id_rsa",
 				Type: TypePrivateKey,
 			},
@@ -109,7 +109,7 @@ func TestConfigurationStructLevelValidatorPKCS12(t *testing.T) {
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, passwordKey)
 	validate := validator.New()
-	validate.RegisterStructValidation(ConfigurationStructLevelValidator, Configuration{})
+	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
 	// missing aliasConfigs
 	err := validate.Struct(config)
 	if err == nil {
@@ -171,7 +171,7 @@ func TestConfigurationStructLevelValidatorCA(t *testing.T) {
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, passwordKey)
 	validate := validator.New()
-	validate.RegisterStructValidation(ConfigurationStructLevelValidator, Configuration{})
+	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
 	// missing passwordPath
 	err := validate.Struct(config)
 	if err == nil {
@@ -188,7 +188,7 @@ func TestConfigurationStructLevelValidatorCA(t *testing.T) {
 		Name:      "mySecret1",
 		Namespace: "default",
 		Keys: []*KeyConfig{
-			&KeyConfig{
+			{
 				Name:   "deployment-ca.pin",
 				Type:   TypePassword,
 				Length: 32,
@@ -202,13 +202,13 @@ func TestConfigurationStructLevelValidatorCA(t *testing.T) {
 	}
 }
 
-func getConfig() *Configuration {
-	return &Configuration{
+func getConfig() *SecretAgentConfigurationSpec {
+	return &SecretAgentConfigurationSpec{
 		AppConfig: AppConfig{
 			SecretsManager: SecretsManagerNone,
 		},
 		Secrets: []*SecretConfig{
-			&SecretConfig{
+			{
 				Name:      "asdfSecret",
 				Namespace: "default",
 				Keys:      []*KeyConfig{},

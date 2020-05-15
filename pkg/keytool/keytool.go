@@ -3,10 +3,10 @@ package keytool
 import (
 	"fmt"
 	"io/ioutil"
-	// "os/exec"
 
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	// "os/exec"
 	// "github.com/ForgeRock/secret-agent/pkg/memorystore"
-	"github.com/ForgeRock/secret-agent/pkg/types"
 	// "github.com/pkg/errors"
 )
 
@@ -31,7 +31,7 @@ func init() {
 }
 
 // GenerateKeyPair generates a keystore
-func GenerateKeyPair(node *types.Node) ([]byte, error) {
+func GenerateKeyPair(node *v1alpha1.Node) ([]byte, error) {
 	// // fetch the keystore password
 	// keystorePassword := ""
 	// for _, parentNode := range node.Parents {
@@ -45,7 +45,7 @@ func GenerateKeyPair(node *types.Node) ([]byte, error) {
 	// }
 
 	// // fetch the deployment key
-	// deploymentKeyNode := &types.Node{}
+	// deploymentKeyNode := &v1alpha1.Node{}
 	// found := false
 	// for _, parentNode := range node.Parents {
 	//     if memorystore.Equal(parentNode.Path, node.AliasConfig.SignedWithPath) {

@@ -1,13 +1,13 @@
 package memorystore
 
 import (
-	"github.com/ForgeRock/secret-agent/pkg/types"
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/pkg/errors"
 )
 
 // EnsureAcyclic ensures the defined dependencies are acycilic,
 //   meaning there are no cirular dependencies
-func EnsureAcyclic(nodes []*types.Node) error {
+func EnsureAcyclic(nodes []*v1alpha1.Node) error {
 	// has no nodes, is acyclic
 	if len(nodes) == 0 {
 		return nil
@@ -50,8 +50,8 @@ func EnsureAcyclic(nodes []*types.Node) error {
 }
 
 // GetDependencyNodes generates the dependency tree(s)
-func GetDependencyNodes(config *types.Configuration) []*types.Node {
-	nodes := []*types.Node{}
+func GetDependencyNodes(config *v1alpha1.SecretAgentConfigurationSpec) []*v1alpha1.Node {
+	nodes := []*v1alpha1.Node{}
 	// create nodes without parents or children
 	nodes = rangeOverSecrets(config.Secrets, nodes, createNode)
 
@@ -62,10 +62,10 @@ func GetDependencyNodes(config *types.Configuration) []*types.Node {
 }
 
 // rangeFunc is a function to be run for each path
-type rangeFunc func([]string, []string, *types.SecretConfig, *types.KeyConfig, *types.AliasConfig, []*types.Node) []*types.Node
+type rangeFunc func([]string, []string, *v1alpha1.SecretConfig, *v1alpha1.KeyConfig, *v1alpha1.AliasConfig, []*v1alpha1.Node) []*v1alpha1.Node
 
 // rangeOverSecrets ranges over the secrets and runs functions to create and update dependency nodes
-func rangeOverSecrets(secretsConfig []*types.SecretConfig, nodes []*types.Node, fn rangeFunc) []*types.Node {
+func rangeOverSecrets(secretsConfig []*v1alpha1.SecretConfig, nodes []*v1alpha1.Node, fn rangeFunc) []*v1alpha1.Node {
 	for _, secretConfig := range secretsConfig {
 		for _, keyConfig := range secretConfig.Keys {
 			// key privateKeyPath
@@ -87,14 +87,14 @@ func rangeOverSecrets(secretsConfig []*types.SecretConfig, nodes []*types.Node, 
 }
 
 // createNode is a rangeFunc that creates dependency nodes without parents or children
-func createNode(parent, path []string, secretConfig *types.SecretConfig, keyConfig *types.KeyConfig, aliasConfig *types.AliasConfig, nodes []*types.Node) []*types.Node {
+func createNode(parent, path []string, secretConfig *v1alpha1.SecretConfig, keyConfig *v1alpha1.KeyConfig, aliasConfig *v1alpha1.AliasConfig, nodes []*v1alpha1.Node) []*v1alpha1.Node {
 	// make sure it doesn't already exist
 	for _, node := range nodes {
 		if Equal(node.Path, path) {
 			return nodes
 		}
 	}
-	node := &types.Node{
+	node := &v1alpha1.Node{
 		Path:         path,
 		SecretConfig: secretConfig,
 		KeyConfig:    keyConfig,
@@ -114,13 +114,13 @@ func createNode(parent, path []string, secretConfig *types.SecretConfig, keyConf
 }
 
 // addParentsAndChildren is a rangeFunc that sets the parents and children for dependency nodes
-func addParentsAndChildren(parentPath, path []string, secretConfig *types.SecretConfig, keyConfig *types.KeyConfig, aliasConfig *types.AliasConfig, nodes []*types.Node) []*types.Node {
+func addParentsAndChildren(parentPath, path []string, secretConfig *v1alpha1.SecretConfig, keyConfig *v1alpha1.KeyConfig, aliasConfig *v1alpha1.AliasConfig, nodes []*v1alpha1.Node) []*v1alpha1.Node {
 	if len(parentPath) > 0 {
 		// find the parent node(s) of the path
 	parentNodes:
 		for _, parentNode := range nodes {
 			if Equal(parentNode.Path, parentPath) {
-				node := &types.Node{}
+				node := &v1alpha1.Node{}
 				if aliasConfig != nil {
 					node = aliasConfig.Node
 				} else {
@@ -141,7 +141,7 @@ func addParentsAndChildren(parentPath, path []string, secretConfig *types.Secret
 	}
 
 	// all aliases should be parents of the relevant secret key
-	if keyConfig.Type == types.TypePKCS12 && aliasConfig != nil {
+	if keyConfig.Type == v1alpha1.TypePKCS12 && aliasConfig != nil {
 		// make sure it doesn't already exist
 		alreadyExists := false
 		for _, parentNode := range keyConfig.Node.Parents {
@@ -157,9 +157,9 @@ func addParentsAndChildren(parentPath, path []string, secretConfig *types.Secret
 	}
 
 	// storePassPath and keyPassPath should be parents of all aliases
-	if keyConfig.Type == types.TypePKCS12 && aliasConfig != nil {
+	if keyConfig.Type == v1alpha1.TypePKCS12 && aliasConfig != nil {
 		// find keyPassPath node
-		keyPassNode := &types.Node{}
+		keyPassNode := &v1alpha1.Node{}
 		for _, n := range nodes {
 			if Equal(n.Path, keyConfig.KeyPassPath) {
 				keyPassNode = n
@@ -178,7 +178,7 @@ func addParentsAndChildren(parentPath, path []string, secretConfig *types.Secret
 			keyPassNode.Children = append(keyPassNode.Children, aliasConfig.Node)
 		}
 		// find storePassPath node
-		storePassNode := &types.Node{}
+		storePassNode := &v1alpha1.Node{}
 		for _, n := range nodes {
 			if Equal(n.Path, keyConfig.StorePassPath) {
 				storePassNode = n

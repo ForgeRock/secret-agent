@@ -1,4 +1,20 @@
-package types
+/*
+
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package v1alpha1
 
 import (
 	"fmt"
@@ -6,89 +22,9 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-// Config Type Strings
-const (
-	TypeLiteral      = "literal"
-	TypePassword     = "password"
-	TypePrivateKey   = "privateKey"
-	TypePublicKeySSH = "publicKeySSH"
-	TypeJCEKS        = "jceks"
-	TypePKCS12       = "pkcs12"
-	TypeCA           = "ca"
-	TypeKeyPair      = "keyPair"
-	TypeHmacKey      = "hmacKey"
-	TypeAESKey       = "aesKey"
-)
-
-// SecretsManager Strings
-const (
-	SecretsManagerNone = "none"
-	SecretsManagerGCP  = "GCP"
-	SecretsManagerAWS  = "AWS"
-)
-
-// AppConfig is the configuration for the forgeops-secrets application
-type AppConfig struct {
-	CreateKubernetesObjects bool   `yaml:"createKubernetesObjects"`
-	SecretsManager          string `yaml:"secretsManager" validate:"required,oneof=none GCP AWS"`
-	GCPProjectID            string `yaml:"gcpProjectID"`
-	AWSRegion               string `yaml:"awsRegion"`
-}
-
-// Configuration is the configuration for the forgeops-secrets application
-//   and the secrets it manages
-type Configuration struct {
-	AppConfig AppConfig       `yaml:"appConfig" validate:"required,dive,required"`
-	Secrets   []*SecretConfig `yaml:"secrets" validate:"dive,required,unique=Name,gt=0,dive,required"`
-}
-
-// SecretConfig is the configuration for a specific Kubernetes secret
-type SecretConfig struct {
-	Name      string       `yaml:"name" validate:"required"`
-	Namespace string       `yaml:"namespace" validate:"required"`
-	Keys      []*KeyConfig `yaml:"keys" validate:"dive,required,unique=Name,gt=0,dive,required"`
-}
-
-// KeyConfig is the configuration for a specific data key
-type KeyConfig struct {
-	Name           string         `yaml:"name" validate:"required"`
-	Type           string         `yaml:"type" validate:"required,oneof=jceks literal password privateKey publicKeySSH pkcs12 jks jceks"`
-	Value          string         `yaml:"value,omitempty"`
-	Length         int            `yaml:"length,omitempty"`
-	PrivateKeyPath []string       `yaml:"privateKeyPath,omitempty"`
-	StorePassPath  []string       `yaml:"storePassPath,omitempty"`
-	KeyPassPath    []string       `yaml:"keyPassPath,omitempty"`
-	AliasConfigs   []*AliasConfig `yaml:"keystoreAliases,omitempty" validate:"dive"`
-	Node           *Node
-}
-
-// AliasConfig is the configuration for a keystore alias
-type AliasConfig struct {
-	Alias          string   `yaml:"alias" validate:"required"`
-	Type           string   `yaml:"type" validate:"required,oneof=ca keyPair hmacKey aesKey"`
-	Algorithm      string   `yaml:"algorithm" validate:"oneof='' ECDSAWithSHA256 SHA256withRSA"`
-	CommonName     string   `yaml:"commonName"`
-	Sans           []string `yaml:"sans"`
-	SignedWithPath []string `yaml:"signedWithPath"`
-	PasswordPath   []string `yaml:"passwordPath"`
-	Node           *Node
-}
-
-// Node is a dependency tree branch or leaf
-// Path is of form secret Name, data Key, and keystore Alias if exists
-type Node struct {
-	Path         []string
-	Parents      []*Node
-	Children     []*Node
-	SecretConfig *SecretConfig
-	KeyConfig    *KeyConfig
-	AliasConfig  *AliasConfig
-	Value        []byte
-}
-
 // ConfigurationStructLevelValidator ensures configuration is usable
 func ConfigurationStructLevelValidator(sl validator.StructLevel) {
-	config := sl.Current().Interface().(Configuration)
+	config := sl.Current().Interface().(SecretAgentConfigurationSpec)
 
 	// AppConfig
 	switch config.AppConfig.SecretsManager {

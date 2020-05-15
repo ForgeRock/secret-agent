@@ -1,0 +1,7 @@
+domain: secrets.forgerock.io
+repo: github.com/ForgeRock/secret-agent
+resources:
+- group: secret-agent
+  kind: SecretAgentConfiguration
+  version: v1alpha1
+version: "2"

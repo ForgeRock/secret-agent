@@ -3,11 +3,11 @@ package keytool
 import (
 	"testing"
 
-	"github.com/ForgeRock/secret-agent/pkg/types"
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 
 func TestGenKeyPair(t *testing.T) {
-	node := &types.Node{
+	node := &v1alpha1.Node{
 		Path: []string{"ds", "ssl-key-pair"},
 		// TODO
 	}

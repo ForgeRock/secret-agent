@@ -4,11 +4,11 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/ForgeRock/secret-agent/pkg/types"
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 
 func TestGeneratePkcs12(t *testing.T) {
-	alias := &types.AliasConfig{
+	alias := &v1alpha1.AliasConfig{
 		Alias:      "asdf",
 		Type:       "ca",
 		Algorithm:  "ECDSAWithSHA256",

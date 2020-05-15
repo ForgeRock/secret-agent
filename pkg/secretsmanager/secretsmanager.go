@@ -5,27 +5,27 @@ import (
 	"fmt"
 	"strings"
 
-	"cloud.google.com/go/secretmanager/apiv1beta1"
-	"github.com/ForgeRock/secret-agent/pkg/types"
+	secretmanager "cloud.google.com/go/secretmanager/apiv1beta1"
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	awssecretsmanager "github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/pkg/errors"
-	secretspb "google.golang.org/genproto/googleapis/cloud/secrets/v1beta1"
+	secretspb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1beta1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // LoadExisting loads any existing secrets in the secrets manager into the memory store
-func LoadExisting(ctx context.Context, config *types.Configuration, nodes []*types.Node) error {
+func LoadExisting(ctx context.Context, config *v1alpha1.SecretAgentConfigurationSpec, nodes []*v1alpha1.Node) error {
 	switch config.AppConfig.SecretsManager {
-	case types.SecretsManagerGCP:
+	case v1alpha1.SecretsManagerGCP:
 		err := loadGCPSecrets(ctx, config.AppConfig.GCPProjectID, nodes)
 		if err != nil {
 			return err
 		}
-	case types.SecretsManagerAWS:
+	case v1alpha1.SecretsManagerAWS:
 		err := loadAWSSecrets(config.AppConfig.AWSRegion, nodes)
 		if err != nil {
 			return err
@@ -36,14 +36,14 @@ func LoadExisting(ctx context.Context, config *types.Configuration, nodes []*typ
 }
 
 // EnsureSecrets ensures all secrets in the memory store are in the secrets manager
-func EnsureSecrets(ctx context.Context, config *types.Configuration, nodes []*types.Node) error {
+func EnsureSecrets(ctx context.Context, config *v1alpha1.SecretAgentConfigurationSpec, nodes []*v1alpha1.Node) error {
 	switch config.AppConfig.SecretsManager {
-	case types.SecretsManagerGCP:
+	case v1alpha1.SecretsManagerGCP:
 		err := ensureGCPSecrets(ctx, config.AppConfig.GCPProjectID, nodes)
 		if err != nil {
 			return err
 		}
-	case types.SecretsManagerAWS:
+	case v1alpha1.SecretsManagerAWS:
 		err := ensureAWSSecrets(config.AppConfig.AWSRegion, nodes)
 		if err != nil {
 			return err
@@ -54,7 +54,7 @@ func EnsureSecrets(ctx context.Context, config *types.Configuration, nodes []*ty
 }
 
 // loadGCPSecrets loads any existing secrets in Google SecretManager into the memory store
-func loadGCPSecrets(ctx context.Context, projectID string, nodes []*types.Node) error {
+func loadGCPSecrets(ctx context.Context, projectID string, nodes []*v1alpha1.Node) error {
 	// setup client
 	client, err := secretmanager.NewClient(ctx)
 	if err != nil {
@@ -74,7 +74,7 @@ func loadGCPSecrets(ctx context.Context, projectID string, nodes []*types.Node) 
 }
 
 // loadGCPSecret loads a single secret out of Google SecretManager, if it exists
-func loadGCPSecret(ctx context.Context, client *secretmanager.Client, projectID string, node *types.Node) error {
+func loadGCPSecret(ctx context.Context, client *secretmanager.Client, projectID string, node *v1alpha1.Node) error {
 	secretID := getSecretID(node.SecretConfig.Namespace, node.Path)
 	name := fmt.Sprintf("projects/%s/secrets/%s/versions/latest", projectID, secretID)
 	request := &secretspb.AccessSecretVersionRequest{Name: name}
@@ -93,7 +93,7 @@ func loadGCPSecret(ctx context.Context, client *secretmanager.Client, projectID 
 }
 
 // loadAWSSecrets loads any existing secrets in AWS SecretsManager into the memory store
-func loadAWSSecrets(awsRegion string, nodes []*types.Node) error {
+func loadAWSSecrets(awsRegion string, nodes []*v1alpha1.Node) error {
 	service := awssecretsmanager.New(session.New(&aws.Config{Region: aws.String(awsRegion)}))
 
 	for _, node := range nodes {
@@ -107,7 +107,7 @@ func loadAWSSecrets(awsRegion string, nodes []*types.Node) error {
 }
 
 // loadAWSSecret loads a single secret out of AWS SecretsManager
-func loadAWSSecret(service *awssecretsmanager.SecretsManager, node *types.Node) error {
+func loadAWSSecret(service *awssecretsmanager.SecretsManager, node *v1alpha1.Node) error {
 	secretID := getSecretID(node.SecretConfig.Namespace, node.Path)
 	request := &awssecretsmanager.GetSecretValueInput{SecretId: aws.String(secretID)}
 	result, err := service.GetSecretValue(request)
@@ -126,7 +126,7 @@ func loadAWSSecret(service *awssecretsmanager.SecretsManager, node *types.Node) 
 }
 
 // ensureGCPSecrets ensures all secrets in the memory store are in Google Secret Manager
-func ensureGCPSecrets(ctx context.Context, projectID string, nodes []*types.Node) error {
+func ensureGCPSecrets(ctx context.Context, projectID string, nodes []*v1alpha1.Node) error {
 	client, err := secretmanager.NewClient(ctx)
 	if err != nil {
 		return errors.WithStack(err)
@@ -187,7 +187,7 @@ func ensureGCPSecrets(ctx context.Context, projectID string, nodes []*types.Node
 }
 
 // ensureAWSSecrets ensures all secrets in the memory store are in AWS Secrets Manager
-func ensureAWSSecrets(awsRegion string, nodes []*types.Node) error {
+func ensureAWSSecrets(awsRegion string, nodes []*v1alpha1.Node) error {
 	service := awssecretsmanager.New(session.New(&aws.Config{Region: aws.String(awsRegion)}))
 
 	for _, node := range nodes {
