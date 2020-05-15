@@ -69,7 +69,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 
 	//Old main.go
 
-	//Namespace workaround: Populate the namespace field. Expected by downstream functions.
+	//Populate the Namespace field. All secrets are created in the namespace of the SecretAgentConfiguration
 	for index := range instance.Spec.Secrets {
 		instance.Spec.Secrets[index].Namespace = instance.Namespace
 	}

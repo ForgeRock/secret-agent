@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"flag"
 
 	// Allow kubeconfig auth providers such as "GCP"
 	secretagentv1alpha1 "github.com/ForgeRock/secret-agent/api/v1alpha1"
@@ -14,10 +13,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-)
-
-var (
-	kubeConfig = flag.String("kubeConfig", "", "path to the kubeconfig file, leave blank to use InClusterConfig")
 )
 
 // LoadExisting loads any existing secrets in the Kubernetes API into the memory store
