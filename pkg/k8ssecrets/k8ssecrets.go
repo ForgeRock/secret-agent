@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"reflect"
 
 	// Allow kubeconfig auth providers such as "GCP"
 
@@ -50,29 +51,36 @@ func LoadExisting(rclient client.Client, secretsConfig []*v1alpha1.SecretConfig)
 }
 
 // ApplySecrets applies secrets from the memory store into the Kubernetes API
-func ApplySecrets(rclient client.Client, secrets []*corev1.Secret) error {
-	for _, secret := range secrets {
-		// apply
-		_secret := &corev1.Secret{}
-		if err := rclient.Get(context.TODO(), types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, _secret); err != nil {
-			if k8sErrors.IsNotFound(err) {
-				// create
-				if err := rclient.Create(context.TODO(), secret); err != nil {
-					return errors.WithStack(err)
-				}
-			} else {
-				return errors.WithStack(err)
+func ApplySecrets(rclient client.Client, secret *corev1.Secret) (*string, error) {
+	var operation string
+	// apply
+	found := &corev1.Secret{}
+	if err := rclient.Get(context.TODO(), types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, found); err != nil {
+		if k8sErrors.IsNotFound(err) {
+			// create
+			if err := rclient.Create(context.TODO(), secret); err != nil {
+				return nil, errors.WithStack(err)
 			}
-
+			operation = "Created"
 		} else {
-			//if found, we need to update
-			if err := rclient.Update(context.TODO(), secret); err != nil {
-				return errors.WithStack(err)
-			}
+			return nil, errors.WithStack(err)
 		}
+
+	} else {
+		//secret found, check if we need to update
+		if !reflect.DeepEqual(secret.Data, found.Data) {
+			if err := rclient.Update(context.TODO(), secret); err != nil {
+				return nil, errors.WithStack(err)
+			}
+			operation = "Updated"
+		} else {
+			//Nothing happened
+			return nil, nil
+		}
+
 	}
 
-	return nil
+	return &operation, nil
 }
 
 // GenerateSecretAPIObjects generates a list of secrets references that can be used to target the Kubernetes API

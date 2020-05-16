@@ -110,20 +110,22 @@ func TestApplySecrets(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			"otherkey": []byte(`YWRtaW4=`),
+			"otherkey": []byte(`cGFzc3dvcmQ=`),
 		},
 	}
 
-	k8sSecrets := []*corev1.Secret{k8sSecret1, k8sSecret2}
-
 	scheme := runtime.NewScheme()
 	clientgoscheme.AddToScheme(scheme)
-	client := fake.NewFakeClientWithScheme(scheme)
-	err := ApplySecrets(client, k8sSecrets)
-	if err != nil {
+	client := fake.NewFakeClientWithScheme(scheme, k8sSecret2)
+	//k8sSecret1 should be created, k8sSecret2 should be updated
+	k8sSecret2.Data = map[string][]byte{"otherkey": []byte(`YWRtaW4=`)}
+	k8sSecrets := []*corev1.Secret{k8sSecret1, k8sSecret2}
+	if _, err := ApplySecrets(client, k8sSecret1); err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
-
+	if _, err := ApplySecrets(client, k8sSecret2); err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
 	for _, writtenSecret := range k8sSecrets {
 		k8sSecret := &corev1.Secret{}
 		if err := client.Get(context.TODO(), types.NamespacedName{Name: writtenSecret.Name, Namespace: writtenSecret.Namespace}, k8sSecret); err != nil {
