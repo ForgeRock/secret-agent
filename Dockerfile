@@ -2,7 +2,7 @@
 FROM gcr.io/forgerock-io/ds-empty/pit1:latest AS ds
 
 # Build the manager binary
-FROM golang:1.13-alpine as builder
+FROM golang:1.14-alpine as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests

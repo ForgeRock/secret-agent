@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -128,14 +129,22 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	}
 
 	if instance.Spec.AppConfig.CreateKubernetesObjects {
+		var operation *string
+		var err error
 		for _, secret := range k8sSecretList {
 			// Set SecretAgentConfiguration instance as the owner and controller of the secret
 			if err := ctrl.SetControllerReference(&instance, secret, reconciler.Scheme); err != nil {
 				return ctrl.Result{}, err
 			}
 			secret.Labels = labelsForSecretAgent(instance.Name)
-			k8ssecrets.ApplySecrets(reconciler.Client, []*corev1.Secret{secret})
 
+			if operation, err = k8ssecrets.ApplySecrets(reconciler.Client, secret); err != nil {
+				return ctrl.Result{}, err
+			}
+			if operation != nil {
+				//Print log if something happened
+				log.Info(fmt.Sprint(*operation, " Secret"), "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
+			}
 		}
 	}
 
