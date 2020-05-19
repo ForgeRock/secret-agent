@@ -1,9 +1,7 @@
 package k8ssecrets
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"reflect"
 
 	// Allow kubeconfig auth providers such as "GCP"
@@ -36,13 +34,7 @@ func LoadExisting(rclient client.Client, secretsConfig []*v1alpha1.SecretConfig)
 				continue
 			}
 			if value, exists := k8sSecret.Data[keyConfig.Name]; exists {
-				decoded := make([]byte, base64.StdEncoding.DecodedLen(len(value)))
-				_, err := base64.StdEncoding.Decode(decoded, value)
-				if err != nil {
-					return err
-				}
-				decoded = bytes.Trim(decoded, "\x00")
-				keyConfig.Node.Value = decoded
+				keyConfig.Node.Value = value
 			}
 		}
 	}
@@ -51,7 +43,7 @@ func LoadExisting(rclient client.Client, secretsConfig []*v1alpha1.SecretConfig)
 }
 
 // ApplySecrets applies secrets from the memory store into the Kubernetes API
-func ApplySecrets(rclient client.Client, secret *corev1.Secret) (*string, error) {
+func ApplySecrets(rclient client.Client, secret *corev1.Secret) (string, error) {
 	var operation string
 	// apply
 	found := &corev1.Secret{}
@@ -59,47 +51,40 @@ func ApplySecrets(rclient client.Client, secret *corev1.Secret) (*string, error)
 		if k8sErrors.IsNotFound(err) {
 			// create
 			if err := rclient.Create(context.TODO(), secret); err != nil {
-				return nil, errors.WithStack(err)
+				return "", errors.WithStack(err)
 			}
 			operation = "Created"
 		} else {
-			return nil, errors.WithStack(err)
+			return "", errors.WithStack(err)
 		}
 
 	} else {
 		//secret found, check if we need to update
 		if !reflect.DeepEqual(secret.Data, found.Data) {
 			if err := rclient.Update(context.TODO(), secret); err != nil {
-				return nil, errors.WithStack(err)
+				return "", errors.WithStack(err)
 			}
 			operation = "Updated"
 		} else {
 			//Nothing happened
-			return nil, nil
+			return "", nil
 		}
 
 	}
 
-	return &operation, nil
+	return operation, nil
 }
 
 // GenerateSecretAPIObjects generates a list of secrets references that can be used to target the Kubernetes API
-func GenerateSecretAPIObjects(secretConfigs []*v1alpha1.SecretConfig) []*corev1.Secret {
-	var k8sSecretList []*corev1.Secret
-	for _, secretConfig := range secretConfigs {
-		// prepare Kubernetes Secret
-		k8sSecret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: secretConfig.Name, Namespace: secretConfig.Namespace},
-			Data:       map[string][]byte{},
-		}
-		for _, keyConfig := range secretConfig.Keys {
-			encoded := make([]byte, base64.StdEncoding.EncodedLen(len(keyConfig.Node.Value)))
-			base64.StdEncoding.Encode(encoded, keyConfig.Node.Value)
-			k8sSecret.Data[keyConfig.Name] = encoded
-		}
-		k8sSecretList = append(k8sSecretList, k8sSecret)
-
+func GenerateSecretAPIObjects(secretConfig *v1alpha1.SecretConfig) *corev1.Secret {
+	// prepare Kubernetes Secret
+	k8sSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretConfig.Name, Namespace: secretConfig.Namespace},
+		Data:       map[string][]byte{},
 	}
-	return k8sSecretList
+	for _, keyConfig := range secretConfig.Keys {
+		k8sSecret.Data[keyConfig.Name] = keyConfig.Node.Value
+	}
+	return k8sSecret
 
 }

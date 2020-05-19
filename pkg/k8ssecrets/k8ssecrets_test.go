@@ -31,7 +31,7 @@ func TestLoadExisting(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			"username": []byte(`YWRtaW4=`),
+			"username": []byte(`admin`),
 		},
 	}
 	k8sSecret2 := &corev1.Secret{
@@ -40,7 +40,7 @@ func TestLoadExisting(t *testing.T) {
 			Namespace: "default",
 		},
 		Data: map[string][]byte{
-			"otherkey": []byte(`YWRtaW4=`),
+			"otherkey": []byte(`admin`),
 		},
 	}
 
@@ -78,13 +78,13 @@ func TestGenerateSecretAPIObjects(t *testing.T) {
 	}
 	secretsConfig[0].Keys = append(secretsConfig[0].Keys, key)
 
-	k8sSecrets := GenerateSecretAPIObjects(secretsConfig)
-	for _, k8sSecret := range k8sSecrets {
+	for _, secret := range secretsConfig {
+		k8sSecret := GenerateSecretAPIObjects(secret)
 		if k8sSecret.ObjectMeta.Name != "asdfSecret" {
 			t.Errorf("Expected asdfSecret, got: %s", k8sSecret.ObjectMeta.Name)
 		}
-		if string(k8sSecret.Data["username"]) != "YWRtaW4=" {
-			t.Errorf("Expected 'YWRtaW4=', got: '%s'", string(k8sSecret.Data["username"]))
+		if string(k8sSecret.Data["username"]) != "admin" {
+			t.Errorf("Expected 'admin', got: '%s'", string(k8sSecret.Data["username"]))
 		}
 		if len(k8sSecret.Data) != 1 {
 			t.Errorf("Expected 1 key, got: %d", len(k8sSecret.Data))
