@@ -167,6 +167,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	//Wait 2 seconds to allow k8s to update before triggeting another reconcile event
 	time.Sleep(2 * time.Second)
 	return ctrl.Result{}, nil
+
 }
 
 var (
