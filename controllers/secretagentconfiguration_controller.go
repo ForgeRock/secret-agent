@@ -121,29 +121,25 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	}
 
 	//end old main.go
-
-	k8sSecretList := k8ssecrets.GenerateSecretAPIObjects(instance.Spec.Secrets)
-
 	labelsForSecretAgent := func(name string) map[string]string {
 		return map[string]string{"managed-by-secret-agent": "true", "secret-agent-configuration-name": name}
 	}
 
 	if instance.Spec.AppConfig.CreateKubernetesObjects {
-		var operation *string
-		var err error
-		for _, secret := range k8sSecretList {
-			// Set SecretAgentConfiguration instance as the owner and controller of the secret
-			if err := ctrl.SetControllerReference(&instance, secret, reconciler.Scheme); err != nil {
-				return ctrl.Result{}, err
-			}
-			secret.Labels = labelsForSecretAgent(instance.Name)
+		for _, secret := range instance.Spec.Secrets {
+			k8sSecret := k8ssecrets.GenerateSecretAPIObjects(secret)
 
-			if operation, err = k8ssecrets.ApplySecrets(reconciler.Client, secret); err != nil {
+			// Set SecretAgentConfiguration instance as the owner and controller of the k8ssecret
+			if err := ctrl.SetControllerReference(&instance, k8sSecret, reconciler.Scheme); err != nil {
 				return ctrl.Result{}, err
 			}
-			if operation != nil {
+			k8sSecret.Labels = labelsForSecretAgent(instance.Name)
+
+			if operation, err := k8ssecrets.ApplySecrets(reconciler.Client, k8sSecret); err != nil {
+				return ctrl.Result{}, err
+			} else if len(operation) > 0 {
 				//Print log if something happened
-				log.Info(fmt.Sprint(*operation, " Secret"), "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
+				log.Info(fmt.Sprint(operation, " Secret"), "Secret.Namespace", k8sSecret.Namespace, "Secret.Name", k8sSecret.Name)
 			}
 		}
 	}
