@@ -32,7 +32,6 @@ import (
 	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
 	"github.com/ForgeRock/secret-agent/pkg/memorystore"
 	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
-	"github.com/go-playground/validator/v10"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -73,15 +72,6 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	//Populate the Namespace field. All secrets are created in the namespace of the SecretAgentConfiguration
 	for index := range instance.Spec.Secrets {
 		instance.Spec.Secrets[index].Namespace = instance.Namespace
-	}
-
-	//TODO Change to validating webhook: https://book.kubebuilder.io/cronjob-tutorial/webhook-implementation.html
-	validate := validator.New()
-	validate.RegisterStructValidation(v1alpha1.ConfigurationStructLevelValidator, v1alpha1.SecretAgentConfigurationSpec{})
-
-	if err := validate.Struct(&instance.Spec); err != nil {
-		log.Error(err, "error validating configuration file: %+v")
-		return ctrl.Result{}, err
 	}
 
 	nodes := memorystore.GetDependencyNodes(&instance.Spec)

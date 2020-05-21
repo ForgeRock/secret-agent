@@ -1,0 +1,52 @@
+
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: mutating-webhook-configuration
+webhooks:
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-secret-agent-secrets-forgerock-io-v1alpha1-secretagentconfiguration
+  failurePolicy: Fail
+  name: msecretagentconfiguration.kb.io
+  rules:
+  - apiGroups:
+    - secret-agent.secrets.forgerock.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - secretagentconfigurations
+
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: ValidatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: validating-webhook-configuration
+webhooks:
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-secret-agent-secrets-forgerock-io-v1alpha1-secretagentconfiguration
+  failurePolicy: Fail
+  name: vsecretagentconfiguration.kb.io
+  rules:
+  - apiGroups:
+    - secret-agent.secrets.forgerock.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - secretagentconfigurations
