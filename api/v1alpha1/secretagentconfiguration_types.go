@@ -40,6 +40,7 @@ type SecretAgentConfigurationStatus struct {
 	ManagedK8sSecrets   []string `json:"managedK8sSecrets,omitempty"`
 	ManagedAWSSecrets   []string `json:"managedAWSSecrets,omitempty"`
 	ManagedGCPSecrets   []string `json:"managedGCPSecrets,omitempty"`
+	ManagedAzureSecrets []string `json:"managedAzureSecrets,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -112,17 +113,19 @@ const (
 
 // SecretsManager Strings
 const (
-	SecretsManagerNone SecretsManager = "none"
-	SecretsManagerGCP  SecretsManager = "GCP"
-	SecretsManagerAWS  SecretsManager = "AWS"
+	SecretsManagerNone  SecretsManager = "none"
+	SecretsManagerGCP   SecretsManager = "GCP"
+	SecretsManagerAWS   SecretsManager = "AWS"
+	SecretsManagerAzure SecretsManager = "Azure"
 )
 
 // AppConfig is the configuration for the forgeops-secrets application
 type AppConfig struct {
 	CreateKubernetesObjects bool           `json:"createKubernetesObjects"`
-	SecretsManager          SecretsManager `json:"secretsManager" validate:"required,oneof=none GCP AWS"`
+	SecretsManager          SecretsManager `json:"secretsManager" validate:"required,oneof=none GCP AWS Azure"`
 	GCPProjectID            string         `json:"gcpProjectID,omitempty"`
 	AWSRegion               string         `json:"awsRegion,omitempty"`
+	AzureVaultName          string         `json:"azureVaultName,omitempty"`
 }
 
 // SecretConfig is the configuration for a specific Kubernetes secret

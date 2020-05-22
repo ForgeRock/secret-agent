@@ -5,16 +5,37 @@ package secretsmanager
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
 	"testing"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1beta1"
-	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/Azure/azure-sdk-for-go/profiles/latest/keyvault/keyvault"
+	azauth "github.com/Azure/azure-sdk-for-go/services/keyvault/auth"
 	secretspb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1beta1"
+
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 
-const (
-	projectID = "fraas-integration-testing"
+var (
+	gcpProjectID   string
+	azureVaultName string
 )
+
+func init() {
+	projectID, ok := os.LookupEnv("GOOGLE_CLOUD_PROJECT")
+	if !ok {
+		log.Fatalf("GOOGLE_CLOUD_PROJECT environment variable required")
+	}
+	gcpProjectID = projectID
+	vaultName, ok := os.LookupEnv("AZURE_VAULT_NAME")
+	if ok {
+		azureVaultName = vaultName
+	} else {
+		azureVaultName = "secret-agent-test"
+	}
+
+}
 
 func TestLoadGCPSecrets(t *testing.T) {
 	keyConfig := &v1alpha1.KeyConfig{
@@ -33,7 +54,7 @@ func TestLoadGCPSecrets(t *testing.T) {
 
 	// expect nothing found
 	ctx := context.Background()
-	err := loadGCPSecrets(ctx, projectID, nodes)
+	err := loadGCPSecrets(ctx, gcpProjectID, nodes)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
@@ -48,9 +69,9 @@ func TestLoadGCPSecrets(t *testing.T) {
 	}
 	defer client.Close()
 	secretID := "default_load-gcp-secrets_username"
-	name := fmt.Sprintf("projects/%s/secrets/%s", projectID, secretID)
+	name := fmt.Sprintf("projects/%s/secrets/%s", gcpProjectID, secretID)
 	createRequest := &secretspb.CreateSecretRequest{
-		Parent:   fmt.Sprintf("projects/%s", projectID),
+		Parent:   fmt.Sprintf("projects/%s", gcpProjectID),
 		SecretId: secretID,
 		Secret: &secretspb.Secret{
 			Name: name,
@@ -75,7 +96,7 @@ func TestLoadGCPSecrets(t *testing.T) {
 
 	// find default_load-gcp-secrets_username
 	// with no version
-	err = loadGCPSecrets(ctx, projectID, nodes)
+	err = loadGCPSecrets(ctx, gcpProjectID, nodes)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
@@ -91,13 +112,14 @@ func TestLoadGCPSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
-	err = loadGCPSecrets(ctx, projectID, nodes)
+	err = loadGCPSecrets(ctx, gcpProjectID, nodes)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
 	if string(node.Value) != "admin" {
 		t.Fatalf("Expected 'admin', got: %s", string(node.Value))
 	}
+
 }
 
 func TestEnsureGCPSecrets(t *testing.T) {
@@ -118,7 +140,7 @@ func TestEnsureGCPSecrets(t *testing.T) {
 
 	// ensure default_ensure-gcp-secrets
 	ctx := context.Background()
-	err := ensureGCPSecrets(ctx, projectID, nodes)
+	err := ensureGCPSecrets(ctx, gcpProjectID, nodes)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
@@ -128,9 +150,9 @@ func TestEnsureGCPSecrets(t *testing.T) {
 	}
 	defer client.Close()
 	secretID := "default_ensure-gcp-secrets_username"
-	name := fmt.Sprintf("projects/%s/secrets/%s/versions/latest", projectID, secretID)
+	name := fmt.Sprintf("projects/%s/secrets/%s/versions/latest", gcpProjectID, secretID)
 	defer func() {
-		name := fmt.Sprintf("projects/%s/secrets/%s", projectID, secretID)
+		name := fmt.Sprintf("projects/%s/secrets/%s", gcpProjectID, secretID)
 		deleteRequest := &secretspb.DeleteSecretRequest{Name: name}
 		err := client.DeleteSecret(ctx, deleteRequest)
 		if err != nil {
@@ -147,4 +169,84 @@ func TestEnsureGCPSecrets(t *testing.T) {
 	if data != "admin" {
 		t.Fatalf("Expected 'admin', got: '%s'", data)
 	}
+}
+
+// newAzureClient create an Azure client with an authorizer from the environment
+func newCliAzureClient() (*keyvault.BaseClient, error) {
+	authorizer, err := azauth.NewAuthorizerFromCLI()
+	if err != nil {
+		return &keyvault.BaseClient{}, err
+	}
+	client := keyvault.New()
+	client.Authorizer = authorizer
+	return &client, nil
+}
+
+// TestLoadAzure requires the vault to be pre-configured at the moment and for hard deletes too
+// az keyvault create --name "secret-agent-test" --resource-group "secret-agent-test" --location eastus --enable-soft-delete false
+func TestLoadAzure(t *testing.T) {
+	keyConfig := &v1alpha1.KeyConfig{
+		Name: "username",
+	}
+	secretConfig := &v1alpha1.SecretConfig{
+		Name:      "load-azure-secrets",
+		Namespace: "default",
+		Keys:      []*v1alpha1.KeyConfig{keyConfig},
+	}
+	node := &v1alpha1.Node{
+		Path:         []string{"load-azure-secrets", "username"},
+		SecretConfig: secretConfig,
+	}
+	nodes := []*v1alpha1.Node{node}
+
+	// expect nothing found
+	baseCtx := context.Background()
+	ctx1, cancel := context.WithTimeout(baseCtx, 3000000000)
+	defer cancel()
+	client, err := newCliAzureClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = loadAzureSecrets(ctx1, client, azureVaultName, nodes)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
+	if len(node.Value) != 0 {
+		t.Fatalf("Expected no value, got: %+v", node.Value)
+	}
+
+	// create a secret to load
+	ctx2, cancel := context.WithTimeout(baseCtx, 300000000)
+	defer cancel()
+	secretParams := keyvault.SecretSetParameters{}
+	secretName := getSecretID(node.SecretConfig.Namespace, node.Path)
+	secretValue := "test-value"
+	secretParams.Value = &secretValue
+	vaultURL := fmt.Sprintf(azureVaultURLFmt, azureVaultName)
+	_, err = client.SetSecret(ctx2, vaultURL, secretName, secretParams)
+	if err != nil {
+		fmt.Printf("unable to add/update secret: %+v", err)
+	}
+
+	// cleanup vault
+	defer func() {
+		// delete
+		_, err := client.DeleteSecret(baseCtx, vaultURL, secretName)
+		if err != nil {
+			t.Fatalf("Error deleting key from keyvault %s %s", vaultURL, secretName)
+		}
+	}()
+
+	// test loaded secrets
+	ctx3, cancel := context.WithTimeout(baseCtx, 300000000)
+	defer cancel()
+	err = loadAzureSecrets(ctx3, client, azureVaultName, nodes)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
+	if string(node.Value) != secretValue {
+		t.Fatalf("Expected value to be: %s but found: %s", secretValue, string(node.Value))
+	}
+
 }

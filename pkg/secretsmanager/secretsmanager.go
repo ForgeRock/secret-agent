@@ -6,7 +6,9 @@ import (
 	"strings"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1beta1"
-	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/Azure/azure-sdk-for-go/profiles/latest/keyvault/keyvault"
+	azauth "github.com/Azure/azure-sdk-for-go/services/keyvault/auth"
+	"github.com/Azure/go-autorest/autorest"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -15,6 +17,8 @@ import (
 	secretspb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1beta1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 
 // LoadExisting loads any existing secrets in the secrets manager into the memory store
@@ -27,6 +31,15 @@ func LoadExisting(ctx context.Context, config *v1alpha1.SecretAgentConfiguration
 		}
 	case v1alpha1.SecretsManagerAWS:
 		err := loadAWSSecrets(config.AppConfig.AWSRegion, nodes)
+		if err != nil {
+			return err
+		}
+	case v1alpha1.SecretsManagerAzure:
+		client, err := newAzureClient()
+		if err != nil {
+			return err
+		}
+		err = loadAzureSecrets(ctx, client, config.AppConfig.AzureVaultName, nodes)
 		if err != nil {
 			return err
 		}
@@ -50,6 +63,48 @@ func EnsureSecrets(ctx context.Context, config *v1alpha1.SecretAgentConfiguratio
 		}
 	}
 
+	return nil
+}
+
+var azureVaultURLFmt string = "https://%s.vault.azure.net/"
+
+// newAzureClient create an Azure client with an authorizer from the environment
+func newAzureClient() (*keyvault.BaseClient, error) {
+	authorizer, err := azauth.NewAuthorizerFromEnvironment()
+	if err != nil {
+		return &keyvault.BaseClient{}, err
+	}
+	client := keyvault.New()
+	client.Authorizer = authorizer
+	return &client, nil
+}
+
+// loadAzureSecrets loads any existing secrets in Azure Key Valut into the memory store
+func loadAzureSecrets(ctx context.Context, client *keyvault.BaseClient, vaultName string, nodes []*v1alpha1.Node) error {
+	for _, node := range nodes {
+		err := loadAzureSecret(ctx, client, vaultName, node)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	return nil
+}
+
+// loadAzureSecret load a secret from Azure Key Vault
+func loadAzureSecret(ctx context.Context, client *keyvault.BaseClient, vaultName string, node *v1alpha1.Node) error {
+	secretID := getSecretID(node.SecretConfig.Namespace, node.Path)
+	response, err := client.GetSecret(ctx, fmt.Sprintf(azureVaultURLFmt, vaultName), secretID, "")
+	if err != nil {
+		if e, ok := err.(autorest.DetailedError); ok && e.StatusCode.(int) == 404 {
+			return nil
+		}
+		return err
+	}
+	// safely dereference
+	if response.Value == nil {
+		return errors.WithStack(fmt.Errorf("no secret found for %s", secretID))
+	}
+	node.Value = []byte(*response.Value)
 	return nil
 }
 
@@ -248,5 +303,5 @@ func getSecretID(namespace string, path []string) string {
 		panic("path is not of length 2 or 3!")
 	}
 
-	return strings.ReplaceAll(strings.ReplaceAll(secretID, ".", "_"), "/", "_")
+	return strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(secretID, ".", "-"), "/", "-"), "_", "-")
 }
