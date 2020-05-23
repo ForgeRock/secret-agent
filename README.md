@@ -13,7 +13,7 @@ The secret-agent generates the secrets required by the ForgeRock Platform. These
 
 ### Deploy
 
-To deploy the secret-agent with default certificates, run:
+To deploy the secret-agent, run:
 
 ```bash
 kustomize build config/default | kubectl apply -f -
