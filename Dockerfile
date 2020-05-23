@@ -6,8 +6,7 @@ FROM golang:1.14-alpine as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
-COPY go.mod go.mod
-COPY go.sum go.sum
+COPY go.mod go.sum ./
 # cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
 RUN go mod download
@@ -46,3 +45,8 @@ RUN mkdir -p /opt/gen/secrets/generic/truststore && \
     chown -R forgerock:root /opt/gen
 
 USER forgerock
+
+# Set the entrypoint to /manager with automation,
+#   leave it as bash here to prevent the need for manual override when debugging
+ENTRYPOINT ["bash"]
+

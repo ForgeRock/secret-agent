@@ -4,16 +4,20 @@ import "github.com/ForgeRock/secret-agent/api/v1alpha1"
 
 // GetExpectedNodesConfiguration1 exports objects for testing
 func GetExpectedNodesConfiguration1() ([]*v1alpha1.Node, *v1alpha1.SecretAgentConfigurationSpec) {
-	// configuration
+	// am-boot secret config
 	amBootAuthorizedKeysKeyConfig := &v1alpha1.KeyConfig{
 		Name:           "authorized_keys",
 		Type:           v1alpha1.TypePublicKeySSH,
 		PrivateKeyPath: []string{"amster", "id_rsa"},
 	}
 	amBootSecretConfig := &v1alpha1.SecretConfig{
-		Name:      "am-boot",
-		Namespace: "fr-platform",
-		Keys:      []*v1alpha1.KeyConfig{amBootAuthorizedKeysKeyConfig}}
+		Name: "am-boot",
+		Keys: []*v1alpha1.KeyConfig{
+			amBootAuthorizedKeysKeyConfig,
+		},
+	}
+
+	// am-runtime secret config
 	amsterIDRsaKeyConfig := &v1alpha1.KeyConfig{
 		Name: "id_rsa",
 		Type: v1alpha1.TypePrivateKey,
@@ -24,57 +28,84 @@ func GetExpectedNodesConfiguration1() ([]*v1alpha1.Node, *v1alpha1.SecretAgentCo
 		PrivateKeyPath: []string{"amster", "id_rsa"},
 	}
 	amsterSecretConfig := &v1alpha1.SecretConfig{
-		Name:      "amster",
-		Namespace: "fr-platform",
+		Name: "amster",
 		Keys: []*v1alpha1.KeyConfig{
 			amsterIDRsaKeyConfig,
 			amsterAuthorizedKeysKeyConfig,
 		},
 	}
-	deploymentCAAliasConfig := &v1alpha1.AliasConfig{
-		Alias:        "deployment-ca",
-		Type:         v1alpha1.TypeCA,
-		PasswordPath: []string{"ds", "deployment-ca.pin"},
+
+	// platform-ca-private secret config
+	platformCAPrivateCAKeyConfig := &v1alpha1.KeyConfig{
+		Name: "ca",
+		Type: v1alpha1.TypeCA,
 	}
-	masterKeyAliasConfig := &v1alpha1.AliasConfig{
-		Alias: "master-key",
-		Type:  v1alpha1.TypeKeyPair,
-		// unrealistic, but helps with testing
-		SignedWithPath: []string{"ds", "keystore", "ssl-key-pair"},
+	platformCAPrivatePrivateKeyKeyConfig := &v1alpha1.KeyConfig{
+		Name:   "private-key",
+		Type:   v1alpha1.TypeCAPrivateKey,
+		CAPath: []string{"platform-ca-private", "ca"},
 	}
-	sslKeyPairAliasConfig := &v1alpha1.AliasConfig{
+	platformCAPrivateSecretConfig := &v1alpha1.SecretConfig{
+		Name: "platform-ca-private",
+		Keys: []*v1alpha1.KeyConfig{
+			platformCAPrivateCAKeyConfig,
+			platformCAPrivatePrivateKeyKeyConfig,
+		},
+	}
+
+	// platform-ca-public secret config
+	platformCAPublicPublicKeyKeyConfig := &v1alpha1.KeyConfig{
+		Name:           "public-key",
+		Type:           v1alpha1.TypeCAPublicKey,
+		PrivateKeyPath: []string{"platform-ca-private", "private-key"},
+	}
+	platformCAPublicSecretConfig := &v1alpha1.SecretConfig{
+		Name: "platform-ca-public",
+		Keys: []*v1alpha1.KeyConfig{
+			platformCAPublicPublicKeyKeyConfig,
+		},
+	}
+
+	// ds secret config
+	dsKeystoreCACertAliasConfig := &v1alpha1.AliasConfig{
+		Alias:         "ca-cert",
+		Type:          v1alpha1.TypePEMPublicKeyCopy,
+		PublicKeyPath: []string{"platform-ca-public", "public-key"},
+	}
+	dsKeystoreMasterKeyPairAliasConfig := &v1alpha1.AliasConfig{
+		Alias:          "master-key-pair",
+		Type:           v1alpha1.TypeKeyPair,
+		SignedWithPath: []string{"platform-ca-private", "private-key"},
+	}
+	dsKeystoreSSLKeyPairAliasConfig := &v1alpha1.AliasConfig{
 		Alias:          "ssl-key-pair",
 		Type:           v1alpha1.TypeKeyPair,
-		SignedWithPath: []string{"ds", "keystore", "deployment-ca"},
+		SignedWithPath: []string{"platform-ca-private", "private-key"},
 	}
-	keystoreKeyConfig := &v1alpha1.KeyConfig{
+	dsKeystoreKeyConfig := &v1alpha1.KeyConfig{
 		Name:          "keystore",
 		Type:          v1alpha1.TypePKCS12,
 		StorePassPath: []string{"ds", "keystore.pin"},
 		KeyPassPath:   []string{"ds", "keystore.pin"},
 		AliasConfigs: []*v1alpha1.AliasConfig{
-			deploymentCAAliasConfig,
-			masterKeyAliasConfig,
-			sslKeyPairAliasConfig,
+			dsKeystoreCACertAliasConfig,
+			dsKeystoreMasterKeyPairAliasConfig,
+			dsKeystoreSSLKeyPairAliasConfig,
 		},
 	}
-	keystorePinKeyConfig := &v1alpha1.KeyConfig{
+	dsKeystorePinKeyConfig := &v1alpha1.KeyConfig{
 		Name: "keystore.pin",
 		Type: v1alpha1.TypePassword,
 	}
-	deploymentCAPinKeyConfig := &v1alpha1.KeyConfig{
-		Name: "deployment-ca.pin",
-		Type: v1alpha1.TypePassword,
-	}
 	dsSecretConfig := &v1alpha1.SecretConfig{
-		Name:      "ds",
-		Namespace: "fr-platform",
+		Name: "ds",
 		Keys: []*v1alpha1.KeyConfig{
-			keystoreKeyConfig,
-			keystorePinKeyConfig,
-			deploymentCAPinKeyConfig,
+			dsKeystoreKeyConfig,
+			dsKeystorePinKeyConfig,
 		},
 	}
+
+	// full config
 	config := &v1alpha1.SecretAgentConfigurationSpec{
 		AppConfig: v1alpha1.AppConfig{
 			CreateKubernetesObjects: false,
@@ -82,106 +113,183 @@ func GetExpectedNodesConfiguration1() ([]*v1alpha1.Node, *v1alpha1.SecretAgentCo
 		}, Secrets: []*v1alpha1.SecretConfig{
 			amBootSecretConfig,
 			amsterSecretConfig,
+			platformCAPrivateSecretConfig,
+			platformCAPublicSecretConfig,
 			dsSecretConfig,
 		},
 	}
 
 	// nodes
 	nodes := []*v1alpha1.Node{}
-	amBootAuthorizedKeys := &v1alpha1.Node{
+
+	// am-boot secret config
+	amBootAuthorizedKeysNode := &v1alpha1.Node{
 		Path:         []string{"am-boot", "authorized_keys"},
 		SecretConfig: amBootSecretConfig,
 		KeyConfig:    amBootAuthorizedKeysKeyConfig,
 	}
-	amBootAuthorizedKeysKeyConfig.Node = amBootAuthorizedKeys
-	amsterIDRsa := &v1alpha1.Node{
+	amBootAuthorizedKeysKeyConfig.Node = amBootAuthorizedKeysNode
+
+	// am-runtime secret config
+	amsterIDRsaNode := &v1alpha1.Node{
 		Path:         []string{"amster", "id_rsa"},
 		SecretConfig: amsterSecretConfig,
 		KeyConfig:    amsterIDRsaKeyConfig,
 	}
-	amsterIDRsaKeyConfig.Node = amsterIDRsa
-	amsterAuthorizedKeys := &v1alpha1.Node{
+	amsterIDRsaKeyConfig.Node = amsterIDRsaNode
+	amsterAuthorizedKeysNode := &v1alpha1.Node{
 		Path:         []string{"amster", "authorized_keys"},
 		SecretConfig: amsterSecretConfig,
 		KeyConfig:    amsterAuthorizedKeysKeyConfig,
 	}
-	amsterAuthorizedKeysKeyConfig.Node = amsterAuthorizedKeys
-	dsKeystore := &v1alpha1.Node{
+	amsterAuthorizedKeysKeyConfig.Node = amsterAuthorizedKeysNode
+
+	// platform-ca-private secret config
+	platformCAPrivateCANode := &v1alpha1.Node{
+		Path:         []string{"platform-ca-private", "ca"},
+		SecretConfig: platformCAPrivateSecretConfig,
+		KeyConfig:    platformCAPrivateCAKeyConfig,
+	}
+	platformCAPrivateCAKeyConfig.Node = platformCAPrivateCANode
+	platformCAPrivatePrivateKeyNode := &v1alpha1.Node{
+		Path:         []string{"platform-ca-private", "private-key"},
+		SecretConfig: platformCAPrivateSecretConfig,
+		KeyConfig:    platformCAPrivatePrivateKeyKeyConfig,
+	}
+	platformCAPrivatePrivateKeyKeyConfig.Node = platformCAPrivatePrivateKeyNode
+
+	// platform-ca-public secret config
+	platformCAPublicPublicKeyNode := &v1alpha1.Node{
+		Path:         []string{"platform-ca-public", "public-key"},
+		SecretConfig: platformCAPublicSecretConfig,
+		KeyConfig:    platformCAPublicPublicKeyKeyConfig,
+	}
+	platformCAPublicPublicKeyKeyConfig.Node = platformCAPublicPublicKeyNode
+
+	// ds secret config
+	dsKeystoreNode := &v1alpha1.Node{
 		Path:         []string{"ds", "keystore"},
 		SecretConfig: dsSecretConfig,
-		KeyConfig:    keystoreKeyConfig,
+		KeyConfig:    dsKeystoreKeyConfig,
 	}
-	keystoreKeyConfig.Node = dsKeystore
-	dsKeystoreDeploymentCa := &v1alpha1.Node{
-		Path:         []string{"ds", "keystore", "deployment-ca"},
+	dsKeystoreKeyConfig.Node = dsKeystoreNode
+	dsKeystoreCACertNode := &v1alpha1.Node{
+		Path:         []string{"ds", "keystore", "ca-cert"},
 		SecretConfig: dsSecretConfig,
-		KeyConfig:    keystoreKeyConfig,
-		AliasConfig:  deploymentCAAliasConfig,
+		KeyConfig:    dsKeystoreKeyConfig,
+		AliasConfig:  dsKeystoreCACertAliasConfig,
 	}
-	deploymentCAAliasConfig.Node = dsKeystoreDeploymentCa
-	dsKeystoreMasterKey := &v1alpha1.Node{
-		Path:         []string{"ds", "keystore", "master-key"},
+	dsKeystoreCACertAliasConfig.Node = dsKeystoreCACertNode
+	dsKeystoreMasterKeyPairNode := &v1alpha1.Node{
+		Path:         []string{"ds", "keystore", "master-key-pair"},
 		SecretConfig: dsSecretConfig,
-		KeyConfig:    keystoreKeyConfig,
-		AliasConfig:  masterKeyAliasConfig,
+		KeyConfig:    dsKeystoreKeyConfig,
+		AliasConfig:  dsKeystoreMasterKeyPairAliasConfig,
 	}
-	masterKeyAliasConfig.Node = dsKeystoreMasterKey
-	dsKeystoreSslKeyPair := &v1alpha1.Node{
+	dsKeystoreMasterKeyPairAliasConfig.Node = dsKeystoreMasterKeyPairNode
+	dsKeystoreSSLKeyPairNode := &v1alpha1.Node{
 		Path:         []string{"ds", "keystore", "ssl-key-pair"},
 		SecretConfig: dsSecretConfig,
-		KeyConfig:    keystoreKeyConfig,
-		AliasConfig:  sslKeyPairAliasConfig,
+		KeyConfig:    dsKeystoreKeyConfig,
+		AliasConfig:  dsKeystoreSSLKeyPairAliasConfig,
 	}
-	sslKeyPairAliasConfig.Node = dsKeystoreSslKeyPair
-	dsKeystorePin := &v1alpha1.Node{
+	dsKeystoreSSLKeyPairAliasConfig.Node = dsKeystoreSSLKeyPairNode
+	dsKeystorePinNode := &v1alpha1.Node{
 		Path:         []string{"ds", "keystore.pin"},
 		SecretConfig: dsSecretConfig,
-		KeyConfig:    keystorePinKeyConfig,
+		KeyConfig:    dsKeystorePinKeyConfig,
 	}
-	keystorePinKeyConfig.Node = dsKeystorePin
-	dsDeploymentCAPin := &v1alpha1.Node{
-		Path:         []string{"ds", "deployment-ca.pin"},
-		SecretConfig: dsSecretConfig,
-		KeyConfig:    deploymentCAPinKeyConfig,
-	}
-	deploymentCAPinKeyConfig.Node = dsDeploymentCAPin
+	dsKeystorePinKeyConfig.Node = dsKeystorePinNode
 
-	// amBootAuthorizedKeys
-	amBootAuthorizedKeys.Parents = []*v1alpha1.Node{amsterIDRsa}
-	amBootAuthorizedKeys.Children = nil
-	nodes = append(nodes, amBootAuthorizedKeys)
-	// amsterIDRsa
-	amsterIDRsa.Parents = nil
-	amsterIDRsa.Children = []*v1alpha1.Node{amBootAuthorizedKeys, amsterAuthorizedKeys}
-	nodes = append(nodes, amsterIDRsa)
-	// amsterAuthorizedKeys
-	amsterAuthorizedKeys.Parents = []*v1alpha1.Node{amsterIDRsa}
-	amsterAuthorizedKeys.Children = nil
-	nodes = append(nodes, amsterAuthorizedKeys)
-	// dsKeystore
-	dsKeystore.Parents = []*v1alpha1.Node{dsKeystoreDeploymentCa, dsKeystoreMasterKey, dsKeystoreSslKeyPair, dsKeystorePin}
-	dsKeystore.Children = nil
-	nodes = append(nodes, dsKeystore)
-	// dsKeystoreDeploymentCa
-	dsKeystoreDeploymentCa.Parents = []*v1alpha1.Node{dsKeystorePin, dsDeploymentCAPin}
-	dsKeystoreDeploymentCa.Children = []*v1alpha1.Node{dsKeystore, dsKeystoreSslKeyPair}
-	nodes = append(nodes, dsKeystoreDeploymentCa)
-	// dsKeystoreMasterKey
-	dsKeystoreMasterKey.Parents = []*v1alpha1.Node{dsKeystorePin, dsKeystoreSslKeyPair}
-	dsKeystoreMasterKey.Children = []*v1alpha1.Node{dsKeystore}
-	nodes = append(nodes, dsKeystoreMasterKey)
-	// dsKeystoreSslKeyPair
-	dsKeystoreSslKeyPair.Parents = []*v1alpha1.Node{dsKeystorePin, dsKeystoreDeploymentCa}
-	dsKeystoreSslKeyPair.Children = []*v1alpha1.Node{dsKeystore, dsKeystoreMasterKey}
-	nodes = append(nodes, dsKeystoreSslKeyPair)
-	// dsKeystorePin
-	dsKeystorePin.Parents = nil
-	dsKeystorePin.Children = []*v1alpha1.Node{dsKeystoreDeploymentCa, dsKeystoreMasterKey, dsKeystoreSslKeyPair, dsKeystore}
-	nodes = append(nodes, dsKeystorePin)
-	// dsDeploymentCAPin
-	dsDeploymentCAPin.Parents = nil
-	dsDeploymentCAPin.Children = []*v1alpha1.Node{dsKeystoreDeploymentCa}
-	nodes = append(nodes, dsDeploymentCAPin)
+	// parents and children
+	// amBootAuthorizedKeysNode
+	amBootAuthorizedKeysNode.Parents = []*v1alpha1.Node{
+		amsterIDRsaNode,
+	}
+	amBootAuthorizedKeysNode.Children = nil
+	nodes = append(nodes, amBootAuthorizedKeysNode)
+	// amsterIDRsaNode
+	amsterIDRsaNode.Parents = nil
+	amsterIDRsaNode.Children = []*v1alpha1.Node{
+		amBootAuthorizedKeysNode,
+		amsterAuthorizedKeysNode,
+	}
+	nodes = append(nodes, amsterIDRsaNode)
+	// amsterAuthorizedKeysNode
+	amsterAuthorizedKeysNode.Parents = []*v1alpha1.Node{
+		amsterIDRsaNode,
+	}
+	amsterAuthorizedKeysNode.Children = nil
+	nodes = append(nodes, amsterAuthorizedKeysNode)
+	// platformCAPrivateCANode
+	platformCAPrivateCANode.Parents = nil
+	platformCAPrivateCANode.Children = []*v1alpha1.Node{
+		platformCAPrivatePrivateKeyNode,
+	}
+	nodes = append(nodes, platformCAPrivateCANode)
+	// platformCAPrivatePrivateKeyNode
+	platformCAPrivatePrivateKeyNode.Parents = []*v1alpha1.Node{
+		platformCAPrivateCANode,
+	}
+	platformCAPrivatePrivateKeyNode.Children = []*v1alpha1.Node{
+		platformCAPublicPublicKeyNode,
+		dsKeystoreMasterKeyPairNode,
+		dsKeystoreSSLKeyPairNode,
+	}
+	nodes = append(nodes, platformCAPrivatePrivateKeyNode)
+	// platformCAPublicPublicKeyNode
+	platformCAPublicPublicKeyNode.Parents = []*v1alpha1.Node{
+		platformCAPrivatePrivateKeyNode,
+	}
+	platformCAPublicPublicKeyNode.Children = []*v1alpha1.Node{
+		dsKeystoreCACertNode,
+	}
+	nodes = append(nodes, platformCAPublicPublicKeyNode)
+	// dsKeystoreNode
+	dsKeystoreNode.Parents = []*v1alpha1.Node{
+		dsKeystoreCACertNode,
+		dsKeystoreMasterKeyPairNode,
+		dsKeystoreSSLKeyPairNode,
+		dsKeystorePinNode,
+	}
+	dsKeystoreNode.Children = nil
+	nodes = append(nodes, dsKeystoreNode)
+	// dsKeystoreCACertNode
+	dsKeystoreCACertNode.Parents = []*v1alpha1.Node{
+		platformCAPublicPublicKeyNode,
+		dsKeystorePinNode,
+	}
+	dsKeystoreCACertNode.Children = []*v1alpha1.Node{
+		dsKeystoreNode,
+	}
+	nodes = append(nodes, dsKeystoreCACertNode)
+	// dsKeystoreMasterKeyPairNode
+	dsKeystoreMasterKeyPairNode.Parents = []*v1alpha1.Node{
+		platformCAPrivatePrivateKeyNode,
+		dsKeystorePinNode,
+	}
+	dsKeystoreMasterKeyPairNode.Children = []*v1alpha1.Node{
+		dsKeystoreNode,
+	}
+	nodes = append(nodes, dsKeystoreMasterKeyPairNode)
+	// dsKeystoreSSLKeyPairNode
+	dsKeystoreSSLKeyPairNode.Parents = []*v1alpha1.Node{
+		platformCAPrivatePrivateKeyNode,
+		dsKeystorePinNode,
+	}
+	dsKeystoreSSLKeyPairNode.Children = []*v1alpha1.Node{
+		dsKeystoreNode,
+	}
+	nodes = append(nodes, dsKeystoreSSLKeyPairNode)
+	// dsKeystorePinNode
+	dsKeystorePinNode.Parents = nil
+	dsKeystorePinNode.Children = []*v1alpha1.Node{
+		dsKeystoreCACertNode,
+		dsKeystoreMasterKeyPairNode,
+		dsKeystoreSSLKeyPairNode,
+		dsKeystoreNode,
+	}
+	nodes = append(nodes, dsKeystorePinNode)
 
 	return nodes, config
 }
@@ -194,9 +302,8 @@ func GetExpectedNodesConfiguration2() ([]*v1alpha1.Node, *v1alpha1.SecretAgentCo
 		PrivateKeyPath: []string{"SecretB", "KeyB"},
 	}
 	secretASecretConfig := &v1alpha1.SecretConfig{
-		Name:      "SecretA",
-		Namespace: "default",
-		Keys:      []*v1alpha1.KeyConfig{secretAKeyAKeyConfig},
+		Name: "SecretA",
+		Keys: []*v1alpha1.KeyConfig{secretAKeyAKeyConfig},
 	}
 	secretBKeyBKeyConfig := &v1alpha1.KeyConfig{
 		Name:           "KeyB",
@@ -207,8 +314,7 @@ func GetExpectedNodesConfiguration2() ([]*v1alpha1.Node, *v1alpha1.SecretAgentCo
 		PrivateKeyPath: []string{"SecretB", "KeyB"},
 	}
 	secretBSecretConfig := &v1alpha1.SecretConfig{
-		Name:      "SecretB",
-		Namespace: "default",
+		Name: "SecretB",
 		Keys: []*v1alpha1.KeyConfig{
 			secretBKeyBKeyConfig,
 			secretBKeyCKeyConfig,
@@ -241,8 +347,7 @@ func GetExpectedNodesConfiguration2() ([]*v1alpha1.Node, *v1alpha1.SecretAgentCo
 	}
 	secretCKeyDKeyConfig := &v1alpha1.KeyConfig{Name: "KeyD"}
 	secretCSecretConfig := &v1alpha1.SecretConfig{
-		Name:      "SecretC",
-		Namespace: "default",
+		Name: "SecretC",
 		Keys: []*v1alpha1.KeyConfig{
 			secretCKeyCKeyConfig,
 			secretCKeyDKeyConfig,
@@ -253,15 +358,13 @@ func GetExpectedNodesConfiguration2() ([]*v1alpha1.Node, *v1alpha1.SecretAgentCo
 		PrivateKeyPath: []string{"SecretE", "KeyE"},
 	}
 	secretDSecretConfig := &v1alpha1.SecretConfig{
-		Name:      "SecretD",
-		Namespace: "default",
-		Keys:      []*v1alpha1.KeyConfig{secretDKeyDKeyConfig},
+		Name: "SecretD",
+		Keys: []*v1alpha1.KeyConfig{secretDKeyDKeyConfig},
 	}
 	secretEKeyEKeyConfig := &v1alpha1.KeyConfig{Name: "KeyE"}
 	secretESecretConfig := &v1alpha1.SecretConfig{
-		Name:      "SecretE",
-		Namespace: "default",
-		Keys:      []*v1alpha1.KeyConfig{secretEKeyEKeyConfig},
+		Name: "SecretE",
+		Keys: []*v1alpha1.KeyConfig{secretEKeyEKeyConfig},
 	}
 	config := &v1alpha1.SecretAgentConfigurationSpec{
 		AppConfig: v1alpha1.AppConfig{
@@ -349,49 +452,107 @@ func GetExpectedNodesConfiguration2() ([]*v1alpha1.Node, *v1alpha1.SecretAgentCo
 	}
 	secretEKeyEKeyConfig.Node = secretEkeyE
 
+	// parents and children
 	// secretAkeyA
-	secretAkeyA.Parents = []*v1alpha1.Node{secretBkeyB}
+	secretAkeyA.Parents = []*v1alpha1.Node{
+		secretBkeyB,
+	}
 	secretAkeyA.Children = nil
 	nodes = append(nodes, secretAkeyA)
 	// secretBkeyB
-	secretBkeyB.Parents = []*v1alpha1.Node{secretCkeyCalias1}
-	secretBkeyB.Children = []*v1alpha1.Node{secretAkeyA, secretBkeyC}
+	secretBkeyB.Parents = []*v1alpha1.Node{
+		secretCkeyCalias1,
+	}
+	secretBkeyB.Children = []*v1alpha1.Node{
+		secretAkeyA,
+		secretBkeyC,
+	}
 	nodes = append(nodes, secretBkeyB)
 	// secretBkeyC
-	secretBkeyC.Parents = []*v1alpha1.Node{secretBkeyB}
+	secretBkeyC.Parents = []*v1alpha1.Node{
+		secretBkeyB,
+	}
 	secretBkeyC.Children = nil
 	nodes = append(nodes, secretBkeyC)
 	// secretCkeyC
-	secretCkeyC.Parents = []*v1alpha1.Node{secretCkeyCalias1, secretCkeyCalias2, secretCkeyCalias3, secretCkeyCalias4, secretCkeyD, secretDkeyD}
+	secretCkeyC.Parents = []*v1alpha1.Node{
+		secretCkeyCalias1,
+		secretCkeyCalias2,
+		secretCkeyCalias3,
+		secretCkeyCalias4,
+		secretCkeyD,
+		secretDkeyD,
+	}
 	secretCkeyC.Children = nil
 	nodes = append(nodes, secretCkeyC)
 	// secretCkeyCalias1
-	secretCkeyCalias1.Parents = []*v1alpha1.Node{secretCkeyD, secretDkeyD}
-	secretCkeyCalias1.Children = []*v1alpha1.Node{secretBkeyB, secretCkeyC, secretCkeyCalias2}
+	secretCkeyCalias1.Parents = []*v1alpha1.Node{
+		secretCkeyD,
+		secretDkeyD,
+	}
+	secretCkeyCalias1.Children = []*v1alpha1.Node{
+		secretBkeyB,
+		secretCkeyC,
+		secretCkeyCalias2,
+	}
 	nodes = append(nodes, secretCkeyCalias1)
 	// secretCkeyCalias2
-	secretCkeyCalias2.Parents = []*v1alpha1.Node{secretCkeyD, secretDkeyD, secretCkeyCalias1}
-	secretCkeyCalias2.Children = []*v1alpha1.Node{secretCkeyC, secretCkeyCalias3}
+	secretCkeyCalias2.Parents = []*v1alpha1.Node{
+		secretCkeyD,
+		secretDkeyD,
+		secretCkeyCalias1,
+	}
+	secretCkeyCalias2.Children = []*v1alpha1.Node{
+		secretCkeyC,
+		secretCkeyCalias3,
+	}
 	nodes = append(nodes, secretCkeyCalias2)
 	// secretCkeyCalias3
-	secretCkeyCalias3.Parents = []*v1alpha1.Node{secretCkeyD, secretDkeyD, secretCkeyCalias2}
-	secretCkeyCalias3.Children = []*v1alpha1.Node{secretCkeyC}
+	secretCkeyCalias3.Parents = []*v1alpha1.Node{
+		secretCkeyD,
+		secretDkeyD,
+		secretCkeyCalias2,
+	}
+	secretCkeyCalias3.Children = []*v1alpha1.Node{
+		secretCkeyC,
+	}
 	nodes = append(nodes, secretCkeyCalias3)
 	// secretCkeyCalias4
-	secretCkeyCalias4.Parents = []*v1alpha1.Node{secretCkeyD, secretDkeyD}
-	secretCkeyCalias4.Children = []*v1alpha1.Node{secretCkeyC}
+	secretCkeyCalias4.Parents = []*v1alpha1.Node{
+		secretCkeyD,
+		secretDkeyD,
+	}
+	secretCkeyCalias4.Children = []*v1alpha1.Node{
+		secretCkeyC,
+	}
 	nodes = append(nodes, secretCkeyCalias4)
 	// secretCkeyD
 	secretCkeyD.Parents = nil
-	secretCkeyD.Children = []*v1alpha1.Node{secretCkeyCalias1, secretCkeyCalias2, secretCkeyCalias3, secretCkeyCalias4, secretCkeyC}
+	secretCkeyD.Children = []*v1alpha1.Node{
+		secretCkeyCalias1,
+		secretCkeyCalias2,
+		secretCkeyCalias3,
+		secretCkeyCalias4,
+		secretCkeyC,
+	}
 	nodes = append(nodes, secretCkeyD)
 	// secretDkeyD
-	secretDkeyD.Parents = []*v1alpha1.Node{secretEkeyE}
-	secretDkeyD.Children = []*v1alpha1.Node{secretCkeyCalias1, secretCkeyCalias2, secretCkeyCalias3, secretCkeyCalias4, secretCkeyC}
+	secretDkeyD.Parents = []*v1alpha1.Node{
+		secretEkeyE,
+	}
+	secretDkeyD.Children = []*v1alpha1.Node{
+		secretCkeyCalias1,
+		secretCkeyCalias2,
+		secretCkeyCalias3,
+		secretCkeyCalias4,
+		secretCkeyC,
+	}
 	nodes = append(nodes, secretDkeyD)
 	// secretEkeyE
 	secretEkeyE.Parents = nil
-	secretEkeyE.Children = []*v1alpha1.Node{secretDkeyD}
+	secretEkeyE.Children = []*v1alpha1.Node{
+		secretDkeyD,
+	}
 	nodes = append(nodes, secretEkeyE)
 
 	return nodes, config

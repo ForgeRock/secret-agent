@@ -1,12 +1,61 @@
 package generator
 
 import (
-	"regexp"
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
-	memorystore_test "github.com/ForgeRock/secret-agent/pkg/memorystore/test"
+	"github.com/ForgeRock/secret-agent/pkg/memorystore/test"
+	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
 )
+
+var outputRigs = flag.Bool("outputRigs", false, "Write YAML file versions of the test rigs")
+
+func TestOutputTestRigs(t *testing.T) {
+	flag.Parse()
+	if *outputRigs {
+		_, config1 := memorystore_test.GetExpectedNodesConfiguration1()
+		_, config2 := memorystore_test.GetExpectedNodesConfiguration2()
+		rigs := []struct {
+			config   *v1alpha1.SecretAgentConfigurationSpec
+			filePath string
+		}{
+			{
+				config:   config1,
+				filePath: "../../testConfiguration1.yaml",
+			},
+			{
+				config:   config2,
+				filePath: "../../testConfiguration2.yaml",
+			},
+		}
+		for _, rig := range rigs {
+			file, err := os.Create(rig.filePath)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %+v", err)
+			}
+			defer file.Close()
+			// remove all nodes since they cause circular references
+			for _, secretConfig := range rig.config.Secrets {
+				for _, keyConfig := range secretConfig.Keys {
+					keyConfig.Node = nil
+					for _, aliasConfig := range keyConfig.AliasConfigs {
+						aliasConfig.Node = nil
+					}
+				}
+			}
+			encoder := yaml.NewEncoder(file)
+			err = encoder.Encode(rig.config)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %+v", err)
+			}
+		}
+	}
+}
 
 func TestRecursivelyGenerateIfMissing(t *testing.T) {
 	// setup
@@ -16,7 +65,7 @@ func TestRecursivelyGenerateIfMissing(t *testing.T) {
 	for _, node := range nodes {
 		err := RecursivelyGenerateIfMissing(config, node)
 		if err != nil {
-			t.Errorf("Expected no error, got: %+v", err)
+			t.Fatalf("Expected no error, got: %+v", err)
 		}
 		for _, parentNode := range node.Parents {
 			if len(parentNode.Value) == 0 {
@@ -25,10 +74,10 @@ func TestRecursivelyGenerateIfMissing(t *testing.T) {
 		}
 	}
 
-	// doesn't generate new aliases if key existing and not using secrets manager
+	// doesn't generate new aliases if key exists and not using secrets manager
 	// nodes, config = memorystore_test.GetExpectedNodesConfiguration1()
 	// for _, node := range nodes {
-	//     if node.KeyConfig.Type == v1alpha1.TypeJCEKS {
+	//     if node.KeyConfig.Type == v1alpha1.TypeJCEKS && node.AliasConfig == nil {
 	//         node.Value = []byte("Asdf")
 	//     }
 	// }
@@ -47,6 +96,29 @@ func TestRecursivelyGenerateIfMissing(t *testing.T) {
 	// }
 
 	// doesn't generate if value already exists
+}
+
+func TestGenerate_PKCS12(t *testing.T) {
+	keystoreFilePath = fmt.Sprintf("%s/keystore.p12", tempDir)
+	err := ioutil.WriteFile(keystoreFilePath, []byte("asdf"), 0644)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
+	defer os.Remove(keystoreFilePath)
+	keyConfig := &v1alpha1.KeyConfig{
+		Name: "keystore",
+		Type: v1alpha1.TypePKCS12,
+	}
+	secretConfig := getSecretConfig(keyConfig)
+	node := &v1alpha1.Node{
+		Path:         []string{"asdfSecret", "keystore"},
+		SecretConfig: secretConfig,
+		KeyConfig:    keyConfig,
+	}
+	err = Generate(node)
+	if err != nil {
+		t.Errorf("Expected no error, got: %+v", err)
+	}
 }
 
 func TestGenerate_Literal(t *testing.T) {
@@ -144,39 +216,100 @@ func TestGenerate_PrivateKey(t *testing.T) {
 			fdsaPublicKey2Node,
 		},
 	}
+	asdfPublicKey1Node.Parents = append(asdfPublicKey1Node.Parents, asdfPrivateKeyNode)
+	fdsaPublicKey2Node.Parents = append(fdsaPublicKey2Node.Parents, asdfPrivateKeyNode)
 
 	// generate
-	err := Generate(asdfPrivateKeyNode)
+	nodes := []*v1alpha1.Node{asdfPrivateKeyNode, asdfPublicKey1Node, fdsaPublicKey2Node}
+	for _, node := range nodes {
+		err := Generate(node)
+		if err != nil {
+			t.Errorf("Expected no error, got: %+v", err)
+		}
+	}
+
+	// check values
+	for _, node := range nodes {
+		if len(node.Value) == 0 {
+			t.Error("Expected non-zero value")
+		}
+	}
+}
+
+func TestGenerate_CAPrivateKey(t *testing.T) {
+	// setup ca
+	asdfCAKeyConfig := &v1alpha1.KeyConfig{
+		Name: "ca",
+		Type: v1alpha1.TypeCA,
+	}
+	// setup same secret privateKey
+	asdfCAPrivateKeyKeyConfig := &v1alpha1.KeyConfig{
+		Name:   "private-key",
+		Type:   v1alpha1.TypeCAPrivateKey,
+		CAPath: []string{"asdfSecret", "ca"},
+	}
+	asdfSecretConfig := getSecretConfig(asdfCAPrivateKeyKeyConfig, asdfCAKeyConfig)
+
+	asdfCANode := &v1alpha1.Node{
+		Path:         []string{"asdfSecret", "ca"},
+		SecretConfig: asdfSecretConfig,
+		KeyConfig:    asdfCAKeyConfig,
+	}
+	asdfCAPrivateKeyNode := &v1alpha1.Node{
+		Path:         []string{"asdfSecret", "private-key"},
+		SecretConfig: asdfSecretConfig,
+		KeyConfig:    asdfCAPrivateKeyKeyConfig,
+		Parents: []*v1alpha1.Node{
+			asdfCANode,
+		},
+	}
+	asdfCANode.Children = append(asdfCANode.Children, asdfCAPrivateKeyNode)
+
+	// generate
+	err := Generate(asdfCANode)
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
 	}
 
 	// check privateKey
-	if !regexp.MustCompile(`BEGIN RSA PRIVATE KEY`).Match(asdfPrivateKeyNode.Value) {
-		t.Error("Expected PRIVATE KEY match, found none")
+	if len(asdfCAPrivateKeyNode.Value) == 0 {
+		t.Error("Expected non-zero value")
+	}
+}
+
+func TestGetValueFromParent(t *testing.T) {
+	// parent not found
+	dsKeystore := &v1alpha1.Node{
+		Path: []string{"ds", "keystore"},
+	}
+	_, err := getValueFromParent([]string{"ds", "keystore.pin"}, dsKeystore)
+	np := &noParentWithPathError{}
+	if !errors.As(err, &np) {
+		t.Errorf("Expected noParentWithPathError error, got: %T", errors.Cause(err))
 	}
 
-	// check all publicKeySSH's
-	//   asdfSecret_default.myPublicKey1 is set
-	if !regexp.MustCompile(`ssh-rsa AAAA`).Match(asdfPublicKey1Node.Value) {
-		t.Error("Expected ssh-rsa AAAA match, found none")
+	// parent found, but empty
+	dsKeystorePin := &v1alpha1.Node{
+		Path: []string{"ds", "keystore.pin"},
+	}
+	dsKeystore.Parents = []*v1alpha1.Node{dsKeystorePin}
+	_, err = getValueFromParent([]string{"ds", "keystore.pin"}, dsKeystore)
+	ev := &emptyValueError{}
+	if !errors.As(err, &ev) {
+		t.Errorf("Expected emptyValueError error, got: %T", errors.Cause(err))
 	}
 
-	//   fdsaSecret_default.myPublicKey2 is set
-	if !regexp.MustCompile(`ssh-rsa AAAA`).Match(fdsaPublicKey2Node.Value) {
-		t.Error("Expected ssh-rsa AAAA match, found none")
-	}
-
-	//   ensure there's only 2
-	if len(asdfPrivateKeyNode.Children) != 2 {
-		t.Errorf("Expected 2, got: %d", len(asdfPrivateKeyNode.Children))
+	// no error
+	dsKeystorePin.Value = []byte("asdf")
+	_, err = getValueFromParent([]string{"ds", "keystore.pin"}, dsKeystore)
+	if err != nil {
+		t.Errorf("Expected no error, got: %+v", err)
 	}
 }
 
 func getSecretConfig(keyConfigs ...*v1alpha1.KeyConfig) *v1alpha1.SecretConfig {
 	return &v1alpha1.SecretConfig{
-		Name:      "asdfSecret",
-		Namespace: "default",
-		Keys:      keyConfigs,
+		Name: "asdfSecret",
+		Keys: keyConfigs,
 	}
 }

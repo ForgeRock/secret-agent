@@ -27,9 +27,11 @@ type SecretAgentConfigurationSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	AppConfig AppConfig `json:"appConfig" validate:"required,dive,required"`
+	// +kubebuilder:validation:Required
+	AppConfig AppConfig `json:"appConfig" yaml:"appConfig,omitempty"`
+	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
-	Secrets []*SecretConfig `json:"secrets" validate:"dive,required,unique=Name,gt=0,dive,required"`
+	Secrets []*SecretConfig `json:"secrets" yaml:"secrets,omitempty" validate:"dive,unique=Name"`
 }
 
 // SecretAgentConfigurationStatus defines the observed state of SecretAgentConfiguration
@@ -73,23 +75,24 @@ func init() {
 }
 
 // SecretsManager Specifies which cloud secret manager will be used
-// Only one of the following secrets manager may be specified.
 // +kubebuilder:validation:Enum=none;GCP;AWS
 type SecretsManager string
 
 // Algorithm Specifies which keystore algorithm to use
-// Only one of the following algorithms may be specified.
 // +kubebuilder:validation:Enum=ECDSAWithSHA256;SHA256withRSA
 type Algorithm string
 
+// Algorithm strings
+const (
+	ECDSAWithSHA256 Algorithm = "ECDSAWithSHA256"
+)
+
 // KeyConfigType Specifies which key type to use
-// Only one of the following types may be specified.
-// +kubebuilder:validation:Enum=literal;password;privateKey;publicKeySSH;jceks;pkcs12;jks
+// +kubebuilder:validation:Enum=literal;password;privateKey;publicKeySSH;ca;caPrivateKey;caPublicKey;pkcs12;jceks;jks
 type KeyConfigType string
 
 // AliasConfigType Specifies which alias config type to use
-// Only one of the following types may be specified.
-// +kubebuilder:validation:Enum=ca;keyPair;hmacKey;aesKey
+// +kubebuilder:validation:Enum=pemPublicKeyCopy;keyPair;hmacKey;aesKey
 type AliasConfigType string
 
 // Key Config Type Strings
@@ -98,17 +101,20 @@ const (
 	TypePassword     KeyConfigType = "password"
 	TypePrivateKey   KeyConfigType = "privateKey"
 	TypePublicKeySSH KeyConfigType = "publicKeySSH"
-	TypeJCEKS        KeyConfigType = "jceks"
+	TypeCA           KeyConfigType = "ca"
+	TypeCAPrivateKey KeyConfigType = "caPrivateKey"
+	TypeCAPublicKey  KeyConfigType = "caPublicKey"
 	TypePKCS12       KeyConfigType = "pkcs12"
+	TypeJCEKS        KeyConfigType = "jceks"
 	TypeJKS          KeyConfigType = "jks"
 )
 
 // Alias Config Type Strings
 const (
-	TypeCA      AliasConfigType = "ca"
-	TypeKeyPair AliasConfigType = "keyPair"
-	TypeHmacKey AliasConfigType = "hmacKey"
-	TypeAESKey  AliasConfigType = "aesKey"
+	TypePEMPublicKeyCopy AliasConfigType = "pemPublicKeyCopy"
+	TypeKeyPair          AliasConfigType = "keyPair"
+	TypeHMACKey          AliasConfigType = "hmacKey"
+	TypeAESKey           AliasConfigType = "aesKey"
 )
 
 // SecretsManager Strings
@@ -121,54 +127,64 @@ const (
 
 // AppConfig is the configuration for the forgeops-secrets application
 type AppConfig struct {
-	CreateKubernetesObjects bool           `json:"createKubernetesObjects"`
-	SecretsManager          SecretsManager `json:"secretsManager" validate:"required,oneof=none GCP AWS Azure"`
-	GCPProjectID            string         `json:"gcpProjectID,omitempty"`
-	AWSRegion               string         `json:"awsRegion,omitempty"`
-	AzureVaultName          string         `json:"azureVaultName,omitempty"`
+	// +kubebuilder:validation:Required
+	CreateKubernetesObjects bool `json:"createKubernetesObjects" yaml:"createKubernetesObjects"`
+	// +kubebuilder:validation:Required
+	SecretsManager SecretsManager `json:"secretsManager" yaml:"secretsManager,omitempty"`
+	GCPProjectID   string         `json:"gcpProjectID,omitempty" yaml:"gcpProjectID,omitempty"`
+	AWSRegion      string         `json:"awsRegion,omitempty" yaml:"awsRegion,omitempty"`
+	AzureVaultName string         `json:"azureVaultName,omitempty" yaml:"azureVaultName,omitempty"`
 }
 
 // SecretConfig is the configuration for a specific Kubernetes secret
 type SecretConfig struct {
-	Name      string `json:"name" validate:"required"`
-	Namespace string `json:"-"`
+	// +kubebuilder:validation:Required
+	Name      string `json:"name" yaml:"name,omitempty"`
+	Namespace string `json:"-" yaml:"namespace,omitempty"`
+	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
-	Keys []*KeyConfig `json:"keys" validate:"dive,required,unique=Name,gt=0,dive,required"`
+	// +kubebuilder:validation:UniqueItems=true
+	Keys []*KeyConfig `json:"keys" yaml:"keys,omitempty" validate:"dive,unique=Name"`
 }
 
 // KeyConfig is the configuration for a specific data key
 type KeyConfig struct {
-	Name           string         `json:"name" validate:"required"`
-	Type           KeyConfigType  `json:"type" validate:"required,oneof=jceks literal password privateKey publicKeySSH pkcs12 jks jceks"`
-	Value          string         `json:"value,omitempty"`
-	Length         int            `json:"length,omitempty"`
-	PrivateKeyPath []string       `json:"privateKeyPath,omitempty"`
-	StorePassPath  []string       `json:"storePassPath,omitempty"`
-	KeyPassPath    []string       `json:"keyPassPath,omitempty"`
-	AliasConfigs   []*AliasConfig `json:"keystoreAliases,omitempty" validate:"dive"`
-	Node           *Node          `json:"-"`
+	// +kubebuilder:validation:Required
+	Name string `json:"name" yaml:"name,omitempty"`
+	// +kubebuilder:validation:Required
+	Type           KeyConfigType  `json:"type" yaml:"type,omitempty"`
+	Value          string         `json:"value,omitempty" yaml:"value,omitempty"`
+	Length         int            `json:"length,omitempty" yaml:"length,omitempty"`
+	CAPath         []string       `json:"caPath,omitempty" yaml:"caPath,omitempty"`
+	PrivateKeyPath []string       `json:"privateKeyPath,omitempty" yaml:"privateKeyPath,omitempty"`
+	StorePassPath  []string       `json:"storePassPath,omitempty" yaml:"storePassPath,omitempty"`
+	KeyPassPath    []string       `json:"keyPassPath,omitempty" yaml:"keyPassPath,omitempty"`
+	AliasConfigs   []*AliasConfig `json:"keystoreAliases,omitempty" yaml:"keystoreAliases,omitempty,omitempty"`
+	Node           *Node          `json:"-" yaml:"node,omitempty"`
 }
 
 // AliasConfig is the configuration for a keystore alias
 type AliasConfig struct {
-	Alias          string          `json:"alias" validate:"required"`
-	Type           AliasConfigType `json:"type" validate:"required,oneof=ca keyPair hmacKey aesKey"`
-	Algorithm      Algorithm       `json:"algorithm" validate:"oneof='' ECDSAWithSHA256 SHA256withRSA"`
-	CommonName     string          `json:"commonName"`
-	Sans           []string        `json:"sans,omitempty"`
-	SignedWithPath []string        `json:"signedWithPath,omitempty"`
-	PasswordPath   []string        `json:"passwordPath,omitempty"`
-	Node           *Node           `json:"-"`
+	// +kubebuilder:validation:Required
+	Alias string `json:"alias" yaml:"alias,omitempty"`
+	// +kubebuilder:validation:Required
+	Type           AliasConfigType `json:"type" yaml:"type,omitempty"`
+	Algorithm      Algorithm       `json:"algorithm,omitempty" yaml:"algorithm,omitempty"`
+	CommonName     string          `json:"commonName,omitempty" yaml:"commonName,omitempty"`
+	Sans           []string        `json:"sans,omitempty" yaml:"sans,omitempty"`
+	SignedWithPath []string        `json:"signedWithPath,omitempty" yaml:"signedWithPath,omitempty"`
+	PublicKeyPath  []string        `json:"publicKeyPath,omitempty" yaml:"publicKeyPath,omitempty"`
+	Node           *Node           `json:"-" yaml:"node,omitempty"`
 }
 
 // Node is a dependency tree branch or leaf
 // Path is of form secret Name, data Key, and keystore Alias if exists
 type Node struct {
-	Path         []string
-	Parents      []*Node
-	Children     []*Node
-	SecretConfig *SecretConfig
-	KeyConfig    *KeyConfig
-	AliasConfig  *AliasConfig
-	Value        []byte
+	Path         []string      `yaml:"path,omitempty"`
+	Parents      []*Node       `yaml:"parents,omitempty"`
+	Children     []*Node       `yaml:"children,omitempty"`
+	SecretConfig *SecretConfig `yaml:"secretConfig,omitempty"`
+	KeyConfig    *KeyConfig    `yaml:"keyConfig,omitempty"`
+	AliasConfig  *AliasConfig  `yaml:"aliasConfig,omitempty"`
+	Value        []byte        `yaml:"value,omitempty"`
 }
