@@ -29,8 +29,22 @@ spec:
         args:
         - --enable-leader-election
         image: controller:latest
-        imagePullPolicy: IfNotPresent
         name: manager
+        env:
+        - name: SERVICE_NAMESPACE
+          value: $(SERVICE_NAMESPACE)
+        - name: WEBHOOK_SECRET_NAME
+          value: $(WEBHOOK_SECRET_NAME)
+        - name: VALIDATING_WEBHOOK_CONFIGURATION
+          value: $(VALIDATING_WEBHOOK_CONFIGURATION_NAME)
+        - name: MUTATING_WEBHOOK_CONFIGURATION
+          value: $(MUTATING_WEBHOOK_CONFIGURATION_NAME) 
+        - name: CERTIFICATE_SANS
+          value: $(SERVICE_NAME).$(SERVICE_NAMESPACE).svc,$(SERVICE_NAME).$(SERVICE_NAMESPACE).svc.cluster.local
+        ports:
+        - name: webhook-server
+          containerPort: 9443
+          protocol: TCP
         resources:
           limits:
             cpu: 100m

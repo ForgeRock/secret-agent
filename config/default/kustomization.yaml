@@ -13,8 +13,37 @@ bases:
 - ../webhook
 - webhook-secret-cert.yaml
 
-patchesStrategicMerge:
-- manager_webhook_patch.yaml
-- webhookconfiguration_patch.yaml
+vars:
+- name: SERVICE_NAMESPACE # namespace of the service
+  objref:
+    kind: Service
+    version: v1
+    name: webhook-service
+  fieldref:
+    fieldpath: metadata.namespace
+- name: SERVICE_NAME
+  objref:
+    kind: Service
+    version: v1
+    name: webhook-service
 
+- name: WEBHOOK_SECRET_NAME
+  objref:
+    kind: Secret
+    version: v1
+    name: webhook-server-cert
+
+- name: VALIDATING_WEBHOOK_CONFIGURATION_NAME
+  objref:
+    group: admissionregistration.k8s.io
+    version: v1beta1
+    kind: ValidatingWebhookConfiguration
+    name: validating-webhook-configuration
+
+- name: MUTATING_WEBHOOK_CONFIGURATION_NAME
+  objref:
+    group: admissionregistration.k8s.io
+    version: v1beta1
+    kind: MutatingWebhookConfiguration
+    name: mutating-webhook-configuration
 
