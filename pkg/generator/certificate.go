@@ -1,7 +1,6 @@
 package generator
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -9,24 +8,37 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"net"
 	"time"
-
-	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 
-func generateCA(alias *v1alpha1.AliasConfig) ([]byte, error) {
+//RootCA data trasfer object for root CAs
+type RootCA struct {
+	CAPem           []byte
+	CAPrivateKeyPEM []byte
+	CA              *x509.Certificate
+	CAKey           *ecdsa.PrivateKey
+}
+
+//GenerateRootCA Generates a root CA
+func GenerateRootCA(algorithm string, commonName string) (RootCA, error) {
 	signatureAlgorithm := x509.SignatureAlgorithm(0)
-	switch alias.Algorithm {
+	switch algorithm {
 	case "ECDSAWithSHA256":
 		signatureAlgorithm = x509.ECDSAWithSHA256
 	}
-	template := &x509.Certificate{
-		SerialNumber: big.NewInt(2020),
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return RootCA{}, err
+	}
+	caTemplate := &x509.Certificate{
+		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			CommonName: alias.CommonName,
+			CommonName: commonName,
 		},
 		NotBefore:          time.Now(),
-		NotAfter:           time.Now().AddDate(10, 0, 0), // + 10 years
+		NotAfter:           time.Now().Add(10 * 365 * 24 * time.Hour), // + 10 years
 		IsCA:               true,
 		SignatureAlgorithm: signatureAlgorithm,
 		ExtKeyUsage: []x509.ExtKeyUsage{
@@ -37,28 +49,85 @@ func generateCA(alias *v1alpha1.AliasConfig) ([]byte, error) {
 	}
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return []byte{}, err
+		return RootCA{}, err
 	}
 
-	ca, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
+	ca, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &privateKey.PublicKey, privateKey)
 	if err != nil {
-		return ca, err
+		return RootCA{}, err
 	}
-	caPEM := new(bytes.Buffer)
-	pem.Encode(caPEM, &pem.Block{
+	caPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
-		Bytes: ca,
-	})
-	// TODO do we need caPrivateKeyPEM?
+		Bytes: ca})
+
+	marshaledPrivateKey, err := x509.MarshalECPrivateKey(privateKey)
+	if err != nil {
+		return RootCA{}, err
+	}
+	caPrivateKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: marshaledPrivateKey})
+
+	//TODO: Which way do we want to encode the PEM for the ca?
 	// marshaledPrivateKey, err := x509.MarshalPKCS8PrivateKey(privateKey)
 	// if err != nil {
-	//     return ca, err
+	// 	return caPEM, []byte{}, err
 	// }
-	// caPrivateKeyPEM := new(bytes.Buffer)
-	// pem.Encode(caPrivateKeyPEM, &pem.Block{
-	//     Type:  "RSA PRIVATE KEY",
-	//     Bytes: marshaledPrivateKey,
-	// })
+	// caPrivateKeyPEM := pem.EncodeToMemory(&pem.Block{
+	// 	Type:  "RSA PRIVATE KEY",
+	// 	Bytes: marshaledPrivateKey})
 
-	return caPEM.Bytes(), nil
+	return RootCA{CAPem: caPEM, CAPrivateKeyPEM: caPrivateKeyPEM, CA: caTemplate, CAKey: privateKey}, nil
+}
+
+// GenerateSignedCerts issues a certificate signed by the provided root CA
+func GenerateSignedCerts(rootCA RootCA, hosts []string) (cert []byte, key []byte, err error) {
+	notBefore := time.Now().Add(time.Minute * -5)
+	notAfter := notBefore.Add(10 * 365 * 24 * time.Hour) //10yrs
+
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return []byte{}, []byte{}, err
+	}
+
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return []byte{}, []byte{}, err
+	}
+
+	leafTemplate := &x509.Certificate{
+		SerialNumber:          serialNumber,
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  false,
+	}
+	for _, h := range hosts {
+		if ip := net.ParseIP(h); ip != nil {
+			leafTemplate.IPAddresses = append(leafTemplate.IPAddresses, ip)
+		} else {
+			leafTemplate.DNSNames = append(leafTemplate.DNSNames, h)
+		}
+	}
+
+	leaf, err := x509.CreateCertificate(rand.Reader, leafTemplate, rootCA.CA, &leafKey.PublicKey, rootCA.CAKey)
+	if err != nil {
+		return []byte{}, []byte{}, err
+	}
+
+	cert = pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: leaf})
+
+	marshaledPrivateKey, err := x509.MarshalECPrivateKey(leafKey)
+	if err != nil {
+		return []byte{}, []byte{}, err
+	}
+	key = pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: marshaledPrivateKey})
+	return cert, key, nil
 }

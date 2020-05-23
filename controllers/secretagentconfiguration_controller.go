@@ -47,6 +47,7 @@ type SecretAgentConfigurationReconciler struct {
 // +kubebuilder:rbac:groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations;mutatingwebhookconfigurations,verbs=get;update;patch
 
 // Reconcile function
 func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -179,7 +180,7 @@ func (reconciler *SecretAgentConfigurationReconciler) SetupWithManager(mgr ctrl.
 		if owner == nil {
 			return nil
 		}
-		// ...make sure it's a CronJob...
+		// ...make sure it's a SecretAgentConfiguration...
 		if owner.APIVersion != apiGVStr || owner.Kind != "SecretAgentConfiguration" {
 			return nil
 		}

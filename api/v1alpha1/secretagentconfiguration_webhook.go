@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"fmt"
+
 	"github.com/go-playground/validator/v10"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,7 +43,7 @@ var _ webhook.Defaulter = &SecretAgentConfiguration{}
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *SecretAgentConfiguration) Default() {
 	// log.Info("default", "name", r.Name)
-	// TODO: fill in defaulting logic here.
+	// TODO LATER: fill in defaulting logic here if we ever want to.
 	//example
 	// if r.Spec.AppConfig.SecretsManager == "" {
 	// 	r.Spec.AppConfig.SecretsManager = SecretsManagerNone
@@ -82,4 +84,129 @@ func (r *SecretAgentConfiguration) ValidateSecretConfiguration() error {
 	}
 	return err
 
+}
+
+// ConfigurationStructLevelValidator ensures configuration is usable
+func ConfigurationStructLevelValidator(sl validator.StructLevel) {
+	config := sl.Current().Interface().(SecretAgentConfigurationSpec)
+
+	// AppConfig
+	switch config.AppConfig.SecretsManager {
+	case SecretsManagerGCP:
+		if config.AppConfig.GCPProjectID == "" {
+			sl.ReportError(config.AppConfig.GCPProjectID, "gcpProjectID", "GCPProjectID", "emptyGCPProjectID", "")
+		}
+	case SecretsManagerAWS:
+		if config.AppConfig.AWSRegion == "" {
+			sl.ReportError(config.AppConfig.AWSRegion, "awsRegion", "AWSRegion", "emptyAWSRegion", "")
+		}
+	}
+
+	// Secrets
+	for secretIndex, secret := range config.Secrets {
+		for keyIndex, key := range secret.Keys {
+			switch key.Type {
+			case TypeLiteral:
+				// must have Value
+				if key.Value == "" {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Value, "value", "Value", "literalValueEmpty", "")
+				}
+			case TypePassword:
+				// must have Length
+				if key.Length == 0 {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Length, "length", "Length", "passwordLengthZero", "")
+				}
+			// if type publicKeySSH, must have privateKey
+			case TypePublicKeySSH:
+				name := fmt.Sprintf("Secrets.%s.%s",
+					config.Secrets[secretIndex].Name,
+					config.Secrets[secretIndex].Keys[keyIndex].Name,
+				)
+				// must have privateKeyPath
+				if len(key.PrivateKeyPath) == 0 {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].PrivateKeyPath, name, "PrivateKeyPath", "privateKeyPathNotSet", "")
+					return
+				}
+				// privateKeyPath must be valid
+				if !pathExistsInSecretConfigs(key.PrivateKeyPath, config.Secrets) {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].PrivateKeyPath, name, "PrivateKeyPath", "privateKeyPathNotFound", "")
+				}
+			case TypePKCS12:
+				name := fmt.Sprintf("Secrets.%s.%s",
+					config.Secrets[secretIndex].Name,
+					config.Secrets[secretIndex].Keys[keyIndex].Name,
+				)
+				// must have keystoreAliases
+				if len(key.AliasConfigs) == 0 {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs, name, "AliasConfigs", "keystoreAliasesNotSet", "")
+					return
+				}
+				// must have keyPassPath
+				if len(key.KeyPassPath) == 0 {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].KeyPassPath, name, "KeyPassPath", "keyPassPathNotFound", "")
+					return
+				}
+				// keyPassPath must be valid
+				if !pathExistsInSecretConfigs(key.KeyPassPath, config.Secrets) {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].KeyPassPath, name, "KeyPassPath", "keyPassPathNotValid", "")
+					return
+				}
+				// must have storePassPath
+				if len(key.StorePassPath) == 0 {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].StorePassPath, name, "StorePassPath", "storePassPathNotFound", "")
+					return
+				}
+				// storePassPath must be valid
+				if !pathExistsInSecretConfigs(key.StorePassPath, config.Secrets) {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].KeyPassPath, name, "StorePassPath", "storePassPathNotValid", "")
+					return
+				}
+				for aliasIndex, alias := range key.AliasConfigs {
+					switch alias.Type {
+					case TypeCA:
+						name := fmt.Sprintf("Secrets.%s.%s.%s",
+							config.Secrets[secretIndex].Name,
+							config.Secrets[secretIndex].Keys[keyIndex].Name,
+							config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].Alias,
+						)
+						// must have passwordPath
+						if len(alias.PasswordPath) == 0 {
+							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].Alias, name, "CA", "passwordPathNotSet", "")
+							return
+						}
+						// passwordPath must be valid
+						if !pathExistsInSecretConfigs(alias.PasswordPath, config.Secrets) {
+							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].Alias, name, "CA", "passwordPathNotFound", "")
+							return
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func pathExistsInSecretConfigs(path []string, secrets []*SecretConfig) bool {
+	found := false
+path:
+	for _, secret := range secrets {
+		if secret.Name == path[0] {
+			for _, key := range secret.Keys {
+				if key.Name == path[1] {
+					if len(path) == 2 {
+						found = true
+						break path
+					}
+					for _, alias := range key.AliasConfigs {
+						if alias.Alias == path[2] {
+							found = true
+							break path
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return found
 }
