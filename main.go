@@ -30,7 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
-	secretagentsecretsforgerockiov1alpha1 "github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/ForgeRock/secret-agent/controllers"
 	// +kubebuilder:scaffold:imports
 )
@@ -44,7 +43,6 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = v1alpha1.AddToScheme(scheme)
-	_ = secretagentsecretsforgerockiov1alpha1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -89,7 +87,7 @@ func main() {
 	setupLog.Info("Starting webhook related patches")
 
 	secretName := os.Getenv("WEBHOOK_SECRET_NAME")
-	namespace := os.Getenv("SYSTEM_NAMESPACE")
+	namespace := os.Getenv("SERVICE_NAMESPACE")
 	validatingWebhookConfigurationName := os.Getenv("VALIDATING_WEBHOOK_CONFIGURATION")
 	mutatingWebhookConfigurationName := os.Getenv("MUTATING_WEBHOOK_CONFIGURATION")
 	val := os.Getenv("CERTIFICATE_SANS")
@@ -97,7 +95,7 @@ func main() {
 
 	if len(secretName) == 0 || len(namespace) == 0 || len(validatingWebhookConfigurationName) == 0 ||
 		len(mutatingWebhookConfigurationName) == 0 || len(dnsNames) == 0 {
-		setupLog.Error(nil, "Need ENVS: WEBHOOK_SECRET_NAME, SYSTEM_NAMESPACE, "+
+		setupLog.Error(nil, "Need ENVS: WEBHOOK_SECRET_NAME, SERVICE_NAMESPACE, "+
 			"VALIDATING_WEBHOOK_CONFIGURATION, MUTATING_WEBHOOK_CONFIGURATION, CERTIFICATE_SANS")
 		os.Exit(1)
 	}
@@ -108,17 +106,17 @@ func main() {
 	}
 
 	setupLog.Info("patching webhook secret", "name", secretName)
-	if err := controllers.PatchWebhookSecret(rootCA, cert, key, secretName, namespace); err != nil {
+	if err := controllers.PatchWebhookSecret(rootCA.CAPem, cert, key, secretName, namespace); err != nil {
 		setupLog.Error(err, "Unable to patch secret")
 	}
 
 	setupLog.Info("patching validating webhook", "name", validatingWebhookConfigurationName)
-	if err := controllers.PatchValidatingWebhookConfiguration(rootCA, validatingWebhookConfigurationName); err != nil {
+	if err := controllers.PatchValidatingWebhookConfiguration(rootCA.CAPem, validatingWebhookConfigurationName); err != nil {
 		setupLog.Error(err, "Unable to patch validating webhook")
 	}
 
 	setupLog.Info("patching mutating webhook", "name", mutatingWebhookConfigurationName)
-	if err := controllers.PatchMutatingWebhookConfiguration(rootCA, mutatingWebhookConfigurationName); err != nil {
+	if err := controllers.PatchMutatingWebhookConfiguration(rootCA.CAPem, mutatingWebhookConfigurationName); err != nil {
 		setupLog.Error(err, "Unable to patch mutating webhook")
 	}
 
@@ -136,7 +134,7 @@ func main() {
 	}
 	//END Create certs for the webhooks
 
-	if err = (&secretagentsecretsforgerockiov1alpha1.SecretAgentConfiguration{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&v1alpha1.SecretAgentConfiguration{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "SecretAgentConfiguration")
 		os.Exit(1)
 	}

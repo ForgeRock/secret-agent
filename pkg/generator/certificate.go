@@ -80,20 +80,20 @@ func GenerateRootCA(algorithm string, commonName string) (RootCA, error) {
 	return RootCA{CAPem: caPEM, CAPrivateKeyPEM: caPrivateKeyPEM, CA: caTemplate, CAKey: privateKey}, nil
 }
 
-// GenerateSignedCerts issues a certificate signed by the provided root CA
-func GenerateSignedCerts(rootCA RootCA, hosts []string) (cert []byte, key []byte, err error) {
+// GenerateSignedCert issues a certificate signed by the provided root CA
+func GenerateSignedCert(rootCA RootCA, hosts []string) (cert []byte, key []byte, err error) {
 	notBefore := time.Now().Add(time.Minute * -5)
 	notAfter := notBefore.Add(10 * 365 * 24 * time.Hour) //10yrs
 
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
-		return []byte{}, []byte{}, err
+		return
 	}
 
 	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return []byte{}, []byte{}, err
+		return
 	}
 
 	leafTemplate := &x509.Certificate{
@@ -115,7 +115,7 @@ func GenerateSignedCerts(rootCA RootCA, hosts []string) (cert []byte, key []byte
 
 	leaf, err := x509.CreateCertificate(rand.Reader, leafTemplate, rootCA.CA, &leafKey.PublicKey, rootCA.CAKey)
 	if err != nil {
-		return []byte{}, []byte{}, err
+		return
 	}
 
 	cert = pem.EncodeToMemory(&pem.Block{
@@ -124,10 +124,10 @@ func GenerateSignedCerts(rootCA RootCA, hosts []string) (cert []byte, key []byte
 
 	marshaledPrivateKey, err := x509.MarshalECPrivateKey(leafKey)
 	if err != nil {
-		return []byte{}, []byte{}, err
+		return
 	}
 	key = pem.EncodeToMemory(&pem.Block{
 		Type:  "EC PRIVATE KEY",
 		Bytes: marshaledPrivateKey})
-	return cert, key, nil
+	return
 }

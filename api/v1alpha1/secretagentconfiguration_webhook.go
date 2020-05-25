@@ -29,7 +29,7 @@ import (
 // log is for logging in this package.
 var log = logf.Log.WithName("secretagentconfiguration-webhook")
 
-//SetupWebhookWithManager registers the webhook with the manager
+// SetupWebhookWithManager registers the webhook with the manager
 func (r *SecretAgentConfiguration) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
@@ -70,19 +70,18 @@ func (r *SecretAgentConfiguration) ValidateUpdate(old runtime.Object) error {
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *SecretAgentConfiguration) ValidateDelete() error {
 	//We're not using this function atm. Keeping it here in case we do want to start using it later.
-	log.Info("validate delete", "name", r.Name)
 	return nil
 }
 
-//ValidateSecretConfiguration Validates the SecretAgentConfiguration object
+// ValidateSecretConfiguration Validates the SecretAgentConfiguration object
 func (r *SecretAgentConfiguration) ValidateSecretConfiguration() error {
 	var err error
 	validate := validator.New()
 	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
 	if err = validate.Struct(&r.Spec); err != nil {
-		log.Error(err, "Validation failed")
+		return err
 	}
-	return err
+	return nil
 
 }
 
