@@ -32,7 +32,6 @@ import (
 	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
 	"github.com/ForgeRock/secret-agent/pkg/memorystore"
 	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
-	"github.com/go-playground/validator/v10"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,6 +47,7 @@ type SecretAgentConfigurationReconciler struct {
 // +kubebuilder:rbac:groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations;mutatingwebhookconfigurations,verbs=get;update;patch
 
 // Reconcile function
 func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -73,15 +73,6 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	//Populate the Namespace field. All secrets are created in the namespace of the SecretAgentConfiguration
 	for index := range instance.Spec.Secrets {
 		instance.Spec.Secrets[index].Namespace = instance.Namespace
-	}
-
-	//TODO Change to validating webhook: https://book.kubebuilder.io/cronjob-tutorial/webhook-implementation.html
-	validate := validator.New()
-	validate.RegisterStructValidation(v1alpha1.ConfigurationStructLevelValidator, v1alpha1.SecretAgentConfigurationSpec{})
-
-	if err := validate.Struct(&instance.Spec); err != nil {
-		log.Error(err, "error validating configuration file: %+v")
-		return ctrl.Result{}, err
 	}
 
 	nodes := memorystore.GetDependencyNodes(&instance.Spec)
@@ -189,7 +180,7 @@ func (reconciler *SecretAgentConfigurationReconciler) SetupWithManager(mgr ctrl.
 		if owner == nil {
 			return nil
 		}
-		// ...make sure it's a CronJob...
+		// ...make sure it's a SecretAgentConfiguration...
 		if owner.APIVersion != apiGVStr || owner.Kind != "SecretAgentConfiguration" {
 			return nil
 		}
