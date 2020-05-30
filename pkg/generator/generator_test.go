@@ -1,14 +1,15 @@
 package generator
 
 import (
+	"bytes"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
-	"github.com/ForgeRock/secret-agent/pkg/memorystore/test"
+	"github.com/ForgeRock/secret-agent/pkg/memorystore"
+	"github.com/ForgeRock/secret-agent/pkg/memorystore/testrig"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 )
@@ -18,8 +19,8 @@ var outputRigs = flag.Bool("outputRigs", false, "Write YAML file versions of the
 func TestOutputTestRigs(t *testing.T) {
 	flag.Parse()
 	if *outputRigs {
-		_, config1 := memorystore_test.GetExpectedNodesConfiguration1()
-		_, config2 := memorystore_test.GetExpectedNodesConfiguration2()
+		_, config1 := testrig.GetExpectedNodesConfiguration1()
+		_, config2 := testrig.GetExpectedNodesConfiguration2()
 		rigs := []struct {
 			config   *v1alpha1.SecretAgentConfigurationSpec
 			filePath string
@@ -59,7 +60,7 @@ func TestOutputTestRigs(t *testing.T) {
 
 func TestRecursivelyGenerateIfMissing(t *testing.T) {
 	// setup
-	nodes, config := memorystore_test.GetExpectedNodesConfiguration1()
+	nodes, config := testrig.GetExpectedNodesConfiguration1()
 
 	// recurses
 	for _, node := range nodes {
@@ -75,43 +76,71 @@ func TestRecursivelyGenerateIfMissing(t *testing.T) {
 	}
 
 	// doesn't generate new aliases if key exists and not using secrets manager
-	// nodes, config = memorystore_test.GetExpectedNodesConfiguration1()
-	// for _, node := range nodes {
-	//     if node.KeyConfig.Type == v1alpha1.TypeJCEKS && node.AliasConfig == nil {
-	//         node.Value = []byte("Asdf")
-	//     }
-	// }
-	// for _, node := range nodes {
-	//     err := RecursivelyGenerateIfMissing(config, node)
-	//     if err != nil {
-	//         t.Errorf("Expected no error, got: %+v", err)
-	//     }
-	// }
-	// for _, node := range nodes {
-	//     if len(node.Path) == 3 { // is an Alias Node
-	//         if len(node.Value) != 0 {
-	//             t.Errorf("Expected node %v to have no Value, but it has \n'%v'", node.Path, string(node.Value))
-	//         }
-	//     }
-	// }
+	nodes, config = testrig.GetExpectedNodesConfiguration1()
+	for _, node := range nodes {
+		if node.KeyConfig.Type == v1alpha1.TypePKCS12 && node.AliasConfig == nil {
+			node.Value = []byte("Asdf")
+		}
+	}
+	for _, node := range nodes {
+		err := RecursivelyGenerateIfMissing(config, node)
+		if err != nil {
+			t.Errorf("Expected no error, got: %+v", err)
+		}
+	}
+	for _, node := range nodes {
+		if len(node.Path) == 3 { // is an Alias Node
+			if len(node.Value) != 0 {
+				t.Errorf("Expected node %v to have no Value, but it has \n'%v'", node.Path, string(node.Value))
+			}
+		}
+	}
 
-	// doesn't generate if value already exists
+	// doesn't regenerate if value already exists
+	newNodes, _ := testrig.GetExpectedNodesConfiguration1()
+	// copy existing values to new nodes
+	for _, newNode := range newNodes {
+		for _, node := range nodes {
+			if memorystore.Equal(node.Path, newNode.Path) {
+				newNode.Value = node.Value
+			}
+			break
+		}
+	}
+	// trigger generate again
+	for _, node := range nodes {
+		err := RecursivelyGenerateIfMissing(config, node)
+		if err != nil {
+			t.Errorf("Expected no error, got: %+v", err)
+		}
+	}
+	// compare new to regenerated
+	for _, newNode := range newNodes {
+		for _, node := range nodes {
+			if memorystore.Equal(node.Path, newNode.Path) {
+				if bytes.Compare(node.Value, newNode.Value) != 0 {
+					t.Errorf("Expected: \n%s\n, got: \n%s\n", string(newNode.Value), string(node.Value))
+				}
+			}
+			break
+		}
+	}
 }
 
 func TestGenerate_PKCS12(t *testing.T) {
-	keystoreFilePath = fmt.Sprintf("%s/keystore.p12", tempDir)
-	err := ioutil.WriteFile(keystoreFilePath, []byte("asdf"), 0644)
+	keystorePath := getKeystoreFilePath([]string{"asdfSecret", "keystorePKCS12"})
+	err := ioutil.WriteFile(keystorePath, []byte("asdf"), 0644)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
-	defer os.Remove(keystoreFilePath)
+	defer os.Remove(keystorePath)
 	keyConfig := &v1alpha1.KeyConfig{
 		Name: "keystore",
 		Type: v1alpha1.TypePKCS12,
 	}
 	secretConfig := getSecretConfig(keyConfig)
 	node := &v1alpha1.Node{
-		Path:         []string{"asdfSecret", "keystore"},
+		Path:         []string{"asdfSecret", "keystorePKCS12"},
 		SecretConfig: secretConfig,
 		KeyConfig:    keyConfig,
 	}

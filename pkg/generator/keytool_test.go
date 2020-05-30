@@ -1,72 +1,143 @@
 package generator
 
 import (
-	"fmt"
-	"os"
+	"io/ioutil"
+	"os/exec"
+	"regexp"
+	"strings"
 	"testing"
 
-	"github.com/ForgeRock/secret-agent/pkg/types"
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/pkg/errors"
 )
 
-func TestGenerateDeploymentKey(t *testing.T) {
-	deploymentKey, err := GenerateDeploymentKey([]byte("asdffdsafdsaasdf"))
+func TestImportCertFromPEM(t *testing.T) {
+	var err error
+	tempDir, err = ioutil.TempDir("", "secrets")
 	if err != nil {
-		t.Fatalf("Expected no error, got one: %+v", err)
+		t.Fatalf("Expected no error, got: %+v", err)
 	}
-	if len(deploymentKey) == 0 {
-		t.Error("Expected non-zero length value")
+	rootCA, err := GenerateRootCA("ForgeRock")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
+	aliasConfig := &v1alpha1.AliasConfig{
+		Alias: "fdsa",
+		Node: &v1alpha1.Node{
+			Path: []string{"asdfSecret", "qwer"},
+		},
+	}
+
+	err = ImportCertFromPEM(rootCA.CertPEM, []byte("qwerqwerqwerqwerqwer"), aliasConfig)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
+
+	// use keytool to check results
+	args := []string{"-c", strings.Join([]string{
+		*keytoolPath, "-list",
+		"-keystore", getKeystoreFilePath(aliasConfig.Node.Path),
+		"-storepass", "qwerqwerqwerqwerqwer",
+		"-alias", aliasConfig.Alias,
+		"-rfc", "|",
+		"awk", "'/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/'",
+	}, " ")}
+	cmd := exec.Command("bash", args...)
+	stdoutStderr, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", errors.Wrap(err, string(stdoutStderr)))
+	}
+
+	expected := strings.TrimSpace(string(rootCA.CertPEM))
+	re := regexp.MustCompile(`\r`)
+	got := strings.TrimSpace(re.ReplaceAllString(string(stdoutStderr), ""))
+	if expected != got {
+		t.Errorf("Expected: \n%s\n, got: \n%s\n", expected, got)
 	}
 }
 
-func TestGenerateTLSKeyPair(t *testing.T) {
-	keystoreFilePath = fmt.Sprintf("%s/keystore-tls-key-pair.p12", tempDir)
-	defer os.Remove(keystoreFilePath)
-	aliasConfig := &types.AliasConfig{
-		Alias:      "asdf",
-		CommonName: "ForgeRock",
-		Sans:       []string{"*.ds"},
-	}
-	password := []byte("asdfasdfasdfasdfasdfasdfasdfasdf")
-	deploymentKey, err := GenerateDeploymentKey(password)
+func TestImportKeyPairFromPEMs(t *testing.T) {
+	var err error
+	tempDir, err = ioutil.TempDir("", "secrets")
 	if err != nil {
-		t.Fatalf("Expected no error, got one: %+v", err)
+		t.Fatalf("Expected no error, got: %+v", err)
 	}
-	_, err = GenerateTLSKeyPair(password, deploymentKey, password, aliasConfig)
+	rootCA, err := GenerateRootCA("ForgeRock")
 	if err != nil {
-		t.Errorf("Expected no error, got one: %+v", err)
+		t.Fatalf("Expected no error, got: %+v", err)
 	}
-}
 
-func TestGenerateMasterKeyPair(t *testing.T) {
-	keystoreFilePath = fmt.Sprintf("%s/keystore-master-key-pair.p12", tempDir)
-	defer os.Remove(keystoreFilePath)
-	aliasConfig := &types.AliasConfig{
-		Alias: "asdf",
-	}
-	password := []byte("asdfasdfasdfasdfasdfasdfasdfasdf")
-	deploymentKey, err := GenerateDeploymentKey(password)
+	// ECDSAWithSHA256
+	cert, err := GenerateSignedCert(rootCA, v1alpha1.ECDSAWithSHA256, "my-common-name", []string{"asdf", "fdsa"})
 	if err != nil {
-		t.Fatalf("Expected no error, got one: %+v", err)
+		t.Errorf("Expected no error, got: %+v", err)
 	}
-	_, err = GenerateMasterKeyPair(password, deploymentKey, password, aliasConfig)
-	if err != nil {
-		t.Errorf("Expected no error, got one: %+v", err)
-	}
-}
 
-func TestGenerateCACert(t *testing.T) {
-	keystoreFilePath = fmt.Sprintf("%s/keystore-ca-cert.p12", tempDir)
-	defer os.Remove(keystoreFilePath)
-	aliasConfig := &types.AliasConfig{
-		Alias: "asdf",
+	aliasConfig := &v1alpha1.AliasConfig{
+		Alias: "fdsa",
+		Node: &v1alpha1.Node{
+			Path: []string{"asdfSecret", "qwer"},
+		},
 	}
-	password := []byte("asdfasdfasdfasdfasdfasdfasdfasdf")
-	deploymentKey, err := GenerateDeploymentKey(password)
+	err = ImportKeyPairFromPEMs(cert.CertPEM, cert.PrivateKeyPEM, []byte("fdsafdsafdsafdsa"), aliasConfig)
 	if err != nil {
 		t.Fatalf("Expected no error, got one: %+v", err)
 	}
-	_, err = GenerateCACert(password, deploymentKey, password, aliasConfig)
+	// use keytool to check results
+	args := []string{"-c", strings.Join([]string{
+		*keytoolPath, "-list",
+		"-keystore", getKeystoreFilePath(aliasConfig.Node.Path),
+		"-storepass", "fdsafdsafdsafdsa",
+		"-alias", aliasConfig.Alias,
+		"-rfc", "|",
+		"awk", "'/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/'",
+	}, " ")}
+	cmd := exec.Command("bash", args...)
+	stdoutStderr, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Errorf("Expected no error, got one: %+v", err)
+		t.Fatalf("Expected no error, got: %+v", errors.Wrap(err, string(stdoutStderr)))
+	}
+	expected := strings.TrimSpace(string(cert.CertPEM))
+	re := regexp.MustCompile(`\r`)
+	got := strings.TrimSpace(re.ReplaceAllString(string(stdoutStderr), ""))
+	if expected != got {
+		t.Errorf("Expected: \n%s\n, got: \n%s\n", expected, got)
+	}
+
+	// SHA256WithRSA
+	cert, err = GenerateSignedCert(rootCA, v1alpha1.SHA256WithRSA, "my-common-name", []string{"asdf", "fdsa"})
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
+
+	aliasConfig = &v1alpha1.AliasConfig{
+		Alias: "fdsa",
+		Node: &v1alpha1.Node{
+			Path: []string{"asdfSecret", "qwer"},
+		},
+	}
+	err = ImportKeyPairFromPEMs(cert.CertPEM, cert.PrivateKeyPEM, []byte("fdsafdsafdsafdsa"), aliasConfig)
+	if err != nil {
+		t.Fatalf("Expected no error, got one: %+v", err)
+	}
+	// use keytool to check results
+	args = []string{"-c", strings.Join([]string{
+		*keytoolPath, "-list",
+		"-keystore", getKeystoreFilePath(aliasConfig.Node.Path),
+		"-storepass", "fdsafdsafdsafdsa",
+		"-alias", aliasConfig.Alias,
+		"-rfc", "|",
+		"awk", "'/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/'",
+	}, " ")}
+	cmd = exec.Command("bash", args...)
+	stdoutStderr, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", errors.Wrap(err, string(stdoutStderr)))
+	}
+	expected = strings.TrimSpace(string(cert.CertPEM))
+	re = regexp.MustCompile(`\r`)
+	got = strings.TrimSpace(re.ReplaceAllString(string(stdoutStderr), ""))
+	if expected != got {
+		t.Errorf("Expected: \n%s\n, got: \n%s\n", expected, got)
 	}
 }

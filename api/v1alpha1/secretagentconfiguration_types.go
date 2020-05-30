@@ -79,20 +79,21 @@ func init() {
 type SecretsManager string
 
 // Algorithm Specifies which keystore algorithm to use
-// +kubebuilder:validation:Enum=ECDSAWithSHA256;SHA256withRSA
+// +kubebuilder:validation:Enum=ECDSAWithSHA256;SHA256WithRSA
 type Algorithm string
 
 // Algorithm strings
 const (
 	ECDSAWithSHA256 Algorithm = "ECDSAWithSHA256"
+	SHA256WithRSA   Algorithm = "SHA256WithRSA"
 )
 
 // KeyConfigType Specifies which key type to use
-// +kubebuilder:validation:Enum=literal;password;privateKey;publicKeySSH;ca;caPrivateKey;caPublicKey;pkcs12;jceks;jks
+// +kubebuilder:validation:Enum=literal;password;privateKey;publicKeySSH;ca;caPrivateKey;caCopy;pkcs12;jceks;jks
 type KeyConfigType string
 
 // AliasConfigType Specifies which alias config type to use
-// +kubebuilder:validation:Enum=pemPublicKeyCopy;keyPair;hmacKey;aesKey
+// +kubebuilder:validation:Enum=caCopy;keyPair;hmacKey;aesKey
 type AliasConfigType string
 
 // Key Config Type Strings
@@ -103,7 +104,7 @@ const (
 	TypePublicKeySSH KeyConfigType = "publicKeySSH"
 	TypeCA           KeyConfigType = "ca"
 	TypeCAPrivateKey KeyConfigType = "caPrivateKey"
-	TypeCAPublicKey  KeyConfigType = "caPublicKey"
+	TypeCACopy       KeyConfigType = "caCopy"
 	TypePKCS12       KeyConfigType = "pkcs12"
 	TypeJCEKS        KeyConfigType = "jceks"
 	TypeJKS          KeyConfigType = "jks"
@@ -111,10 +112,10 @@ const (
 
 // Alias Config Type Strings
 const (
-	TypePEMPublicKeyCopy AliasConfigType = "pemPublicKeyCopy"
-	TypeKeyPair          AliasConfigType = "keyPair"
-	TypeHMACKey          AliasConfigType = "hmacKey"
-	TypeAESKey           AliasConfigType = "aesKey"
+	TypeCACopyAlias AliasConfigType = "caCopy"
+	TypeKeyPair     AliasConfigType = "keyPair"
+	TypeHMACKey     AliasConfigType = "hmacKey"
+	TypeAESKey      AliasConfigType = "aesKey"
 )
 
 // SecretsManager Strings
@@ -173,7 +174,7 @@ type AliasConfig struct {
 	CommonName     string          `json:"commonName,omitempty" yaml:"commonName,omitempty"`
 	Sans           []string        `json:"sans,omitempty" yaml:"sans,omitempty"`
 	SignedWithPath []string        `json:"signedWithPath,omitempty" yaml:"signedWithPath,omitempty"`
-	PublicKeyPath  []string        `json:"publicKeyPath,omitempty" yaml:"publicKeyPath,omitempty"`
+	CAPath         []string        `json:"caPath,omitempty" yaml:"caPath,omitempty"`
 	Node           *Node           `json:"-" yaml:"node,omitempty"`
 }
 

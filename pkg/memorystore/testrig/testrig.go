@@ -1,4 +1,4 @@
-package memorystore_test
+package testrig
 
 import "github.com/ForgeRock/secret-agent/api/v1alpha1"
 
@@ -55,9 +55,9 @@ func GetExpectedNodesConfiguration1() ([]*v1alpha1.Node, *v1alpha1.SecretAgentCo
 
 	// platform-ca-public secret config
 	platformCAPublicPublicKeyKeyConfig := &v1alpha1.KeyConfig{
-		Name:           "public-key",
-		Type:           v1alpha1.TypeCAPublicKey,
-		PrivateKeyPath: []string{"platform-ca-private", "private-key"},
+		Name:   "public-key",
+		Type:   v1alpha1.TypeCACopy,
+		CAPath: []string{"platform-ca-private", "ca"},
 	}
 	platformCAPublicSecretConfig := &v1alpha1.SecretConfig{
 		Name: "platform-ca-public",
@@ -68,18 +68,23 @@ func GetExpectedNodesConfiguration1() ([]*v1alpha1.Node, *v1alpha1.SecretAgentCo
 
 	// ds secret config
 	dsKeystoreCACertAliasConfig := &v1alpha1.AliasConfig{
-		Alias:         "ca-cert",
-		Type:          v1alpha1.TypePEMPublicKeyCopy,
-		PublicKeyPath: []string{"platform-ca-public", "public-key"},
+		Alias:  "ca-cert",
+		Type:   v1alpha1.TypeCACopyAlias,
+		CAPath: []string{"platform-ca-public", "public-key"},
 	}
 	dsKeystoreMasterKeyPairAliasConfig := &v1alpha1.AliasConfig{
 		Alias:          "master-key-pair",
 		Type:           v1alpha1.TypeKeyPair,
+		Algorithm:      v1alpha1.SHA256WithRSA,
+		CommonName:     "asdf-fdsa",
 		SignedWithPath: []string{"platform-ca-private", "private-key"},
 	}
 	dsKeystoreSSLKeyPairAliasConfig := &v1alpha1.AliasConfig{
 		Alias:          "ssl-key-pair",
 		Type:           v1alpha1.TypeKeyPair,
+		Algorithm:      v1alpha1.ECDSAWithSHA256,
+		CommonName:     "asdf-fdsa",
+		Sans:           []string{"qwer"},
 		SignedWithPath: []string{"platform-ca-private", "private-key"},
 	}
 	dsKeystoreKeyConfig := &v1alpha1.KeyConfig{
@@ -94,8 +99,9 @@ func GetExpectedNodesConfiguration1() ([]*v1alpha1.Node, *v1alpha1.SecretAgentCo
 		},
 	}
 	dsKeystorePinKeyConfig := &v1alpha1.KeyConfig{
-		Name: "keystore.pin",
-		Type: v1alpha1.TypePassword,
+		Name:   "keystore.pin",
+		Type:   v1alpha1.TypePassword,
+		Length: 32,
 	}
 	dsSecretConfig := &v1alpha1.SecretConfig{
 		Name: "ds",
@@ -225,6 +231,7 @@ func GetExpectedNodesConfiguration1() ([]*v1alpha1.Node, *v1alpha1.SecretAgentCo
 	platformCAPrivateCANode.Parents = nil
 	platformCAPrivateCANode.Children = []*v1alpha1.Node{
 		platformCAPrivatePrivateKeyNode,
+		platformCAPublicPublicKeyNode,
 	}
 	nodes = append(nodes, platformCAPrivateCANode)
 	// platformCAPrivatePrivateKeyNode
@@ -232,14 +239,13 @@ func GetExpectedNodesConfiguration1() ([]*v1alpha1.Node, *v1alpha1.SecretAgentCo
 		platformCAPrivateCANode,
 	}
 	platformCAPrivatePrivateKeyNode.Children = []*v1alpha1.Node{
-		platformCAPublicPublicKeyNode,
 		dsKeystoreMasterKeyPairNode,
 		dsKeystoreSSLKeyPairNode,
 	}
 	nodes = append(nodes, platformCAPrivatePrivateKeyNode)
 	// platformCAPublicPublicKeyNode
 	platformCAPublicPublicKeyNode.Parents = []*v1alpha1.Node{
-		platformCAPrivatePrivateKeyNode,
+		platformCAPrivateCANode,
 	}
 	platformCAPublicPublicKeyNode.Children = []*v1alpha1.Node{
 		dsKeystoreCACertNode,

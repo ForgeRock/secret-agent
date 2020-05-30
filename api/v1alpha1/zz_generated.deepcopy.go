@@ -37,8 +37,8 @@ func (in *AliasConfig) DeepCopyInto(out *AliasConfig) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.PublicKeyPath != nil {
-		in, out := &in.PublicKeyPath, &out.PublicKeyPath
+	if in.CAPath != nil {
+		in, out := &in.CAPath, &out.CAPath
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
@@ -288,6 +288,11 @@ func (in *SecretAgentConfigurationStatus) DeepCopyInto(out *SecretAgentConfigura
 	}
 	if in.ManagedGCPSecrets != nil {
 		in, out := &in.ManagedGCPSecrets, &out.ManagedGCPSecrets
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.ManagedAzureSecrets != nil {
+		in, out := &in.ManagedAzureSecrets, &out.ManagedAzureSecrets
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}

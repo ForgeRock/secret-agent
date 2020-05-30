@@ -3,9 +3,9 @@ package generator
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/ForgeRock/secret-agent/pkg/memorystore"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -79,67 +79,103 @@ func Generate(node *v1alpha1.Node) error {
 
 		node.Value = publicKeyPEM
 	case v1alpha1.TypeCA:
-		rootCA, err := GenerateRootCA(v1alpha1.ECDSAWithSHA256, "ForgeRock")
+		rootCA, err := GenerateRootCA("ForgeRock")
 		if err != nil {
 			return err
 		}
 
-		node.Value = rootCA.CAPem
+		node.Value = rootCA.CertPEM
 
 		// find private key node(s)
 		for _, childNode := range node.Children {
 			if childNode.KeyConfig.Type == v1alpha1.TypeCAPrivateKey {
 				if memorystore.Equal(childNode.KeyConfig.CAPath, node.Path) {
-					childNode.Value = rootCA.CAPrivateKeyPEM
+					childNode.Value = rootCA.PrivateKeyPEM
 				}
 			}
 		}
 	case v1alpha1.TypeCAPrivateKey:
 		// taken care of by TypeCA
-	case v1alpha1.TypeCAPublicKey:
-		caPrivateKeyPEM, err := getValueFromParent(node.KeyConfig.PrivateKeyPath, node)
-		if err != nil {
-			return err
-		}
-		caPublicKeyPEM, err := GetECPublicKeyFromPrivateKey(caPrivateKeyPEM)
+	case v1alpha1.TypeCACopy:
+		caPEM, err := getValueFromParent(node.KeyConfig.CAPath, node)
 		if err != nil {
 			return err
 		}
 
-		node.Value = caPublicKeyPEM
+		node.Value = caPEM
 	case v1alpha1.TypeJCEKS:
 		// TODO
 	case v1alpha1.TypePKCS12:
 		switch length := len(node.Path); length {
 		case 2: // compiled keystore
-			// value, err := GetKeystore()
-			// if err != nil {
-			//     return errors.WithStack(err)
-			// }
+			value, err := GetKeystore(node.Path)
+			if err != nil {
+				return errors.WithStack(err)
+			}
 
-			// node.Value = value
-
-			// TODO placeholder
-			node.Value = []byte("temp-placeholder")
+			node.Value = value
 		case 3: // individual aliases
 			switch node.AliasConfig.Type {
-			case v1alpha1.TypePEMPublicKeyCopy:
-				publicKeyPEM, err := getValueFromParent(node.AliasConfig.PublicKeyPath, node)
+			case v1alpha1.TypeCACopyAlias:
+				caCertPEM, err := getValueFromParent(node.AliasConfig.CAPath, node)
+				if err != nil {
+					return err
+				}
+				storePassword, err := getValueFromParent(node.KeyConfig.StorePassPath, node)
+				if err != nil {
+					return err
+				}
+				err = ImportCertFromPEM(caCertPEM, storePassword, node.AliasConfig)
 				if err != nil {
 					return err
 				}
 
-				node.Value = publicKeyPEM
+				node.Value = caCertPEM
 			case v1alpha1.TypeKeyPair:
-				// generate and sign
-				// add to keystore
-				contents, err := GenerateKeyPair(node)
+				// get private key's PEM value
+				rootCAPrivateKeyPEM, err := getValueFromParent(node.AliasConfig.SignedWithPath, node)
 				if err != nil {
 					return err
 				}
-				node.Value = contents
-				// TODO placeholder
-				node.Value = []byte("temp-placeholder")
+
+				// get private key's CA PEM value
+				rootCAPEM := []byte{}
+				for _, parentNode := range node.Parents {
+					if memorystore.Equal(node.AliasConfig.SignedWithPath, parentNode.Path) {
+						rootCAPEM, err = getValueFromParent(parentNode.KeyConfig.CAPath, parentNode)
+						if err != nil {
+							return err
+						}
+						break
+					}
+				}
+				if len(rootCAPEM) == 0 {
+					return errors.New("Failed to find root CA PEM value")
+				}
+
+				// generate
+				certAndKeyPEM, certPEM, keyPEM, err := GenerateSignedCertPEM(
+					rootCAPEM,
+					rootCAPrivateKeyPEM,
+					node.AliasConfig.Algorithm,
+					node.AliasConfig.CommonName,
+					node.AliasConfig.Sans,
+				)
+				if err != nil {
+					return err
+				}
+
+				// add to keystore
+				storePassword, err := getValueFromParent(node.KeyConfig.StorePassPath, node)
+				if err != nil {
+					return err
+				}
+				err = ImportKeyPairFromPEMs(certPEM, keyPEM, storePassword, node.AliasConfig)
+				if err != nil {
+					return err
+				}
+
+				node.Value = certAndKeyPEM
 			case v1alpha1.TypeHMACKey:
 				// TODO placeholder
 				node.Value = []byte("temp-placeholder")

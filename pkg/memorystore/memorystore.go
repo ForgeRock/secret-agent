@@ -1,8 +1,8 @@
 package memorystore
 
 import (
-	"github.com/pkg/errors"
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/pkg/errors"
 )
 
 // EnsureAcyclic ensures the defined dependencies are acycilic,
@@ -82,8 +82,8 @@ func rangeOverSecrets(secretsConfig []*v1alpha1.SecretConfig, nodes []*v1alpha1.
 			for _, aliasConfig := range keyConfig.AliasConfigs {
 				// alias signedWithPath
 				nodes = fn(aliasConfig.SignedWithPath, []string{secretConfig.Name, keyConfig.Name, aliasConfig.Alias}, secretConfig, keyConfig, aliasConfig, nodes)
-				// alias publicKeyPath
-				nodes = fn(aliasConfig.PublicKeyPath, []string{secretConfig.Name, keyConfig.Name, aliasConfig.Alias}, secretConfig, keyConfig, aliasConfig, nodes)
+				// alias caPath
+				nodes = fn(aliasConfig.CAPath, []string{secretConfig.Name, keyConfig.Name, aliasConfig.Alias}, secretConfig, keyConfig, aliasConfig, nodes)
 				// alias storePassPath
 				nodes = fn(keyConfig.StorePassPath, []string{secretConfig.Name, keyConfig.Name, aliasConfig.Alias}, secretConfig, keyConfig, aliasConfig, nodes)
 				// alias keyPassPath
