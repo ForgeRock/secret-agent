@@ -1,6 +1,12 @@
 package controllers
 
 import (
+	"errors"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -11,6 +17,62 @@ import (
 
 type k8s struct {
 	clientset kubernetes.Interface
+}
+
+// InitWebhookCertificates creates and injects req certs by the k8s webhooks
+func InitWebhookCertificates(certDir string) error {
+
+	secretName := os.Getenv("WEBHOOK_SECRET_NAME")
+	namespace := os.Getenv("SERVICE_NAMESPACE")
+	validatingWebhookConfigurationName := os.Getenv("VALIDATING_WEBHOOK_CONFIGURATION")
+	mutatingWebhookConfigurationName := os.Getenv("MUTATING_WEBHOOK_CONFIGURATION")
+	val := os.Getenv("CERTIFICATE_SANS")
+	sans := strings.Split(val, ",")
+
+	if len(secretName) == 0 || len(namespace) == 0 || len(validatingWebhookConfigurationName) == 0 ||
+		len(mutatingWebhookConfigurationName) == 0 || len(sans) == 0 {
+		return errors.New("Need ENVS: WEBHOOK_SECRET_NAME, SERVICE_NAMESPACE, " +
+			"VALIDATING_WEBHOOK_CONFIGURATION, MUTATING_WEBHOOK_CONFIGURATION, CERTIFICATE_SANS")
+	}
+
+	rootCA, leafCert, err := generateCertificates(sans)
+	if err != nil {
+		// Unable to create secret
+		return err
+	}
+
+	// Patching webhook secret
+	if err := patchWebhookSecret(rootCA.CertPEM, leafCert.CertPEM, leafCert.PrivateKeyPEM, secretName, namespace); err != nil {
+		return err
+	}
+
+	// Patching validating webhook
+	if err := patchValidatingWebhookConfiguration(rootCA.CertPEM, validatingWebhookConfigurationName); err != nil {
+		return err
+	}
+
+	// Patching mutating webhook
+	if err := patchMutatingWebhookConfiguration(rootCA.CertPEM, mutatingWebhookConfigurationName); err != nil {
+		return err
+	}
+
+	// Unable to create certDir
+	if err := os.MkdirAll(certDir, 0755); err != nil {
+		return err
+	}
+	// Unable to create ca.crt
+	if err := ioutil.WriteFile(filepath.Join(certDir, "ca.crt"), rootCA.CertPEM, 0400); err != nil {
+		return err
+	}
+	// Unable to create tls.crt
+	if err := ioutil.WriteFile(filepath.Join(certDir, "tls.crt"), leafCert.CertPEM, 0400); err != nil {
+		return err
+	}
+	// Unable to create tls.key
+	if err := ioutil.WriteFile(filepath.Join(certDir, "tls.key"), leafCert.PrivateKeyPEM, 0400); err != nil {
+		return err
+	}
+	return nil
 }
 
 func getClientSet(kubeconfig string) (*k8s, error) {
@@ -27,8 +89,8 @@ func getClientSet(kubeconfig string) (*k8s, error) {
 	return &k8s{clientset: c}, nil
 }
 
-// GenerateCertificates generates the root CA and leaf certificate to be used by the webhook
-func GenerateCertificates(sans []string) (rootCA, leafCert *generator.Certificate, err error) {
+// generateCertificates generates the root CA and leaf certificate to be used by the webhook
+func generateCertificates(sans []string) (rootCA, leafCert *generator.Certificate, err error) {
 	rootCA, err = generator.GenerateRootCA("secret-agent")
 	if err != nil {
 		return
@@ -41,8 +103,8 @@ func GenerateCertificates(sans []string) (rootCA, leafCert *generator.Certificat
 	return
 }
 
-// PatchWebhookSecret patches the named TLS secret with the TLS information
-func PatchWebhookSecret(rootCAPem, certPEM, keyPEM []byte, name, namespace string) (err error) {
+// patchWebhookSecret patches the named TLS secret with the TLS information
+func patchWebhookSecret(rootCAPem, certPEM, keyPEM []byte, name, namespace string) (err error) {
 	k, err := getClientSet("")
 	if err != nil {
 		return
@@ -64,8 +126,8 @@ func PatchWebhookSecret(rootCAPem, certPEM, keyPEM []byte, name, namespace strin
 	return
 }
 
-// PatchValidatingWebhookConfiguration patches the given ValidatingWebhookConfiguration with the caBuncle
-func PatchValidatingWebhookConfiguration(rootCAPem []byte, name string) (err error) {
+// patchValidatingWebhookConfiguration patches the given ValidatingWebhookConfiguration with the caBuncle
+func patchValidatingWebhookConfiguration(rootCAPem []byte, name string) (err error) {
 	k, err := getClientSet("")
 	if err != nil {
 		return
@@ -86,8 +148,8 @@ func PatchValidatingWebhookConfiguration(rootCAPem []byte, name string) (err err
 	return
 }
 
-// PatchMutatingWebhookConfiguration patches the given MutatingWebhookConfiguration with the caBuncle
-func PatchMutatingWebhookConfiguration(rootCAPem []byte, name string) (err error) {
+// patchMutatingWebhookConfiguration patches the given MutatingWebhookConfiguration with the caBuncle
+func patchMutatingWebhookConfiguration(rootCAPem []byte, name string) (err error) {
 	k, err := getClientSet("")
 	if err != nil {
 		return
