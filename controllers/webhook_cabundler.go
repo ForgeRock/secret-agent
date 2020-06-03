@@ -4,6 +4,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/ForgeRock/secret-agent/pkg/generator"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -26,23 +27,22 @@ func getClientSet(kubeconfig string) (*k8s, error) {
 	return &k8s{clientset: c}, nil
 }
 
-// GenerateCertificates generates the rootCA and signed cert and key to be used by the webhook
-func GenerateCertificates(dnsNames []string) (rootCA generator.RootCA, cert []byte, key []byte, err error) {
+// GenerateCertificates generates the root CA and leaf certificate to be used by the webhook
+func GenerateCertificates(sans []string) (rootCA, leafCert *generator.Certificate, err error) {
+	rootCA, err = generator.GenerateRootCA("secret-agent")
+	if err != nil {
+		return
+	}
+	leafCert, err = generator.GenerateSignedCert(rootCA, v1alpha1.ECDSAWithSHA256, "", sans)
+	if err != nil {
+		return
+	}
 
-	rootCA, err = generator.GenerateRootCA("", "secret-agent")
-	if err != nil {
-		return
-	}
-	cert, key, err = generator.GenerateSignedCert(rootCA, dnsNames)
-	if err != nil {
-		return
-	}
 	return
 }
 
-// PatchWebhookSecret patches the named tls secret with the TLS information
-func PatchWebhookSecret(rootCAPem, cert, key []byte, name string, namespace string) (err error) {
-
+// PatchWebhookSecret patches the named TLS secret with the TLS information
+func PatchWebhookSecret(rootCAPem, certPEM, keyPEM []byte, name, namespace string) (err error) {
 	k, err := getClientSet("")
 	if err != nil {
 		return
@@ -52,20 +52,20 @@ func PatchWebhookSecret(rootCAPem, cert, key []byte, name string, namespace stri
 		return
 	}
 
-	//secret found, we need to update
+	// secret found, we need to update
 	k8sSecret.Data["ca.crt"] = rootCAPem
-	k8sSecret.Data["tls.crt"] = cert
-	k8sSecret.Data["tls.key"] = key
+	k8sSecret.Data["tls.crt"] = certPEM
+	k8sSecret.Data["tls.key"] = keyPEM
 	_, err = k.clientset.CoreV1().Secrets(namespace).Update(k8sSecret)
 	if err != nil {
 		return
 	}
+
 	return
 }
 
 // PatchValidatingWebhookConfiguration patches the given ValidatingWebhookConfiguration with the caBuncle
 func PatchValidatingWebhookConfiguration(rootCAPem []byte, name string) (err error) {
-
 	k, err := getClientSet("")
 	if err != nil {
 		return
@@ -82,12 +82,12 @@ func PatchValidatingWebhookConfiguration(rootCAPem []byte, name string) (err err
 		h.ClientConfig.CABundle = rootCAPem
 	}
 	_, err = k.clientset.AdmissionregistrationV1beta1().ValidatingWebhookConfigurations().Update(webhookConfiguration)
+
 	return
 }
 
 // PatchMutatingWebhookConfiguration patches the given MutatingWebhookConfiguration with the caBuncle
 func PatchMutatingWebhookConfiguration(rootCAPem []byte, name string) (err error) {
-
 	k, err := getClientSet("")
 	if err != nil {
 		return
@@ -104,6 +104,7 @@ func PatchMutatingWebhookConfiguration(rootCAPem []byte, name string) (err error
 		h.ClientConfig.CABundle = rootCAPem
 	}
 	_, err = k.clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Update(webhookConfiguration)
+
 	return
 
 }

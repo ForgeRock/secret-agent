@@ -24,3 +24,7 @@ bin
 *~
 /.project
 /.vscode/
+
+testConfiguration1.yaml
+testConfiguration2.yaml
+

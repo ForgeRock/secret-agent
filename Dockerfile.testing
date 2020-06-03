@@ -1,0 +1,21 @@
+# For building gcr.io/forgerock-io/secret-agent-testing:latest
+FROM gcr.io/forgerock-io/ds-empty/pit1:latest AS ds
+
+FROM openjdk:11-jdk-slim
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+CMD ["bash"]
+RUN apt-get update && apt-get install -y curl git-core
+RUN curl -O https://dl.google.com/go/go1.13.10.linux-amd64.tar.gz && \
+    SUM=$(sha256sum go1.13.10.linux-amd64.tar.gz | awk '{print $1}') && \
+    if [ "$SUM" != "8a4cbc9f2b95d114c38f6cbe94a45372d48c604b707db2057c787398dfbf8e7f"]; then echo "Failed checksum"; exit 1; fi && \
+    tar xvf go1.13.10.linux-amd64.tar.gz && \
+    chown -R root:root ./go && \
+    mv go /usr/local && \
+    rm go1.13.10.linux-amd64.tar.gz
+ENV PATH="/usr/local/go/bin:${PATH}" GOPATH="/root/go"
+WORKDIR /root/go/src/github.com/Forgerock/secret-agent
+RUN addgroup --gid 11111 forgerock && \
+    adduser --shell /bin/bash --home /home/forgerock --uid 11111 --disabled-password --ingroup root --gecos forgerock forgerock && \
+    chown -R forgerock:root /home/forgerock
+COPY --from=ds --chown=forgerock:root /opt/opendj /opt/gen/opendj
+

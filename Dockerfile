@@ -1,13 +1,11 @@
 # For building gcr.io/forgerock-io/secret-agent:latest
-FROM gcr.io/forgerock-io/ds-empty/pit1:latest AS ds
 
 # Build the manager binary
 FROM golang:1.14-alpine as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
-COPY go.mod go.mod
-COPY go.sum go.sum
+COPY go.mod go.sum ./
 # cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
 RUN go mod download
@@ -37,7 +35,6 @@ RUN addgroup --gid 11111 forgerock && \
 
 WORKDIR /opt/gen
 
-COPY --from=ds --chown=forgerock:root /opt/opendj /opt/gen/opendj
 COPY --from=builder --chown=forgerock:root /workspace/manager /
 
 RUN mkdir -p /opt/gen/secrets/generic/truststore && \
@@ -46,3 +43,8 @@ RUN mkdir -p /opt/gen/secrets/generic/truststore && \
     chown -R forgerock:root /opt/gen
 
 USER forgerock
+
+# Set the entrypoint to /manager with automation,
+#   leave it as bash here to prevent the need for manual override when debugging
+ENTRYPOINT ["bash"]
+
