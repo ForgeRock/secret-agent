@@ -7,18 +7,18 @@ import (
 	"testing"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
-	memorystore_test "github.com/ForgeRock/secret-agent/pkg/memorystore/test"
+	"github.com/ForgeRock/secret-agent/pkg/memorystore/testrig"
 )
 
 func TestEnsureAcyclic(t *testing.T) {
-	nodes, _ := memorystore_test.GetExpectedNodesConfiguration2()
+	nodes, _ := testrig.GetExpectedNodesConfiguration2()
 	err := EnsureAcyclic(nodes)
 	if err != nil {
 		t.Errorf("Expected no error, got \n%s", err)
 	}
 
 	// create circular dependency
-	nodes, _ = memorystore_test.GetExpectedNodesConfiguration2()
+	nodes, _ = testrig.GetExpectedNodesConfiguration2()
 	// find the secretAkeyA node
 	secretAkeyA := &v1alpha1.Node{}
 	for _, node := range nodes {
@@ -41,7 +41,7 @@ func TestEnsureAcyclic(t *testing.T) {
 
 func TestGetDependencyNodes(t *testing.T) {
 	// configuration 1
-	expectedNodes, config := memorystore_test.GetExpectedNodesConfiguration1()
+	expectedNodes, config := testrig.GetExpectedNodesConfiguration1()
 	expectedNodes = sortParentsAndChildren(expectedNodes)
 	nodes := sortParentsAndChildren(GetDependencyNodes(config))
 	if !reflect.DeepEqual(nodes, expectedNodes) {
@@ -57,7 +57,7 @@ func TestGetDependencyNodes(t *testing.T) {
 	}
 
 	// configuration 2
-	expectedNodes, config = memorystore_test.GetExpectedNodesConfiguration2()
+	expectedNodes, config = testrig.GetExpectedNodesConfiguration2()
 	expectedNodes = sortParentsAndChildren(expectedNodes)
 	nodes = sortParentsAndChildren(GetDependencyNodes(config))
 	if !reflect.DeepEqual(nodes, expectedNodes) {
