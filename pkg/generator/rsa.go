@@ -11,11 +11,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func generateRSAPrivateKey() (*rsa.PrivateKey, []byte, error) {
-	reader := rand.Reader
-	privateKey, err := rsa.GenerateKey(reader, 2048)
+func generateRSAPrivateKey() ([]byte, error) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		return privateKey, []byte{}, errors.WithStack(err)
+		return []byte{}, errors.WithStack(err)
 	}
 
 	buffer := &bytes.Buffer{}
@@ -25,35 +24,49 @@ func generateRSAPrivateKey() (*rsa.PrivateKey, []byte, error) {
 	}
 	err = pem.Encode(buffer, block)
 	if err != nil {
-		return privateKey, []byte{}, errors.WithStack(err)
+		return []byte{}, errors.WithStack(err)
 	}
-	privateKeyBytes := buffer.Bytes()
 
-	return privateKey, privateKeyBytes, nil
+	return buffer.Bytes(), nil
 }
 
-func generateRSAPublicKey(privateKey *rsa.PrivateKey) ([]byte, error) {
-	block := &pem.Block{
+func getRSAPublicKeyFromPrivateKey(privateKeyPEM []byte) ([]byte, error) {
+	block, _ := pem.Decode(privateKeyPEM)
+	if block == nil || block.Type != "RSA PRIVATE KEY" {
+		return []byte{}, errors.WithStack(errors.New("failed to decode PEM block containing private key"))
+	}
+	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		return []byte{}, errors.WithStack(err)
+	}
+
+	block = &pem.Block{
 		Type:  "RSA PUBLIC KEY",
 		Bytes: x509.MarshalPKCS1PublicKey(&privateKey.PublicKey),
 	}
 	buffer := &bytes.Buffer{}
-	err := pem.Encode(buffer, block)
+	err = pem.Encode(buffer, block)
 	if err != nil {
 		return []byte{}, errors.WithStack(err)
 	}
-	publicKeyBytes := buffer.Bytes()
 
-	return publicKeyBytes, nil
+	return buffer.Bytes(), nil
 }
 
-func generateRSAPublicKeySSH(privateKey *rsa.PrivateKey) ([]byte, error) {
-	pub, err := ssh.NewPublicKey(&privateKey.PublicKey)
+func getRSAPublicKeySSHFromPrivateKey(privateKeyPEM []byte) ([]byte, error) {
+	block, _ := pem.Decode(privateKeyPEM)
+	if block == nil || block.Type != "RSA PRIVATE KEY" {
+		return []byte{}, errors.WithStack(errors.New("failed to decode PEM block containing private key"))
+	}
+	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
-		return []byte{}, err
+		return []byte{}, errors.WithStack(err)
 	}
 
-	publicKeyBytes := ssh.MarshalAuthorizedKey(pub)
+	publicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return []byte{}, errors.WithStack(err)
+	}
 
-	return publicKeyBytes, nil
+	return ssh.MarshalAuthorizedKey(publicKey), nil
 }
