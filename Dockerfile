@@ -27,7 +27,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -ldflags "-s -
 # ENTRYPOINT ["/manager"]
 
 
-FROM openjdk:11-jdk-slim
+FROM openjdk:11-jre-slim
 
 RUN addgroup --gid 11111 forgerock && \
     adduser --shell /bin/bash --home /home/forgerock --uid 11111 --disabled-password --ingroup root --gecos forgerock forgerock && \

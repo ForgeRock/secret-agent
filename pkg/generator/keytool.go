@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	keytoolPath = flag.String("keytoolPath", "/usr/local/openjdk-11/bin/keytool", "The path to the keytool executable")
-	opensslPath = flag.String("opensslPath", "/usr/bin/openssl", "The path to the openssl executable")
+	keytoolPath = flag.String("keytoolPath", "keytool", "The path to the keytool executable")
+	opensslPath = flag.String("opensslPath", "openssl", "The path to the openssl executable")
 	tempDir     = ""
 )
 
