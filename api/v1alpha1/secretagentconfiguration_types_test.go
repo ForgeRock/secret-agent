@@ -90,9 +90,9 @@ func TestConfigurationStructLevelValidatorPublicKeySSH(t *testing.T) {
 
 func TestConfigurationStructLevelValidatorPKCS12(t *testing.T) {
 	alias := &AliasConfig{
-		Alias:        "fdsaAlias",
-		Type:         TypeCA,
-		PasswordPath: []string{"asdfSecret", "fdsaPassword"},
+		Alias:  "fdsaAlias",
+		Type:   TypeCACopyAlias,
+		CAPath: []string{"asdfSecret", "fdsaPassword"},
 	}
 	passwordKey := &KeyConfig{
 		Name:   "fdsaPassword",
@@ -153,7 +153,7 @@ func TestConfigurationStructLevelValidatorPKCS12(t *testing.T) {
 func TestConfigurationStructLevelValidatorCA(t *testing.T) {
 	alias := &AliasConfig{
 		Alias: "fdsaAlias",
-		Type:  TypeCA,
+		Type:  TypeCACopyAlias,
 	}
 	passwordKey := &KeyConfig{
 		Name:   "fdsaPassword",
@@ -172,13 +172,13 @@ func TestConfigurationStructLevelValidatorCA(t *testing.T) {
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, passwordKey)
 	validate := validator.New()
 	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
-	// missing passwordPath
+	// missing caPath
 	err := validate.Struct(config)
 	if err == nil {
 		t.Error("Expected error, got none")
 	}
-	// passwordPath points to non-existent secret/key
-	config.Secrets[0].Keys[0].AliasConfigs[0].PasswordPath = []string{"mySecret1", "deployment-ca.pin"}
+	// caPath points to non-existent secret/key
+	config.Secrets[0].Keys[0].AliasConfigs[0].CAPath = []string{"mySecret1", "deployment-ca.pin"}
 	err = validate.Struct(config)
 	if err == nil {
 		t.Error("Expected error, got none")
