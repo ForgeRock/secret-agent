@@ -1,24 +1,27 @@
 # For building gcr.io/forgerock-io/secret-agent-testing:latest
 
-FROM openjdk:11-jdk-slim
+FROM openjdk:11-jre-slim
+
+ARG GO_VERSION="1.14.4"
+ARG GO_PACKAGE_SHA256="aed845e4185a0b2a3c3d5e1d0a35491702c55889192bb9c30e67a3de6849c067"
+
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
-CMD ["bash"]
-RUN apt-get update && apt-get install -y curl git-core
-RUN curl -O https://dl.google.com/go/go1.13.10.linux-amd64.tar.gz && \
-    SUM=$(sha256sum go1.13.10.linux-amd64.tar.gz | awk '{print $1}') && \
-    if [ "$SUM" != "8a4cbc9f2b95d114c38f6cbe94a45372d48c604b707db2057c787398dfbf8e7f"]; then echo "Failed checksum"; exit 1; fi && \
-    tar xvf go1.13.10.linux-amd64.tar.gz && \
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y curl git-core make && \
+    apt-get clean all
+RUN curl -LO https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
+    SUM=$(sha256sum go${GO_VERSION}.linux-amd64.tar.gz | awk '{print $1}') && \
+    if [ "${SUM}" != "${GO_PACKAGE_SHA256}" ]; then echo "Failed checksum"; exit 1; fi && \
+    tar xf go${GO_VERSION}.linux-amd64.tar.gz && \
     chown -R root:root ./go && \
     mv go /usr/local && \
-    rm go1.13.10.linux-amd64.tar.gz
-ENV PATH="/usr/local/go/bin:${PATH}" GOPATH="/root/go"
+    rm go${GO_VERSION}.linux-amd64.tar.gz
+
+RUN curl -L https://go.kubebuilder.io/dl/2.3.1/${GOOS}/${GOARCH} | tar -xz -C /tmp/ && \
+    mv /tmp/kubebuilder_2.3.1_${GOOS}_${GOARCH} /usr/local/kubebuilder
+
+ENV PATH="/usr/local/go/bin:${PATH}:/usr/local/kubebuilder/bin" GOPATH="/root/go"
+
 WORKDIR /root/go/src/github.com/ForgeRock/secret-agent
-RUN addgroup --gid 11111 forgerock && \
-    adduser --shell /bin/bash --home /home/forgerock --uid 11111 --disabled-password --ingroup root --gecos forgerock forgerock && \
-    chown -R forgerock:root /home/forgerock
 
-RUN os=$(go env GOOS) && \
-    arch=$(go env GOARCH) && \
-    curl -L https://go.kubebuilder.io/dl/2.3.1/${os}/${arch} | tar -xz -C /tmp/ && \
-    mv /tmp/kubebuilder_2.3.1_${os}_${arch} /usr/local/kubebuilder
-
+CMD ["bash"]

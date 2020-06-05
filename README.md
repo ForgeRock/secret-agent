@@ -20,6 +20,7 @@ kustomize build config/default | kubectl apply -f -
 ```
 
 ## Running the tests
+
 * Some of the tests exercise parts of the code that os.Exec openssl and keytool, and kubebuilder's etcd
   * It's easiest to test in Docker
   * Ensure you're kube context is hooked up to a test cluster, such as minikube, then
