@@ -13,9 +13,20 @@ endif
 
 all: manager
 
-# Run tests
-test: generate fmt vet manifests
+# Run unit and integration tests (backwards compatability)
+test: int-test
+
+# Run unit tests
+unit-test: generate fmt vet manifests
 	go test ./... -coverprofile cover.out
+
+# Run unit and integration tests
+int-test: generate fmt vet manifests
+	go test ./... -tags=integration -coverprofile cover.out
+
+# Run unit and integration and cloud-provider tests
+cloud-test: generate fmt vet manifests
+	go test ./... -tags=integration,cloud-provider -coverprofile cover.out
 
 # Build manager binary
 manager: generate fmt vet
@@ -59,7 +70,7 @@ generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 # Build the docker image
-docker-build: test
+docker-build: int-test
 	docker build . -t ${IMG}
 
 # Push the docker image
