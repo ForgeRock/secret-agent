@@ -1,4 +1,4 @@
-// +build integration
+// +build cloud-provider
 
 package secretsmanager
 

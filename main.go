@@ -18,10 +18,7 @@ package main
 
 import (
 	"flag"
-	"io/ioutil"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -85,54 +82,12 @@ func main() {
 
 	// Start creating certs for the webhooks
 	setupLog.Info("Starting webhook related patches")
-
-	secretName := os.Getenv("WEBHOOK_SECRET_NAME")
-	namespace := os.Getenv("SERVICE_NAMESPACE")
-	validatingWebhookConfigurationName := os.Getenv("VALIDATING_WEBHOOK_CONFIGURATION")
-	mutatingWebhookConfigurationName := os.Getenv("MUTATING_WEBHOOK_CONFIGURATION")
-	val := os.Getenv("CERTIFICATE_SANS")
-	sans := strings.Split(val, ",")
-
-	if len(secretName) == 0 || len(namespace) == 0 || len(validatingWebhookConfigurationName) == 0 ||
-		len(mutatingWebhookConfigurationName) == 0 || len(sans) == 0 {
-		setupLog.Error(nil, "Need ENVS: WEBHOOK_SECRET_NAME, SERVICE_NAMESPACE, "+
-			"VALIDATING_WEBHOOK_CONFIGURATION, MUTATING_WEBHOOK_CONFIGURATION, CERTIFICATE_SANS")
+	if err := controllers.InitWebhookCertificates(certDir); err != nil {
+		setupLog.Error(err, "Failed to init webhook certificates")
 		os.Exit(1)
 	}
 
-	rootCA, leafCert, err := controllers.GenerateCertificates(sans)
-	if err != nil {
-		setupLog.Error(err, "Unable to create secret")
-	}
-
-	setupLog.Info("patching webhook secret", "name", secretName)
-	if err := controllers.PatchWebhookSecret(rootCA.CertPEM, leafCert.CertPEM, leafCert.PrivateKeyPEM, secretName, namespace); err != nil {
-		setupLog.Error(err, "Unable to patch secret")
-	}
-
-	setupLog.Info("patching validating webhook", "name", validatingWebhookConfigurationName)
-	if err := controllers.PatchValidatingWebhookConfiguration(rootCA.CertPEM, validatingWebhookConfigurationName); err != nil {
-		setupLog.Error(err, "Unable to patch validating webhook")
-	}
-
-	setupLog.Info("patching mutating webhook", "name", mutatingWebhookConfigurationName)
-	if err := controllers.PatchMutatingWebhookConfiguration(rootCA.CertPEM, mutatingWebhookConfigurationName); err != nil {
-		setupLog.Error(err, "Unable to patch mutating webhook")
-	}
-
-	if err := os.MkdirAll(certDir, 0755); err != nil {
-		setupLog.Error(err, "Unable to create certDir", "path", certDir)
-	}
-	if err := ioutil.WriteFile(filepath.Join(certDir, "ca.crt"), rootCA.CertPEM, 0400); err != nil {
-		setupLog.Error(err, "Unable to create ca.crt")
-	}
-	if err := ioutil.WriteFile(filepath.Join(certDir, "tls.crt"), leafCert.CertPEM, 0400); err != nil {
-		setupLog.Error(err, "Unable to create tls.crt")
-	}
-	if err := ioutil.WriteFile(filepath.Join(certDir, "tls.key"), leafCert.PrivateKeyPEM, 0400); err != nil {
-		setupLog.Error(err, "Unable to create tls.key")
-	}
-	// END Create certs for the webhooks
+	//END Create certs for the webhooks
 
 	if err = (&v1alpha1.SecretAgentConfiguration{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "SecretAgentConfiguration")

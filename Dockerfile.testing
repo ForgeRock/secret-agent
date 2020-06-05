@@ -1,5 +1,4 @@
 # For building gcr.io/forgerock-io/secret-agent-testing:latest
-FROM gcr.io/forgerock-io/ds-empty/pit1:latest AS ds
 
 FROM openjdk:11-jdk-slim
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
@@ -13,9 +12,13 @@ RUN curl -O https://dl.google.com/go/go1.13.10.linux-amd64.tar.gz && \
     mv go /usr/local && \
     rm go1.13.10.linux-amd64.tar.gz
 ENV PATH="/usr/local/go/bin:${PATH}" GOPATH="/root/go"
-WORKDIR /root/go/src/github.com/Forgerock/secret-agent
+WORKDIR /root/go/src/github.com/ForgeRock/secret-agent
 RUN addgroup --gid 11111 forgerock && \
     adduser --shell /bin/bash --home /home/forgerock --uid 11111 --disabled-password --ingroup root --gecos forgerock forgerock && \
     chown -R forgerock:root /home/forgerock
-COPY --from=ds --chown=forgerock:root /opt/opendj /opt/gen/opendj
+
+RUN os=$(go env GOOS) && \
+    arch=$(go env GOARCH) && \
+    curl -L https://go.kubebuilder.io/dl/2.3.1/${os}/${arch} | tar -xz -C /tmp/ && \
+    mv /tmp/kubebuilder_2.3.1_${os}_${arch} /usr/local/kubebuilder
 

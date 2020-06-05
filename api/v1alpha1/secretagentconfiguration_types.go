@@ -144,7 +144,6 @@ type SecretConfig struct {
 	Namespace string `json:"-" yaml:"namespace,omitempty"`
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:UniqueItems=true
 	Keys []*KeyConfig `json:"keys" yaml:"keys,omitempty" validate:"dive,unique=Name"`
 }
 
