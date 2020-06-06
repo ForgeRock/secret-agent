@@ -1,23 +1,24 @@
 package controllers
 
 import (
+	"context"
 	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
+	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/ForgeRock/secret-agent/pkg/generator"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-type k8s struct {
-	clientset kubernetes.Interface
-}
 
 // InitWebhookCertificates creates and injects req certs by the k8s webhooks
 func InitWebhookCertificates(certDir string) error {
@@ -41,18 +42,23 @@ func InitWebhookCertificates(certDir string) error {
 		return err
 	}
 
+	k8sClient, err := getClient()
+	if err != nil {
+		return err
+	}
+
 	// Patching webhook secret
-	if err := patchWebhookSecret(rootCA.CertPEM, leafCert.CertPEM, leafCert.PrivateKeyPEM, secretName, namespace); err != nil {
+	if err := patchWebhookSecret(k8sClient, rootCA.CertPEM, leafCert.CertPEM, leafCert.PrivateKeyPEM, secretName, namespace); err != nil {
 		return err
 	}
 
 	// Patching validating webhook
-	if err := patchValidatingWebhookConfiguration(rootCA.CertPEM, validatingWebhookConfigurationName); err != nil {
+	if err := patchValidatingWebhookConfiguration(k8sClient, rootCA.CertPEM, validatingWebhookConfigurationName); err != nil {
 		return err
 	}
 
 	// Patching mutating webhook
-	if err := patchMutatingWebhookConfiguration(rootCA.CertPEM, mutatingWebhookConfigurationName); err != nil {
+	if err := patchMutatingWebhookConfiguration(k8sClient, rootCA.CertPEM, mutatingWebhookConfigurationName); err != nil {
 		return err
 	}
 
@@ -75,18 +81,23 @@ func InitWebhookCertificates(certDir string) error {
 	return nil
 }
 
-func getClientSet(kubeconfig string) (*k8s, error) {
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+func getClient() (client.Client, error) {
+
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+
+	kubeconfig, err := ctrl.GetConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	c, err := kubernetes.NewForConfig(config)
+	kubeclient, err := client.New(kubeconfig, client.Options{
+		Scheme: scheme,
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	return &k8s{clientset: c}, nil
+	return kubeclient, nil
 }
 
 // generateCertificates generates the root CA and leaf certificate to be used by the webhook
@@ -104,13 +115,10 @@ func generateCertificates(sans []string) (rootCA, leafCert *generator.Certificat
 }
 
 // patchWebhookSecret patches the named TLS secret with the TLS information
-func patchWebhookSecret(rootCAPem, certPEM, keyPEM []byte, name, namespace string) (err error) {
-	k, err := getClientSet("")
-	if err != nil {
-		return
-	}
-	k8sSecret, err := k.clientset.CoreV1().Secrets(namespace).Get(name, metav1.GetOptions{})
-	if err != nil {
+func patchWebhookSecret(k client.Client, rootCAPem, certPEM, keyPEM []byte, name, namespace string) (err error) {
+
+	k8sSecret := &corev1.Secret{}
+	if err = k.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, k8sSecret); err != nil {
 		return
 	}
 
@@ -118,54 +126,39 @@ func patchWebhookSecret(rootCAPem, certPEM, keyPEM []byte, name, namespace strin
 	k8sSecret.Data["ca.crt"] = rootCAPem
 	k8sSecret.Data["tls.crt"] = certPEM
 	k8sSecret.Data["tls.key"] = keyPEM
-	_, err = k.clientset.CoreV1().Secrets(namespace).Update(k8sSecret)
-	if err != nil {
-		return
-	}
+
+	err = k.Update(context.TODO(), k8sSecret)
 
 	return
 }
 
 // patchValidatingWebhookConfiguration patches the given ValidatingWebhookConfiguration with the caBuncle
-func patchValidatingWebhookConfiguration(rootCAPem []byte, name string) (err error) {
-	k, err := getClientSet("")
-	if err != nil {
-		return
-	}
-	webhookConfiguration, err := k.clientset.
-		AdmissionregistrationV1beta1().
-		ValidatingWebhookConfigurations().
-		Get(name, metav1.GetOptions{})
-	if err != nil {
+func patchValidatingWebhookConfiguration(k client.Client, rootCAPem []byte, name string) (err error) {
+
+	webhookConfiguration := &admissionregistrationv1beta1.ValidatingWebhookConfiguration{}
+	if err = k.Get(context.TODO(), types.NamespacedName{Name: name}, webhookConfiguration); err != nil {
 		return
 	}
 	for i := range webhookConfiguration.Webhooks {
-		h := &webhookConfiguration.Webhooks[i]
-		h.ClientConfig.CABundle = rootCAPem
+		webhookConfiguration.Webhooks[i].ClientConfig.CABundle = rootCAPem
 	}
-	_, err = k.clientset.AdmissionregistrationV1beta1().ValidatingWebhookConfigurations().Update(webhookConfiguration)
+
+	err = k.Update(context.TODO(), webhookConfiguration)
 
 	return
 }
 
 // patchMutatingWebhookConfiguration patches the given MutatingWebhookConfiguration with the caBuncle
-func patchMutatingWebhookConfiguration(rootCAPem []byte, name string) (err error) {
-	k, err := getClientSet("")
-	if err != nil {
-		return
-	}
-	webhookConfiguration, err := k.clientset.
-		AdmissionregistrationV1beta1().
-		MutatingWebhookConfigurations().
-		Get(name, metav1.GetOptions{})
-	if err != nil {
+func patchMutatingWebhookConfiguration(k client.Client, rootCAPem []byte, name string) (err error) {
+
+	webhookConfiguration := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
+	if err = k.Get(context.TODO(), types.NamespacedName{Name: name}, webhookConfiguration); err != nil {
 		return
 	}
 	for i := range webhookConfiguration.Webhooks {
-		h := &webhookConfiguration.Webhooks[i]
-		h.ClientConfig.CABundle = rootCAPem
+		webhookConfiguration.Webhooks[i].ClientConfig.CABundle = rootCAPem
 	}
-	_, err = k.clientset.AdmissionregistrationV1beta1().MutatingWebhookConfigurations().Update(webhookConfiguration)
+	err = k.Update(context.TODO(), webhookConfiguration)
 
 	return
 
