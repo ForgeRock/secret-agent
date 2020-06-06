@@ -1,4 +1,4 @@
-# For building gcr.io/forgerock-io/secret-agent:latest
+# For building forgerock/secret-agent:tagname
 
 # Build the manager binary
 FROM golang:1.14-alpine as builder
@@ -29,20 +29,20 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -ldflags "-s -
 
 FROM openjdk:11-jre-slim
 
-RUN addgroup --gid 11111 forgerock && \
-    adduser --shell /bin/bash --home /home/forgerock --uid 11111 --disabled-password --ingroup root --gecos forgerock forgerock && \
-    chown -R forgerock:root /home/forgerock
+RUN addgroup --gid 11111 secret-agent && \
+    adduser --shell /bin/bash --home /home/secret-agent --uid 11111 --disabled-password --ingroup root --gecos secret-agent secret-agent && \
+    chown -R secret-agent:root /home/secret-agent
 
 WORKDIR /opt/gen
 
-COPY --from=builder --chown=forgerock:root /workspace/manager /
+COPY --from=builder --chown=secret-agent:root /workspace/manager /
 
 RUN mkdir -p /opt/gen/secrets/generic/truststore && \
     cp $JAVA_HOME/lib/security/cacerts /opt/gen/secrets/generic/truststore && \
     chmod 764 /opt/gen/secrets/generic/truststore/cacerts && \
-    chown -R forgerock:root /opt/gen
+    chown -R secret-agent:root /opt/gen
 
-USER forgerock
+USER secret-agent
 
 # Set the entrypoint to /manager with automation,
 #   leave it as bash here to prevent the need for manual override when debugging
