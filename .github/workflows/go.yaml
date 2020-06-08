@@ -39,7 +39,7 @@ jobs:
       uses: actions/checkout@v2
        
     - name: Build Test Image
-      run: docker build -t secret-agent-tester -f Dockerfile.testing .
+      run: docker build -t secret-agent-tester --target=tester .
 
     - name: Test
       run: docker run -i --rm -v ${GITHUB_WORKSPACE}:/root/go/src/github.com/ForgeRock/secret-agent secret-agent-tester make citest

@@ -24,7 +24,7 @@ kustomize build config/default | kubectl apply -f -
 * Some of the tests exercise parts of the code that os.Exec openssl and keytool, and kubebuilder's etcd
   * It's easiest to test in Docker
   * Ensure you're kube context is hooked up to a test cluster, such as minikube, then
-    * `docker build -t gcr.io/forgerock-io/secret-agent-testing:latest -f Dockerfile.testing .`
+    * `docker build -t gcr.io/forgerock-io/secret-agent-testing:latest -f --target=tester .`
     * `docker run -it --rm -v ${PWD}:/root/go/src/github.com/ForgeRock/secret-agent gcr.io/forgerock-io/secret-agent-testing:latest`
     * `go test ./...`
 
