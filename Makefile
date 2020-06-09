@@ -14,6 +14,12 @@ endif
 all: manager
 
 # Run unit and integration tests (backwards compatability)
+citest: int-test
+	git status --untracked-files=no --porcelain
+	if [ -n "$(shell git status --untracked-files=no --porcelain)" ]; then echo "There are uncommitted changes"; false; fi
+	echo "Test successful"
+
+# Run unit and integration tests (backwards compatability)
 test: int-test
 
 # Run unit tests
