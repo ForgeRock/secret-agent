@@ -166,8 +166,47 @@ func GenerateSignedCert(rootCA *Certificate, algorithm v1alpha1.Algorithm, commo
 	if err != nil {
 		return cert, errors.WithStack(err)
 	}
-
 	return cert, nil
+}
+
+// GenerateSelfSignedCertPEM generates a self signed certificate with an expire date based on a unix timestamp
+func GenerateSelfSignedCertPEM(commonName string, expire int) ([]byte, []byte, []byte, error) {
+	var err error
+	cert := &Certificate{}
+	cert.PrivateKeyRSA, err = rsa.GenerateKey(rand.Reader, 3072)
+	if err != nil {
+		return []byte{}, []byte{}, []byte{}, errors.WithStack(errors.New("Unable to generate RSA key"))
+	}
+	marshaledPrivateKey := x509.MarshalPKCS1PrivateKey(cert.PrivateKeyRSA)
+	cert.PrivateKeyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: marshaledPrivateKey})
+	// prepare cert template
+	notBefore := time.Unix(0, 0)
+	notAfter := time.Unix(int64(expire), 0)
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return []byte{}, []byte{}, []byte{}, errors.WithStack(errors.New("Unable to create serial number for cert"))
+	}
+	certTemplate := &x509.Certificate{
+		SerialNumber:          serialNumber,
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		BasicConstraintsValid: true,
+		IsCA:                  false,
+		SignatureAlgorithm:    x509.SHA256WithRSA,
+	}
+	if len(commonName) != 0 {
+		certTemplate.Subject = pkix.Name{
+			CommonName: commonName,
+		}
+	}
+	certBytes, err := x509.CreateCertificate(rand.Reader, certTemplate, certTemplate, &cert.PrivateKeyRSA.PublicKey, cert.PrivateKeyRSA)
+	if err != nil {
+		return []byte{}, []byte{}, []byte{}, errors.WithStack(err)
+	}
+	cert.CertPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
+	certAndKeyPEM := append(cert.CertPEM, cert.PrivateKeyPEM...)
+	return certAndKeyPEM, cert.CertPEM, cert.PrivateKeyPEM, nil
 }
 
 // GenerateSignedCertPEM issues a certificate signed by the provided root CA

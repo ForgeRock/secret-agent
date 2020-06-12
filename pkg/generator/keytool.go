@@ -30,6 +30,7 @@ func init() {
 func GetKeystore(nodePath []string) ([]byte, error) {
 	keystorePath := getKeystoreFilePath(nodePath)
 	contents, err := ioutil.ReadFile(keystorePath)
+	defer os.Remove(keystorePath)
 	if err != nil {
 		return contents, errors.WithStack(err)
 	}

@@ -173,6 +173,8 @@ type AliasConfig struct {
 	CommonName     string          `json:"commonName,omitempty" yaml:"commonName,omitempty"`
 	Sans           []string        `json:"sans,omitempty" yaml:"sans,omitempty"`
 	SignedWithPath []string        `json:"signedWithPath,omitempty" yaml:"signedWithPath,omitempty"`
+	SelfSigned     bool            `json:"selfSigned,omitempty" yaml:"selfSigned,omitempty"`
+	Expire         int             `json:"expire,omitempty" yaml:"expire,omitempty"`
 	CAPath         []string        `json:"caPath,omitempty" yaml:"caPath,omitempty"`
 	Node           *Node           `json:"-" yaml:"node,omitempty"`
 }

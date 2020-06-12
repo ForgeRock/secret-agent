@@ -189,14 +189,22 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 						}
 					case TypeKeyPair:
 						// must have signedWithPath
-						if len(alias.SignedWithPath) == 0 {
+						if len(alias.SignedWithPath) == 0 && !alias.SelfSigned {
 							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].SignedWithPath, name, "signedWithPath", "signedWithPathNotSet", "")
 							return
 						}
 						// signedWithPath must be valid
-						if !pathExistsInSecretConfigs(alias.SignedWithPath, config.Secrets) {
+						if !pathExistsInSecretConfigs(alias.SignedWithPath, config.Secrets) && !alias.SelfSigned {
 							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].SignedWithPath, name, "signedWithPath", "signedWithPathNotFound", "")
 							return
+						}
+						// Self Signed shoudn't have a signed with path
+						if alias.SelfSigned && len(alias.SignedWithPath) != 0 && alias.Algorithm == SHA256WithRSA {
+							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].SignedWithPath, name, "selfSigned", "signedWithPathFound", "")
+							return
+						}
+						if alias.SelfSigned && alias.Algorithm != SHA256WithRSA {
+							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].SignedWithPath, name, "selfSigned", "unsupportedAlgorithm", "")
 						}
 						// must have algorithm
 						if len(alias.Algorithm) == 0 {
@@ -212,6 +220,9 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 
 func pathExistsInSecretConfigs(path []string, secrets []*SecretConfig) bool {
 	found := false
+	if len(path) == 0 {
+		return found
+	}
 path:
 	for _, secret := range secrets {
 		if secret.Name == path[0] {
