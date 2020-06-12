@@ -113,3 +113,18 @@ func TestGenerateSignedCertPEM(t *testing.T) {
 		t.Error("Expected 'BEGIN EC PRIVATE KEY match, found none")
 	}
 }
+
+func TestGenerateSharedCert(t *testing.T) {
+	_, certPEM, keyPEM, err := GenerateSharedCertPEM("foobar")
+	// check
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
+	if !regexp.MustCompile(`-----BEGIN CERTIFICATE-----`).Match(certPEM) {
+		t.Error("Expected '-----BEGIN CERTIFICATE-----' match, found none")
+	}
+	if !regexp.MustCompile(`BEGIN RSA PRIVATE KEY`).Match(keyPEM) {
+		t.Error("Expected 'BEGIN RSA PRIVATE KEY match, found none")
+	}
+
+}

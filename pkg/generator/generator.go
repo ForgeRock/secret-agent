@@ -132,37 +132,48 @@ func Generate(node *v1alpha1.Node) error {
 
 				node.Value = caCertPEM
 			case v1alpha1.TypeKeyPair:
-				// get private key's PEM value
-				rootCAPrivateKeyPEM, err := getValueFromParent(node.AliasConfig.SignedWithPath, node)
-				if err != nil {
-					return err
-				}
-
-				// get private key's CA PEM value
-				rootCAPEM := []byte{}
-				for _, parentNode := range node.Parents {
-					if memorystore.Equal(node.AliasConfig.SignedWithPath, parentNode.Path) {
-						rootCAPEM, err = getValueFromParent(parentNode.KeyConfig.CAPath, parentNode)
-						if err != nil {
-							return err
-						}
-						break
+				var certAndKeyPEM, certPEM, keyPEM []byte
+				var err error
+				if !node.AliasConfig.SharedCert {
+					// get private key's PEM value
+					rootCAPrivateKeyPEM, err := getValueFromParent(node.AliasConfig.SignedWithPath, node)
+					if err != nil {
+						return err
 					}
-				}
-				if len(rootCAPEM) == 0 {
-					return errors.New("Failed to find root CA PEM value")
-				}
 
-				// generate
-				certAndKeyPEM, certPEM, keyPEM, err := GenerateSignedCertPEM(
-					rootCAPEM,
-					rootCAPrivateKeyPEM,
-					node.AliasConfig.Algorithm,
-					node.AliasConfig.CommonName,
-					node.AliasConfig.Sans,
-				)
-				if err != nil {
-					return err
+					// get private key's CA PEM value
+					rootCAPEM := []byte{}
+					for _, parentNode := range node.Parents {
+						if memorystore.Equal(node.AliasConfig.SignedWithPath, parentNode.Path) {
+							rootCAPEM, err = getValueFromParent(parentNode.KeyConfig.CAPath, parentNode)
+							if err != nil {
+								return err
+							}
+							break
+						}
+					}
+					if len(rootCAPEM) == 0 {
+						return errors.New("Failed to find root CA PEM value")
+					}
+
+					// generate
+					certAndKeyPEM, certPEM, keyPEM, err = GenerateSignedCertPEM(
+						rootCAPEM,
+						rootCAPrivateKeyPEM,
+						node.AliasConfig.Algorithm,
+						node.AliasConfig.CommonName,
+						node.AliasConfig.Sans,
+					)
+					if err != nil {
+						return err
+					}
+				} else if node.AliasConfig.SharedCert {
+					certAndKeyPEM, certPEM, keyPEM, err = GenerateSharedCertPEM(node.AliasConfig.CommonName)
+					if err != nil {
+						return errors.WithStack(err)
+					}
+				} else {
+					return errors.New("Cert should be either SharedCert or Signed")
 				}
 
 				// add to keystore
@@ -170,6 +181,9 @@ func Generate(node *v1alpha1.Node) error {
 				if err != nil {
 					return err
 				}
+				fmt.Printf("----------%s----------\n", node.AliasConfig.CommonName)
+				fmt.Printf("cert to be imported: %+v \n", string(certPEM))
+				fmt.Printf("key to be imported: %+v \n", string(keyPEM))
 				err = ImportKeyPairFromPEMs(certPEM, keyPEM, storePassword, node.AliasConfig)
 				if err != nil {
 					return err
