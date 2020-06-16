@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"io/ioutil"
 	"math/big"
 	"net"
 	"time"
@@ -23,6 +24,16 @@ type Certificate struct {
 	PrivateKeyEC  *ecdsa.PrivateKey
 	PrivateKeyRSA *rsa.PrivateKey
 	PrivateKeyPEM []byte
+}
+
+// GenerateTrustStoreBundle
+func GenerateTrustStoreBundle(rootCA []byte) ([]byte, error) {
+	rawCertBundle, err := ioutil.ReadFile("/etc/ssl/certs/ca-certificates.crt")
+	if err != nil {
+		return []byte{}, err
+	}
+	return append(rawCertBundle, rootCA...), nil
+
 }
 
 // GenerateRootCA Generates a root CA

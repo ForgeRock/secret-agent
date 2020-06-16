@@ -89,7 +89,7 @@ const (
 )
 
 // KeyConfigType Specifies which key type to use
-// +kubebuilder:validation:Enum=literal;password;privateKey;publicKeySSH;ca;caPrivateKey;caCopy;pkcs12;jceks;jks
+// +kubebuilder:validation:Enum=literal;password;privateKey;publicKeySSH;ca;caPrivateKey;caCopy;pkcs12;jceks;jks;truststore
 type KeyConfigType string
 
 // AliasConfigType Specifies which alias config type to use
@@ -108,6 +108,7 @@ const (
 	TypePKCS12       KeyConfigType = "pkcs12"
 	TypeJCEKS        KeyConfigType = "jceks"
 	TypeJKS          KeyConfigType = "jks"
+	TypeTrustStore   KeyConfigType = "truststore"
 )
 
 // Alias Config Type Strings

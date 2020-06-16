@@ -158,7 +158,8 @@ func addParentsAndChildren(parentPath, path []string, secretConfig *v1alpha1.Sec
 // addAliasParentsAndChildren is a rangeFunc that sets the parents and children for alias dependency nodes
 //   all aliases should be parents of the relevant secret key
 func addAliasParentsAndChildren(parentPath, path []string, secretConfig *v1alpha1.SecretConfig, keyConfig *v1alpha1.KeyConfig, aliasConfig *v1alpha1.AliasConfig, nodes []*v1alpha1.Node) []*v1alpha1.Node {
-	if keyConfig.Type == v1alpha1.TypePKCS12 && aliasConfig != nil {
+	if (keyConfig.Type == v1alpha1.TypePKCS12 || keyConfig.Type == v1alpha1.TypeTrustStore) && aliasConfig != nil {
+		// if (keyConfig.Type == v1alpha1.TypePKCS12) && aliasConfig != nil {
 		// make sure it doesn't already exist
 		alreadyExists := false
 		for _, parentNode := range keyConfig.Node.Parents {

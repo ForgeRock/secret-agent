@@ -194,10 +194,35 @@ func Generate(node *v1alpha1.Node) error {
 			case v1alpha1.TypeAESKey:
 				// TODO placeholder
 				node.Value = []byte("temp-placeholder")
+
 			default:
 				return errors.WithStack(fmt.Errorf("Unexpected aliasConfig.Type: '%v', in %v", node.AliasConfig.Type, node.Path))
 			}
 		}
+	case v1alpha1.TypeTrustStore:
+		switch length := len(node.Path); length {
+		case 2:
+			value, err := GetKeystore(node.Path)
+			if err != nil {
+				return errors.WithStack(err)
+			}
+			node.Value = value
+		case 3:
+			caPEM, err := getValueFromParent(node.AliasConfig.CAPath, node)
+			if err != nil {
+				return err
+			}
+			certBundle, err := GenerateTrustStoreBundle(caPEM)
+			if err != nil {
+				return err
+			}
+			storePassword, err := getValueFromParent(node.KeyConfig.StorePassPath, node)
+			err = ImportCertFromPEM(certBundle, storePassword, node.AliasConfig)
+			if err != nil {
+				return err
+			}
+		}
+
 	default:
 		return errors.WithStack(fmt.Errorf("Unexpected node.KeyConfig.Type: '%v', in %v", node.KeyConfig.Type, node.Path))
 	}

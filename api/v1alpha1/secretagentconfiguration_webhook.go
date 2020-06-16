@@ -213,6 +213,17 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 						}
 					}
 				}
+			case TypeTrustStore:
+				for aliasIndex, alias := range key.AliasConfigs {
+					if !pathExistsInSecretConfigs(alias.CAPath, config.Secrets) {
+						sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].CAPath, name, "caPath", "caPathWithPathNotFound", "")
+						return
+					}
+					if len(alias.CAPath) == 0 {
+						sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].CAPath, name, "caPath", "caPathNotFound", "")
+						return
+					}
+				}
 			}
 		}
 	}

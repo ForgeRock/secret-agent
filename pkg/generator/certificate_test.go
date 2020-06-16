@@ -128,3 +128,35 @@ func TestGenerateSharedCert(t *testing.T) {
 	}
 
 }
+
+func TestGenerateTrustStore(t *testing.T) {
+	_, certPEM, _, err := GenerateSelfSignedCertPEM("foobar", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := GenerateTrustStoreBundle(certPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parsed []*x509.Certificate
+	for len(bundle) > 0 {
+		var block *pem.Block
+		block, bundle = pem.Decode(bundle)
+		if block == nil {
+			break
+		}
+		if block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
+			continue
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			continue
+		}
+		parsed = append(parsed, cert)
+	}
+	lastCert := parsed[len(parsed)-1]
+	if lastCert.Subject.CommonName != "foobar" {
+		t.Errorf("expected to find cert with common name of 'foobar' but found %+v", lastCert.Subject.CommonName)
+	}
+
+}
