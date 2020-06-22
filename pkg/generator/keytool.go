@@ -46,6 +46,7 @@ func ImportCertFromPEM(certPEM, storePassword []byte, aliasConfig *v1alpha1.Alia
 	if err != nil {
 		return errors.WithStack(err)
 	}
+	defer os.Remove(certPath)
 	// use keytool to import
 	args := []string{"-importcert", "-trustcacerts",
 		"-alias", aliasConfig.Alias,
