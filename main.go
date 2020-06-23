@@ -80,18 +80,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Start creating certs for the webhooks
-	setupLog.Info("Starting webhook related patches")
-	if err := controllers.InitWebhookCertificates(certDir); err != nil {
-		setupLog.Error(err, "Failed to init webhook certificates")
-		os.Exit(1)
-	}
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		// Start creating certs for the webhooks
+		setupLog.Info("Starting webhook related patches")
+		if err := controllers.InitWebhookCertificates(certDir); err != nil {
+			setupLog.Error(err, "Failed to init webhook certificates")
+			os.Exit(1)
+		}
 
-	//END Create certs for the webhooks
-
-	if err = (&v1alpha1.SecretAgentConfiguration{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "SecretAgentConfiguration")
-		os.Exit(1)
+		if err = (&v1alpha1.SecretAgentConfiguration{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "SecretAgentConfiguration")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 
