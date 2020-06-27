@@ -36,46 +36,53 @@ func InitWebhookCertificates(certDir string) error {
 			"VALIDATING_WEBHOOK_CONFIGURATION, MUTATING_WEBHOOK_CONFIGURATION, CERTIFICATE_SANS")
 	}
 
-	rootCA, leafCert, err := generateCertificates(sans)
-	if err != nil {
-		// Unable to create secret
-		return err
-	}
-
 	k8sClient, err := getClient()
 	if err != nil {
 		return err
 	}
 
-	// Patching webhook secret
-	if err := patchWebhookSecret(k8sClient, rootCA.CertPEM, leafCert.CertPEM, leafCert.PrivateKeyPEM, secretName, namespace); err != nil {
-		return err
+	rootCAPem, certPEM, keyPEM, err := getWebhookSecret(k8sClient, secretName, namespace)
+	if err != nil {
+		// If we couldn't obtain the certs from the k8s secret, generate the certs and patch the k8s secret for future use
+		rootCA, leafCert, err := generateCertificates(sans)
+		if err != nil {
+			// Unable to create secret
+			return err
+		}
+
+		// Patching webhook secret
+		if err := patchWebhookSecret(k8sClient, rootCA.CertPEM, leafCert.CertPEM, leafCert.PrivateKeyPEM, secretName, namespace); err != nil {
+			return err
+		}
+		rootCAPem = rootCA.CertPEM
+		certPEM = leafCert.CertPEM
+		keyPEM = leafCert.PrivateKeyPEM
 	}
 
 	// Patching validating webhook
-	if err := patchValidatingWebhookConfiguration(k8sClient, rootCA.CertPEM, validatingWebhookConfigurationName); err != nil {
+	if err := patchValidatingWebhookConfiguration(k8sClient, rootCAPem, validatingWebhookConfigurationName); err != nil {
 		return err
 	}
 
 	// Patching mutating webhook
-	if err := patchMutatingWebhookConfiguration(k8sClient, rootCA.CertPEM, mutatingWebhookConfigurationName); err != nil {
+	if err := patchMutatingWebhookConfiguration(k8sClient, rootCAPem, mutatingWebhookConfigurationName); err != nil {
 		return err
 	}
 
-	// Unable to create certDir
-	if err := os.MkdirAll(certDir, 0755); err != nil {
+	// Create certDir
+	if err := os.MkdirAll(certDir, 0700); err != nil {
 		return err
 	}
-	// Unable to create ca.crt
-	if err := ioutil.WriteFile(filepath.Join(certDir, "ca.crt"), rootCA.CertPEM, 0400); err != nil {
+	// Create ca.crt
+	if err := ioutil.WriteFile(filepath.Join(certDir, "ca.crt"), rootCAPem, 0400); err != nil {
 		return err
 	}
-	// Unable to create tls.crt
-	if err := ioutil.WriteFile(filepath.Join(certDir, "tls.crt"), leafCert.CertPEM, 0400); err != nil {
+	// Create tls.crt
+	if err := ioutil.WriteFile(filepath.Join(certDir, "tls.crt"), certPEM, 0400); err != nil {
 		return err
 	}
-	// Unable to create tls.key
-	if err := ioutil.WriteFile(filepath.Join(certDir, "tls.key"), leafCert.PrivateKeyPEM, 0400); err != nil {
+	// Create tls.key
+	if err := ioutil.WriteFile(filepath.Join(certDir, "tls.key"), keyPEM, 0400); err != nil {
 		return err
 	}
 	return nil
@@ -108,6 +115,34 @@ func generateCertificates(sans []string) (rootCA, leafCert *generator.Certificat
 	}
 	leafCert, err = generator.GenerateSignedCert(rootCA, v1alpha1.ECDSAWithSHA256, "", sans)
 	if err != nil {
+		return
+	}
+
+	return
+}
+
+// getWebhookSecret patches the named TLS secret with the TLS information
+func getWebhookSecret(k client.Client, name, namespace string) (rootCAPem, certPEM, keyPEM []byte, err error) {
+
+	k8sSecret := &corev1.Secret{}
+	if err = k.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, k8sSecret); err != nil {
+		return
+	}
+	var ok bool
+	// secret found, let's grab the contents
+	rootCAPem, ok = k8sSecret.Data["ca.crt"]
+	if !ok {
+		err = errors.New("Secret key ca.crt not found in " + name)
+		return
+	}
+	certPEM, ok = k8sSecret.Data["tls.crt"]
+	if !ok {
+		err = errors.New("Secret key tls.crt not found in " + name)
+		return
+	}
+	keyPEM, ok = k8sSecret.Data["tls.key"]
+	if !ok {
+		err = errors.New("Secret key tls.key not found in " + name)
 		return
 	}
 
