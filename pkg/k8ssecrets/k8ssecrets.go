@@ -15,31 +15,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// LoadExisting loads any existing secrets in the Kubernetes API into the memory store
-func LoadExisting(rclient client.Client, secretsConfig []*v1alpha1.SecretConfig) error {
-	for _, secretConfig := range secretsConfig {
-
-		k8sSecret := &corev1.Secret{}
-		if err := rclient.Get(context.TODO(), types.NamespacedName{Name: secretConfig.Name, Namespace: secretConfig.Namespace}, k8sSecret); err != nil {
-			if k8sErrors.IsNotFound(err) {
-				continue
+// LoadSecret loads any existing secrets in the Kubernetes API into the memory store
+func LoadSecret(rclient client.Client, secretName, namespace string) (*corev1.Secret, error) {
+	k8sSecret := &corev1.Secret{}
+	if err := rclient.Get(context.TODO(), types.NamespacedName{Name: secretName, Namespace: namespace}, k8sSecret); err != nil {
+		if k8sErrors.IsNotFound(err) {
+			meta := metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: namespace,
 			}
-			return errors.WithStack(err)
+			return &corev1.Secret{
+				ObjectMeta: meta,
+			}, nil
 		}
-
-		for _, keyConfig := range secretConfig.Keys {
-			// only load from Kubernetes if not in memory store (node.Value),
-			//   since SecretsManager is source of truth if in use
-			if len(keyConfig.Node.Value) != 0 {
-				continue
-			}
-			if value, exists := k8sSecret.Data[keyConfig.Name]; exists {
-				keyConfig.Node.Value = value
-			}
-		}
+		return k8sSecret, errors.WithStack(err)
 	}
+	return k8sSecret, nil
 
-	return nil
 }
 
 // ApplySecrets applies secrets from the memory store into the Kubernetes API
@@ -87,4 +79,34 @@ func GenerateSecretAPIObjects(secretConfig *v1alpha1.SecretConfig) *corev1.Secre
 	}
 	return k8sSecret
 
+}
+
+////////
+// TO REMOVE
+///////
+// LoadExisting loads any existing secrets in the Kubernetes API into the memory store
+func LoadExisting(rclient client.Client, secretsConfig []*v1alpha1.SecretConfig) error {
+	for _, secretConfig := range secretsConfig {
+
+		k8sSecret := &corev1.Secret{}
+		if err := rclient.Get(context.TODO(), types.NamespacedName{Name: secretConfig.Name, Namespace: secretConfig.Namespace}, k8sSecret); err != nil {
+			if k8sErrors.IsNotFound(err) {
+				continue
+			}
+			return errors.WithStack(err)
+		}
+
+		for _, keyConfig := range secretConfig.Keys {
+			// only load from Kubernetes if not in memory store (node.Value),
+			//   since SecretsManager is source of truth if in use
+			if len(keyConfig.Node.Value) != 0 {
+				continue
+			}
+			if value, exists := k8sSecret.Data[keyConfig.Name]; exists {
+				keyConfig.Node.Value = value
+			}
+		}
+	}
+
+	return nil
 }

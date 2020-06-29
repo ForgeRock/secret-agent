@@ -102,10 +102,10 @@ func TestConfigurationStructLevelValidatorKeyPair(t *testing.T) {
 		Name: "fdsaKey",
 		Type: KeyConfigTypeKeyPair,
 		Spec: &KeySpec{
-			Algorithm:      "ECDSAWithSHA256",
-			CommonName:     "name",
-			Sans:           []string{"*.name", "*.name-repo", "*.name-cts"},
-			SignedWithPath: "asdfSecret/ca",
+			Algorithm:         "ECDSAWithSHA256",
+			Sans:              []string{"*.name", "*.name-repo", "*.name-cts"},
+			SignedWithPath:    "asdfSecret/ca",
+			DistinguishedName: &DistinguishedName{CommonName: "foo"},
 		},
 	}
 	ca := &KeyConfig{
@@ -131,12 +131,14 @@ func TestConfigurationStructLevelValidatorKeyPair(t *testing.T) {
 	config.Secrets[0].Keys[0].Spec.Algorithm = "ECDSAWithSHA256"
 
 	// Missing CommonName
-	config.Secrets[0].Keys[0].Spec.CommonName = ""
+	config.Secrets[0].Keys[0].Spec.DistinguishedName = nil
 	err = validate.Struct(config)
 	if err == nil {
-		t.Error("Missing CommonName: Expected error, got none")
+		t.Error("Missing DistinguishedName: Expected error, got none")
 	}
-	config.Secrets[0].Keys[0].Spec.CommonName = "name"
+	config.Secrets[0].Keys[0].Spec.DistinguishedName = &DistinguishedName{
+		CommonName: "name",
+	}
 
 	// Missing SignedWith
 	config.Secrets[0].Keys[0].Spec.SignedWithPath = ""
@@ -202,8 +204,10 @@ func TestConfigurationStructLevelValidatorKeytool(t *testing.T) {
 		Name: "keypa",
 		Type: KeyConfigTypeKeyPair,
 		Spec: &KeySpec{
-			Algorithm:      "SHA256WithRSA",
-			CommonName:     "name",
+			Algorithm: "SHA256WithRSA",
+			DistinguishedName: &DistinguishedName{
+				CommonName: "name",
+			},
 			SignedWithPath: "asdfSecret/ca",
 		},
 	}

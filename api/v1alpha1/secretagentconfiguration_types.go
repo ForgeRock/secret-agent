@@ -70,6 +70,50 @@ type SecretAgentConfigurationList struct {
 	Items           []SecretAgentConfiguration `json:"items"`
 }
 
+// DistinguishedName certificate subject data
+type DistinguishedName struct {
+	Country            []string `json:"country,omitempty" yaml:"country,omitempty"`
+	Organization       []string `json:"organization,omitempty" yaml:"organization,omitempty"`
+	OrganizationalUnit []string `json:"organizationUnit,omitempty" yaml:"organizationUnit,omitempty"`
+	Locality           []string `json:"locality,omitempty" yaml:"locality,omitempty"`
+	Province           []string `json:"province,omitempty" yaml:"province,omitempty"`
+	StreetAddress      []string `json:"streetAddress,omitempty" yaml:"streetAddress,omitempty"`
+	PostalCode         []string `json:"postalCode,omitempty" yaml:"postalCode,omitempty"`
+	SerialNumber       string   `json:"serialNumber,omitempty" yaml:"serialNumber,omitempty"`
+	CommonName         string   `json:"commonName,omitempty" yaml:"commonName,omitempty,flow"`
+}
+
+func (dn *DistinguishedName) isEmpty() bool {
+	if len(dn.Country) != 0 {
+		return true
+	}
+	if len(dn.Organization) != 0 {
+		return true
+	}
+	if len(dn.OrganizationalUnit) != 0 {
+		return true
+	}
+	if len(dn.Locality) != 0 {
+		return true
+	}
+	if len(dn.Province) != 0 {
+		return true
+	}
+	if len(dn.StreetAddress) != 0 {
+		return true
+	}
+	if len(dn.PostalCode) != 0 {
+		return true
+	}
+	if dn.SerialNumber == "" {
+		return true
+	}
+	if dn.CommonName == "" {
+		return true
+	}
+	return false
+}
+
 func init() {
 	SchemeBuilder.Register(&SecretAgentConfiguration{}, &SecretAgentConfigurationList{})
 }
@@ -193,15 +237,15 @@ type KeyConfig struct {
 
 // KeySpec is the configuration for each key
 type KeySpec struct {
-	Value                 string        `json:"value,omitempty"`
-	Algorithm             AlgorithmType `json:"algorithm,omitempty"`
-	CommonName            string        `json:"commonName,omitempty"`
-	SignedWithPath        string        `json:"signedWithPath,omitempty"`
-	StoreType             StoreType     `json:"storeType,omitempty"`
-	StorePassPath         string        `json:"storePassPath,omitempty"`
-	KeyPassPath           string        `json:"keyPassPath,omitempty"`
-	Sans                  []string      `json:"sans,omitempty"`
-	TruststoreImportPaths []string      `json:"truststoreImportPaths,omitempty"`
+	Value                 string             `json:"value,omitempty"`
+	Algorithm             AlgorithmType      `json:"algorithm,omitempty"`
+	DistinguishedName     *DistinguishedName `json:"distinguishedName,omitempty"`
+	SignedWithPath        string             `json:"signedWithPath,omitempty"`
+	StoreType             StoreType          `json:"storeType,omitempty"`
+	StorePassPath         string             `json:"storePassPath,omitempty"`
+	KeyPassPath           string             `json:"keyPassPath,omitempty"`
+	Sans                  []string           `json:"sans,omitempty"`
+	TruststoreImportPaths []string           `json:"truststoreImportPaths,omitempty"`
 
 	// +kubebuilder:validation:Minimun=16
 	Length *int `json:"length,omitempty"`

@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -8,13 +9,17 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"net"
+	"strings"
 	"time"
 
-	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
+
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 
 // Certificate represents a certificate and its private key
@@ -26,7 +31,208 @@ type Certificate struct {
 	PrivateKeyPEM []byte
 }
 
-// GenerateTrustStoreBundle
+// CertKeyPair Private/Public certificates which optionally can be signed by a RootCA
+type CertKeyPair struct {
+	Name       string
+	RootCA     *RootCA
+	Cert       *Certificate
+	V1Spec     *v1alpha1.KeySpec
+	SelfSigned bool
+	refName    string
+	refDataKey string
+	refValue   []byte
+}
+
+// References return names of secrets that should be looked up
+func (kp *CertKeyPair) References() ([]string, []string) {
+	return []string{kp.refName}, []string{kp.refDataKey}
+}
+
+// LoadSecretFromManager populates CertKeyPair data from secret manager
+func (kp *CertKeyPair) LoadSecretFromManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+	return nil
+}
+
+// EnsureSecretManager populates secrete manager from CertKeyPair data
+func (kp *CertKeyPair) EnsureSecretManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+	return nil
+}
+
+// Generate generate a key pair
+func (kp *CertKeyPair) Generate() error {
+	var err error
+
+	// PrivateKeyEC/PrivateKeyRSA and PrivateKeyPEM
+	switch kp.V1Spec.Algorithm {
+	case v1alpha1.AlgorithmTypeECDSAWithSHA256:
+		kp.Cert.PrivateKeyEC, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+
+		marshaledPrivateKey, err := x509.MarshalECPrivateKey(kp.Cert.PrivateKeyEC)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		kp.Cert.PrivateKeyPEM = pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: marshaledPrivateKey})
+	case v1alpha1.AlgorithmTypeSHA256WithRSA:
+		kp.Cert.PrivateKeyRSA, err = rsa.GenerateKey(rand.Reader, 3072)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+
+		marshaledPrivateKey := x509.MarshalPKCS1PrivateKey(kp.Cert.PrivateKeyRSA)
+		kp.Cert.PrivateKeyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: marshaledPrivateKey})
+	}
+
+	// prepare cert template
+	notBefore := time.Now().Add(time.Minute * -5)
+	notAfter := notBefore.Add(10 * 365 * 24 * time.Hour) // 10yrs
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	certTemplate := &x509.Certificate{
+		SerialNumber:          serialNumber,
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  false,
+		SignatureAlgorithm:    x509.ECDSAWithSHA256,
+	}
+	pkixName := dnToPkixName(kp.V1Spec.DistinguishedName)
+	if pkixName != nil {
+		certTemplate.Subject = *pkixName
+	}
+	for _, hostname := range kp.V1Spec.Sans {
+		if ip := net.ParseIP(hostname); ip != nil {
+			certTemplate.IPAddresses = append(certTemplate.IPAddresses, ip)
+		} else {
+			certTemplate.DNSNames = append(certTemplate.DNSNames, hostname)
+		}
+	}
+
+	// CertPEM
+	var publicKey interface{}
+	switch kp.V1Spec.Algorithm {
+	case v1alpha1.AlgorithmTypeECDSAWithSHA256:
+		publicKey = &kp.Cert.PrivateKeyEC.PublicKey
+	case v1alpha1.AlgorithmTypeSHA256WithRSA:
+		publicKey = &kp.Cert.PrivateKeyRSA.PublicKey
+	}
+	signer := &Certificate{Cert: kp.RootCA.Cert.Cert,
+		PrivateKeyEC: kp.RootCA.Cert.PrivateKeyEC,
+	}
+	certBytes, err := x509.CreateCertificate(rand.Reader, certTemplate, signer.Cert, publicKey, signer.PrivateKeyEC)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	kp.Cert.CertPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
+	block, _ := pem.Decode(kp.Cert.CertPEM)
+	if block == nil {
+		return errors.WithStack(errors.New("Unable to decode PEM encoded cert"))
+	}
+	// need to use the parsed cert, not the template
+	kp.Cert.Cert, err = x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	return nil
+}
+
+// LoadFromData  load data from kubernetes secret
+func (kp *CertKeyPair) LoadFromData(data map[string][]byte) {
+	pubKey := fmt.Sprintf("%s.pem", kp.Name)
+	privKey := fmt.Sprintf("%s-private.pem", kp.Name)
+	// shouldn't happen, but protect against it anyway
+	if kp.Cert == nil {
+		kp.Cert = &Certificate{}
+	}
+	kp.Cert.CertPEM, kp.Cert.PrivateKeyPEM = data[pubKey], data[privKey]
+	return
+}
+
+// IsEmpty checks if CertKeyPair has any useable
+func (kp *CertKeyPair) IsEmpty() bool {
+	if kp.Cert.CertPEM == nil {
+		return true
+	}
+	if kp.Cert.PrivateKeyPEM == nil {
+		return true
+	}
+	return false
+}
+
+// ToKubernetes serializes CertKeyPair to kubernetes object
+func (kp *CertKeyPair) ToKubernetes(secObject *corev1.Secret) {
+	if secObject.Data == nil {
+		secObject.Data = make(map[string][]byte)
+	}
+	publicPemKey := fmt.Sprintf("%s.pem", kp.Name)
+	privatePemKey := fmt.Sprintf("%s-private.pem", kp.Name)
+	secObject.Data[publicPemKey] = kp.Cert.CertPEM
+	secObject.Data[privatePemKey] = kp.Cert.PrivateKeyPEM
+	return
+}
+
+// LoadReferenceData loads references from data
+func (kp *CertKeyPair) LoadReferenceData(data []map[string][]byte) error {
+	if len(data) == 0 {
+		return errors.New("secret reference value not found")
+	}
+	rootCAData := data[0]
+	kp.RootCA = NewRootCA()
+	kp.RootCA.LoadFromData(rootCAData)
+	if kp.RootCA.IsEmpty() {
+		return errors.New("signing CA couldn't be loaded")
+	}
+	return nil
+}
+
+// NewCertKeyPair creates new CertKeyPair type for reconcilation
+func NewCertKeyPair(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
+	keyPair := &CertKeyPair{
+		Cert: &Certificate{},
+	}
+	keyPair.Name = keyConfig.Name
+	if keyConfig.Spec.SignedWithPath != "" {
+		paths := strings.Split(keyConfig.Spec.SignedWithPath, "/")
+		if len(paths) != 2 {
+			return &CertKeyPair{}, errors.New("SignedWithPath should be exactly a secret name and a data key")
+		}
+		secretRef, dataKey := paths[0], paths[1]
+		keyPair.refName = secretRef
+		keyPair.refDataKey = dataKey
+	}
+	keyPair.V1Spec = keyConfig.Spec
+	return keyPair, nil
+}
+
+// ToPkixName convert DistinguishedName to pkix.Name
+func dnToPkixName(dn *v1alpha1.DistinguishedName) *pkix.Name {
+	if dn == nil {
+		return nil
+	}
+	return &pkix.Name{Country: dn.Country,
+		Organization:       dn.Organization,
+		OrganizationalUnit: dn.OrganizationalUnit,
+		Locality:           dn.Locality,
+		Province:           dn.Province,
+		StreetAddress:      dn.StreetAddress,
+		PostalCode:         dn.PostalCode,
+		SerialNumber:       dn.SerialNumber,
+		CommonName:         dn.CommonName,
+	}
+}
+
+////////////////////////////
+// TODO remove  below
+///////////////////////////
+
+// GenerateTrustStoreBundle foobar
 func GenerateTrustStoreBundle(rootCA []byte) ([]byte, error) {
 	rawCertBundle, err := ioutil.ReadFile("/etc/ssl/certs/ca-certificates.crt")
 	if err != nil {
@@ -34,66 +240,6 @@ func GenerateTrustStoreBundle(rootCA []byte) ([]byte, error) {
 	}
 	return append(rawCertBundle, rootCA...), nil
 
-}
-
-// GenerateRootCA Generates a root CA
-func GenerateRootCA(commonName string) (*Certificate, error) {
-	var err error
-	cert := &Certificate{}
-
-	// PrivateKeyEC and PrivateKeyPEM
-	cert.PrivateKeyEC, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return cert, errors.WithStack(err)
-	}
-	// TODO Which way do we want to marshal?
-	// marshaledPrivateKey, err := x509.MarshalPKCS8PrivateKey(privateKey)
-	marshaledPrivateKey, err := x509.MarshalECPrivateKey(cert.PrivateKeyEC)
-	if err != nil {
-		return cert, errors.WithStack(err)
-	}
-	block := &pem.Block{Type: "EC PRIVATE KEY", Bytes: marshaledPrivateKey}
-	cert.PrivateKeyPEM = pem.EncodeToMemory(block)
-
-	// prepare cert template
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
-	if err != nil {
-		return cert, errors.WithStack(err)
-	}
-	certTemplate := &x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject: pkix.Name{
-			CommonName: commonName,
-		},
-		NotBefore:          time.Now(),
-		NotAfter:           time.Now().Add(10 * 365 * 24 * time.Hour), // + 10 years
-		IsCA:               true,
-		SignatureAlgorithm: x509.ECDSAWithSHA256,
-		ExtKeyUsage: []x509.ExtKeyUsage{
-			x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth,
-		},
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		BasicConstraintsValid: true,
-	}
-
-	// Cert and CertPEM
-	certBytes, err := x509.CreateCertificate(rand.Reader, certTemplate, certTemplate, &cert.PrivateKeyEC.PublicKey, cert.PrivateKeyEC)
-	if err != nil {
-		return cert, errors.WithStack(err)
-	}
-	cert.CertPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
-	block, _ = pem.Decode(cert.CertPEM)
-	if block == nil {
-		return cert, errors.WithStack(errors.New("Unable to decode PEM encoded cert"))
-	}
-	// need to use the parsed cert, not the template
-	cert.Cert, err = x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return cert, errors.WithStack(err)
-	}
-
-	return cert, nil
 }
 
 // GenerateSignedCert issues a certificate signed by the provided root CA
@@ -220,38 +366,62 @@ func GenerateSelfSignedCertPEM(commonName string, expire int) ([]byte, []byte, [
 	return certAndKeyPEM, cert.CertPEM, cert.PrivateKeyPEM, nil
 }
 
-// GenerateSignedCertPEM issues a certificate signed by the provided root CA
-//   receives and returns PEM version
-func GenerateSignedCertPEM(rootCAPEM, rootCAPrivateKeyPEM []byte, algorithm v1alpha1.Algorithm, commonName string, sans []string) ([]byte, []byte, []byte, error) {
-	// root CA
-	block, _ := pem.Decode(rootCAPEM)
+// GenerateRootCA  gen
+func GenerateRootCA(commonName string) (*Certificate, error) {
+	var err error
+	cert := &Certificate{}
+
+	// PrivateKeyEC and PrivateKeyPEM
+	cert.PrivateKeyEC, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return cert, errors.WithStack(err)
+	}
+	// TODO Which way do we want to marshal?
+	// marshaledPrivateKey, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	marshaledPrivateKey, err := x509.MarshalECPrivateKey(cert.PrivateKeyEC)
+	if err != nil {
+		return cert, errors.WithStack(err)
+	}
+	block := &pem.Block{Type: "EC PRIVATE KEY", Bytes: marshaledPrivateKey}
+	cert.PrivateKeyPEM = pem.EncodeToMemory(block)
+
+	// prepare cert template
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return cert, errors.WithStack(err)
+	}
+	certTemplate := &x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+		NotBefore:          time.Now(),
+		NotAfter:           time.Now().Add(10 * 365 * 24 * time.Hour), // + 10 years
+		IsCA:               true,
+		SignatureAlgorithm: x509.ECDSAWithSHA256,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth,
+		},
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+	}
+
+	// Cert and CertPEM
+	certBytes, err := x509.CreateCertificate(rand.Reader, certTemplate, certTemplate, &cert.PrivateKeyEC.PublicKey, cert.PrivateKeyEC)
+	if err != nil {
+		return cert, errors.WithStack(err)
+	}
+	cert.CertPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
+	block, _ = pem.Decode(cert.CertPEM)
 	if block == nil {
-		return []byte{}, []byte{}, []byte{}, errors.WithStack(errors.New("Unable to decode PEM encoded cert"))
+		return cert, errors.WithStack(errors.New("Unable to decode PEM encoded cert"))
 	}
-	parsedCert, err := x509.ParseCertificate(block.Bytes)
+	// need to use the parsed cert, not the template
+	cert.Cert, err = x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return []byte{}, []byte{}, []byte{}, errors.WithStack(err)
+		return cert, errors.WithStack(err)
 	}
 
-	// root private key
-	block, _ = pem.Decode(rootCAPrivateKeyPEM)
-	if block == nil {
-		return []byte{}, []byte{}, []byte{}, errors.WithStack(errors.New("Unable to decode PEM encoded cert"))
-	}
-	parsedPrivateKey, err := x509.ParseECPrivateKey(block.Bytes)
-	if err != nil {
-		return []byte{}, []byte{}, []byte{}, errors.WithStack(err)
-	}
-
-	// generate
-	rootCA := &Certificate{Cert: parsedCert, PrivateKeyEC: parsedPrivateKey}
-	cert, err := GenerateSignedCert(rootCA, algorithm, commonName, sans)
-	if err != nil {
-		return []byte{}, []byte{}, []byte{}, err
-	}
-
-	// setup return values
-	certAndKeyPEM := append(cert.CertPEM, cert.PrivateKeyPEM...)
-
-	return certAndKeyPEM, cert.CertPEM, cert.PrivateKeyPEM, nil
+	return cert, nil
 }

@@ -213,11 +213,14 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 				if key.Spec.Algorithm == "" {
 					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.Algorithm, name,
 						"algorithm", "algorithmValueEmpty", "")
+					return
 				}
-				// must set commonName
-				if key.Spec.CommonName == "" {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.CommonName, name,
-						"commonName", "commonNameValueEmpty", "")
+				// must set DistinguishedName
+				if key.Spec.DistinguishedName == nil {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.DistinguishedName, name,
+						"distinguishedName", "distinguishedNameValueEmpty", "")
+					return
+
 				}
 				// must set signedWith
 				if key.Spec.SignedWithPath == "" {

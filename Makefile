@@ -24,20 +24,23 @@ test: int-test
 
 # Run unit tests
 unit-test: generate fmt vet manifests
-	go test ./... -coverprofile cover.out
+	go test ./... -coverprofile cover.html
 
 # Run unit and integration tests
 int-test: generate fmt vet manifests
-	go test ./... -tags=integration -coverprofile cover.out
+	go test ./... -tags=integration -coverprofile cover.html
 
 # Run unit and integration and cloud-provider tests
 cloud-test: generate fmt vet manifests
-	go test ./... -tags=integration,cloud-provider -coverprofile cover.out
+	go test ./... -tags=integration,cloud-provider -coverprofile cover.html
 
 # Build manager binary
 manager: generate fmt vet
 	go build -o bin/manager main.go
 
+# debug
+debug: generate fmt vet manifests
+	dlv debug ./main.go
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
 	go run ./main.go

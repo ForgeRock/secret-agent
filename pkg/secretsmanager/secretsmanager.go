@@ -21,46 +21,127 @@ import (
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 
-// LoadExisting loads any existing secrets in the secrets manager into the memory store
-func LoadExisting(ctx context.Context, config *v1alpha1.SecretAgentConfigurationSpec, nodes []*v1alpha1.Node) error {
-	switch config.AppConfig.SecretsManager {
+func idSafe(value string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(value, ".", "-"), "/", "-"), "_", "-")
+}
+
+// EnsureSecret ensures a secret is stored in secret manager
+func EnsureSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName string, value []byte) error {
+	secretID := idSafe(secretName)
+	switch config.SecretsManager {
 	case v1alpha1.SecretsManagerGCP:
-		err := loadGCPSecrets(ctx, config.AppConfig.GCPProjectID, nodes)
+		err := ensureGCPSecretByID(ctx, config.GCPProjectID, secretID, value)
 		if err != nil {
 			return err
 		}
 	case v1alpha1.SecretsManagerAWS:
-		err := loadAWSSecrets(config.AppConfig.AWSRegion, nodes)
-		if err != nil {
-			return err
-		}
-	case v1alpha1.SecretsManagerAzure:
-		client, err := newAzureClient()
-		if err != nil {
-			return err
-		}
-		err = loadAzureSecrets(ctx, client, config.AppConfig.AzureVaultName, nodes)
-		if err != nil {
-			return err
-		}
+		//Err := ensureAWSSecrets(config.AppConfig.AWSRegion, nodes)
+		//If err != nil {
+		//	return err
+		//}
 	}
 
 	return nil
 }
 
-// EnsureSecrets ensures all secrets in the memory store are in the secrets manager
-func EnsureSecrets(ctx context.Context, config *v1alpha1.SecretAgentConfigurationSpec, nodes []*v1alpha1.Node) error {
-	switch config.AppConfig.SecretsManager {
+func LoadSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName string) ([]byte, error) {
+	secretName = idSafe(secretName)
+	var value []byte
+	var err error
+	switch config.SecretsManager {
 	case v1alpha1.SecretsManagerGCP:
-		err := ensureGCPSecrets(ctx, config.AppConfig.GCPProjectID, nodes)
+		value, err = loadGCPSecretByID(ctx, config.GCPProjectID, secretName)
 		if err != nil {
-			return err
+			return []byte{}, err
 		}
 	case v1alpha1.SecretsManagerAWS:
-		err := ensureAWSSecrets(config.AppConfig.AWSRegion, nodes)
-		if err != nil {
-			return err
+		// TODO
+		//
+		fmt.Print("AWS secret manager not implemented")
+
+	case v1alpha1.SecretsManagerAzure:
+		fmt.Print("AWS secret manager not implemented")
+	}
+	return value, err
+
+}
+
+// GCP FUNCS
+
+// loadGCPSecretByNameloads a single secret out of Google SecretManager, if it exists
+func loadGCPSecretByID(ctx context.Context, projectID string, secretID string) ([]byte, error) {
+	client, err := secretmanager.NewClient(ctx)
+	if err != nil {
+		return []byte{}, err
+	}
+	defer client.Close()
+	name := fmt.Sprintf("projects/%s/secrets/%s/versions/latest", projectID, secretID)
+	request := &secretspb.AccessSecretVersionRequest{Name: name}
+	secretResponse, err := client.AccessSecretVersion(ctx, request)
+	if err != nil {
+		stat := status.Convert(err)
+		if stat.Code() == codes.NotFound {
+			// doesn't exist
+			return []byte{}, nil
 		}
+		return []byte{}, errors.WithStack(err)
+	}
+	return secretResponse.GetPayload().GetData(), nil
+}
+
+// ensureGCPSecret ensures a single secret is stored in Google Secret Manager
+func ensureGCPSecretByID(ctx context.Context, projectID, secretName string, value []byte) error {
+	secretID := idSafe(secretName)
+	client, err := secretmanager.NewClient(ctx)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	name := fmt.Sprintf("projects/%s/secrets/%s", projectID, secretID)
+
+	// check if exists
+	preExists := true
+	getRequest := &secretspb.GetSecretRequest{Name: name}
+	_, err = client.GetSecret(ctx, getRequest)
+	if err != nil {
+		stat := status.Convert(err)
+		if stat.Code() != codes.NotFound {
+			return errors.WithStack(err)
+		}
+		// doesn't exist, create
+		preExists = false
+		createRequest := &secretspb.CreateSecretRequest{
+			Parent:   fmt.Sprintf("projects/%s", projectID),
+			SecretId: secretID,
+			Secret: &secretspb.Secret{
+				Name: name,
+				Replication: &secretspb.Replication{
+					Replication: &secretspb.Replication_Automatic_{
+						Automatic: &secretspb.Replication_Automatic{},
+					},
+				},
+			},
+		}
+		_, err = client.CreateSecret(ctx, createRequest)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+	}
+
+	// only add new version if secret was created this round, because
+	//   otherwise the in memory version was read from SM and is already correct
+	if preExists {
+		return nil
+	}
+
+	// add secret version
+	secretVersionRequest := &secretspb.AddSecretVersionRequest{
+		Parent:  name,
+		Payload: &secretspb.SecretPayload{Data: value},
+	}
+	_, err = client.AddSecretVersion(ctx, secretVersionRequest)
+	if err != nil {
+		return errors.WithStack(err)
 	}
 
 	return nil
@@ -78,6 +159,10 @@ func newAzureClient() (*keyvault.BaseClient, error) {
 	client.Authorizer = authorizer
 	return &client, nil
 }
+
+///////////////
+// TO REMOVE
+//////////////
 
 // loadAzureSecrets loads any existing secrets in Azure Key Valut into the memory store
 func loadAzureSecrets(ctx context.Context, client *keyvault.BaseClient, vaultName string, nodes []*v1alpha1.Node) error {
@@ -115,7 +200,6 @@ func loadGCPSecrets(ctx context.Context, projectID string, nodes []*v1alpha1.Nod
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	defer client.Close()
 
 	// loop and load
 	for _, node := range nodes {
@@ -147,20 +231,6 @@ func loadGCPSecret(ctx context.Context, client *secretmanager.Client, projectID 
 	return nil
 }
 
-// loadAWSSecrets loads any existing secrets in AWS SecretsManager into the memory store
-func loadAWSSecrets(awsRegion string, nodes []*v1alpha1.Node) error {
-	service := awssecretsmanager.New(session.New(&aws.Config{Region: aws.String(awsRegion)}))
-
-	for _, node := range nodes {
-		err := loadAWSSecret(service, node)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // loadAWSSecret loads a single secret out of AWS SecretsManager
 func loadAWSSecret(service *awssecretsmanager.SecretsManager, node *v1alpha1.Node) error {
 	secretID := getSecretID(node.SecretConfig.Namespace, node.Path)
@@ -176,6 +246,20 @@ func loadAWSSecret(service *awssecretsmanager.SecretsManager, node *v1alpha1.Nod
 		return errors.WithStack(err)
 	}
 	node.Value = []byte(*result.SecretString)
+
+	return nil
+}
+
+// loadAWSSecrets loads any existing secrets in AWS SecretsManager into the memory store
+func loadAWSSecrets(awsRegion string, nodes []*v1alpha1.Node) error {
+	service := awssecretsmanager.New(session.New(&aws.Config{Region: aws.String(awsRegion)}))
+
+	for _, node := range nodes {
+		err := loadAWSSecret(service, node)
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -303,5 +387,49 @@ func getSecretID(namespace string, path []string) string {
 		panic("path is not of length 2 or 3!")
 	}
 
-	return strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(secretID, ".", "-"), "/", "-"), "_", "-")
+	return idSafe(secretID)
+}
+
+// LoadExisting loads any existing secrets in the secrets manager into the memory store
+func LoadExisting(ctx context.Context, config *v1alpha1.SecretAgentConfigurationSpec, nodes []*v1alpha1.Node) error {
+	switch config.AppConfig.SecretsManager {
+	case v1alpha1.SecretsManagerGCP:
+		err := loadGCPSecrets(ctx, config.AppConfig.GCPProjectID, nodes)
+		if err != nil {
+			return err
+		}
+	case v1alpha1.SecretsManagerAWS:
+		err := loadAWSSecrets(config.AppConfig.AWSRegion, nodes)
+		if err != nil {
+			return err
+		}
+	case v1alpha1.SecretsManagerAzure:
+		client, err := newAzureClient()
+		if err != nil {
+			return err
+		}
+		err = loadAzureSecrets(ctx, client, config.AppConfig.AzureVaultName, nodes)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// EnsureSecrets ensures all secrets in the memory store are in the secrets manager
+func EnsureSecrets(ctx context.Context, config *v1alpha1.SecretAgentConfigurationSpec, nodes []*v1alpha1.Node) error {
+	switch config.AppConfig.SecretsManager {
+	case v1alpha1.SecretsManagerGCP:
+		err := ensureGCPSecrets(ctx, config.AppConfig.GCPProjectID, nodes)
+		if err != nil {
+			return err
+		}
+	case v1alpha1.SecretsManagerAWS:
+		err := ensureAWSSecrets(config.AppConfig.AWSRegion, nodes)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
