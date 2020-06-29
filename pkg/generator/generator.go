@@ -105,6 +105,7 @@ func Generate(node *v1alpha1.Node) error {
 		node.Value = caPEM
 	case v1alpha1.TypeJCEKS:
 		// TODO
+		node.Value = []byte("placeholder")
 	case v1alpha1.TypePKCS12:
 		switch length := len(node.Path); length {
 		case 2: // compiled keystore
