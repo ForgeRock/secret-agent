@@ -16,6 +16,8 @@ package v1alpha1
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
 
 	"github.com/go-playground/validator/v10"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,12 +42,55 @@ var _ webhook.Defaulter = &SecretAgentConfiguration{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *SecretAgentConfiguration) Default() {
-	// log.Info("default", "name", r.Name)
-	// TODO LATER: fill in defaulting logic here if we ever want to.
-	//example
-	// if r.Spec.AppConfig.SecretsManager == "" {
-	// 	r.Spec.AppConfig.SecretsManager = SecretsManagerNone
-	// }
+
+	if r.Spec.AppConfig.MaxRetries == nil {
+		r.Spec.AppConfig.MaxRetries = new(int)
+		*r.Spec.AppConfig.MaxRetries = 3
+	}
+
+	if r.Spec.AppConfig.BackOffSecs == nil {
+		r.Spec.AppConfig.BackOffSecs = new(int)
+		*r.Spec.AppConfig.BackOffSecs = 2
+	}
+
+	for secretIndex, secret := range r.Spec.Secrets {
+		if secret.GenerateIfNecessary == nil {
+			r.Spec.Secrets[secretIndex].GenerateIfNecessary = new(bool)
+			*r.Spec.Secrets[secretIndex].GenerateIfNecessary = true
+		}
+		for keysIndex, key := range secret.Keys {
+			// If we're processing passwords and received no Spec, create a new spec.
+			// We will be defaulting the Length
+			if key.Type == KeyConfigTypePassword && key.Spec == nil {
+				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec = new(KeySpec)
+			}
+			if key.Spec != nil {
+				if key.Type == KeyConfigTypePassword && key.Spec.Length == nil {
+					r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Length = new(int)
+					*r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Length = 32
+				}
+				key.Spec.SignedWithPath = cleanUpPaths(key.Spec.SignedWithPath)
+				key.Spec.StorePassPath = cleanUpPaths(key.Spec.StorePassPath)
+				key.Spec.KeyPassPath = cleanUpPaths(key.Spec.KeyPassPath)
+				for idx, path := range key.Spec.TruststoreImportPaths {
+					key.Spec.TruststoreImportPaths[idx] = cleanUpPaths(path)
+				}
+				for idx, alias := range key.Spec.KeytoolAliases {
+					key.Spec.KeytoolAliases[idx].SourcePath = cleanUpPaths(alias.SourcePath)
+					key.Spec.KeytoolAliases[idx].DestinationPath = cleanUpPaths(alias.DestinationPath)
+
+				}
+			}
+		}
+	}
+}
+
+func cleanUpPaths(p string) string {
+	if p != "" {
+		p = strings.TrimPrefix(p, PathDelimiter)
+		p = strings.TrimSuffix(p, PathDelimiter)
+	}
+	return p
 }
 
 // change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
@@ -104,155 +149,217 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 	}
 
 	// Secrets
+	duplicateSecretName := make(map[string]bool)
 	for secretIndex, secret := range config.Secrets {
+		_, exist := duplicateSecretName[config.Secrets[secretIndex].Name]
+		if !exist {
+			duplicateSecretName[config.Secrets[secretIndex].Name] = true
+		} else {
+			sl.ReportError(config.Secrets[secretIndex], config.Secrets[secretIndex].Name,
+				"Name", "duplicateSecretName", "")
+			return
+		}
+		duplicateKeyName := make(map[string]bool)
 		for keyIndex, key := range secret.Keys {
 			name := fmt.Sprintf("Secrets.%s.%s",
 				config.Secrets[secretIndex].Name,
 				config.Secrets[secretIndex].Keys[keyIndex].Name,
 			)
-			switch key.Type {
-			case TypeLiteral:
-				// must have Value
-				if key.Value == "" {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Value, name, "value", "literalValueEmpty", "")
+			_, exist := duplicateKeyName[config.Secrets[secretIndex].Keys[keyIndex].Name]
+			if !exist {
+				duplicateKeyName[config.Secrets[secretIndex].Keys[keyIndex].Name] = true
+			} else {
+				sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex],
+					config.Secrets[secretIndex].Keys[keyIndex].Name, "Name", "duplicateKeyName", "")
+				return
+			}
+
+			if key.Type != KeyConfigTypeCA && key.Type != KeyConfigTypeSSH {
+				if key.Spec == nil {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex], name,
+						"Name", "missingSpec", "")
+					return
 				}
-			case TypePassword:
+			}
+
+			switch key.Type {
+			case KeyConfigTypeCA:
+				// must have empty spec. No extra specs should be specified
+				if key.Spec != nil {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec, name,
+						"Spec", "specUnwantedValues", "")
+				}
+			case KeyConfigTypeLiteral:
+				// must have Value
+				if key.Spec.Value == "" {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.Value, name,
+						"value", "literalValueEmpty", "")
+				}
+			case KeyConfigTypePassword:
 				// must have Length
-				if key.Length == 0 {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Length, name, "length", "passwordLengthZero", "")
+				if *key.Spec.Length == 0 {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.Length, name,
+						"length", "passwordLengthZero", "")
 				}
 			// if type publicKeySSH, must have privateKey
-			case TypePublicKeySSH:
-				// must have privateKeyPath
-				if len(key.PrivateKeyPath) == 0 {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].PrivateKeyPath, name, "privateKeyPath", "privateKeyPathNotSet", "")
+			case KeyConfigTypeSSH:
+				// must have empty spec. No extra specs should be specified
+				if key.Spec != nil {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec, name,
+						"Spec", "specUnwantedValues", "")
+				}
+			case KeyConfigTypeKeyPair:
+				// must set algorithm
+				if key.Spec.Algorithm == "" {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.Algorithm, name,
+						"algorithm", "algorithmValueEmpty", "")
+				}
+				// must set commonName
+				if key.Spec.CommonName == "" {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.CommonName, name,
+						"commonName", "commonNameValueEmpty", "")
+				}
+				// must set signedWith
+				if key.Spec.SignedWithPath == "" {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.SignedWithPath, name,
+						"signedWith", "signedWithValueEmpty", "")
 					return
 				}
-				// privateKeyPath must be valid
-				if !pathExistsInSecretConfigs(key.PrivateKeyPath, config.Secrets) {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].PrivateKeyPath, name, "privateKeyPath", "privateKeyPathNotFound", "")
-				}
-			case TypeCACopy:
-				// must have caPath
-				if len(key.CAPath) == 0 {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].CAPath, name, "caPath", "caPathNotFound", "")
+				// signedWith path must be valid
+				if !pathExistsInSecretAgentConfiguration(key.Spec.SignedWithPath, config.Secrets) {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.SignedWithPath, name,
+						"signedWith", "signedWithInvalidPath", "")
 					return
 				}
-				// caPath must be valid
-				if !pathExistsInSecretConfigs(key.CAPath, config.Secrets) {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].CAPath, name, "caPath", "caPathNotValid", "")
+
+			case KeyConfigTypeTrustStore:
+				if len(key.Spec.TruststoreImportPaths) == 0 {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.TruststoreImportPaths, name,
+						"truststoreImportPaths", "truststoreImportPathsValueEmpty", "")
 					return
 				}
-			case TypePKCS12:
-				// must have keystoreAliases
-				if len(key.AliasConfigs) == 0 {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs, name, "keystoreAliases", "keystoreAliasesNotSet", "")
-					return
+
+				for aliasIndex, alias := range key.Spec.TruststoreImportPaths {
+					if !pathExistsInSecretAgentConfiguration(alias, config.Secrets) {
+						sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.TruststoreImportPaths[aliasIndex], name,
+							"truststoreImportPaths", "truststoreImportPathsNotFound", "")
+						return
+					}
+
+				}
+			case KeyConfigTypeKeytool:
+				// must set storeType
+				if key.Spec.StoreType == "" {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.StorePassPath, name,
+						"storeType", "storeTypeValueEmpty", "")
 				}
 				// must have keyPassPath
-				if len(key.KeyPassPath) == 0 {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].KeyPassPath, name, "keyPassPath", "keyPassPathNotFound", "")
+				if len(key.Spec.KeyPassPath) == 0 {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.KeyPassPath, name,
+						"keyPassPath", "keyPassPathNotFound", "")
 					return
 				}
 				// keyPassPath must be valid
-				if !pathExistsInSecretConfigs(key.KeyPassPath, config.Secrets) {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].KeyPassPath, name, "keyPassPath", "keyPassPathNotValid", "")
+				if !pathExistsInSecretAgentConfiguration(key.Spec.KeyPassPath, config.Secrets) {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.KeyPassPath, name,
+						"keyPassPath", "keyPassPathNotValid", "")
 					return
 				}
 				// must have storePassPath
-				if len(key.StorePassPath) == 0 {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].StorePassPath, name, "storePassPath", "storePassPathNotFound", "")
+				if len(key.Spec.StorePassPath) == 0 {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.StorePassPath, name,
+						"storePassPath", "storePassPathNotFound", "")
 					return
 				}
 				// storePassPath must be valid
-				if !pathExistsInSecretConfigs(key.StorePassPath, config.Secrets) {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].StorePassPath, name, "storePassPath", "storePassPathNotValid", "")
+				if !pathExistsInSecretAgentConfiguration(key.Spec.StorePassPath, config.Secrets) {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.StorePassPath, name,
+						"storePassPath", "storePassPathNotValid", "")
 					return
 				}
-				for aliasIndex, alias := range key.AliasConfigs {
+				// must have KeytoolAliases
+				if len(key.Spec.KeytoolAliases) == 0 {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases, name,
+						"keytoolAliases", "keytoolAliasesNotSet", "")
+					return
+				}
+				duplicateAliasName := make(map[string]bool)
+				for aliasIndex, alias := range key.Spec.KeytoolAliases {
+					_, exist := duplicateAliasName[config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases[aliasIndex].Name]
+					if !exist {
+						duplicateAliasName[config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases[aliasIndex].Name] = true
+					} else {
+						sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases[aliasIndex],
+							config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases[aliasIndex].Name,
+							"Name", "duplicateAliasName", "")
+						return
+					}
 					name := fmt.Sprintf("Secrets.%s.%s.%s",
 						config.Secrets[secretIndex].Name,
 						config.Secrets[secretIndex].Keys[keyIndex].Name,
-						config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].Alias,
+						config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases[aliasIndex].Name,
 					)
-					switch alias.Type {
-					case TypeCACopyAlias:
-						// must have caPath
-						if len(alias.CAPath) == 0 {
-							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].CAPath, name, "caPath", "caPathNotSet", "")
+					switch alias.Cmd {
+					case KeytoolCmdImportcert, KeytoolCmdImportpassword:
+						if alias.SourcePath == "" {
+							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases[aliasIndex],
+								name, "sourcePass", "sourcePassNotSet", "")
 							return
 						}
-						// caPath must be valid
-						if !pathExistsInSecretConfigs(alias.CAPath, config.Secrets) {
-							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].CAPath, name, "caPath", "caPathNotFound", "")
+						if !pathExistsInSecretAgentConfiguration(alias.SourcePath, config.Secrets) {
+							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases[aliasIndex].SourcePath,
+								name, "sourcePath", "sourcePathNotValid", "")
 							return
 						}
-					case TypeKeyPair:
-						// must have signedWithPath
-						if len(alias.SignedWithPath) == 0 && !alias.SelfSigned {
-							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].SignedWithPath, name, "signedWithPath", "signedWithPathNotSet", "")
+					case KeytoolCmdGenkeypair, KeytoolCmdGenseckey:
+						if alias.DestinationPath == "" {
+							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases[aliasIndex],
+								name, "destinationPass", "destinationPassNotSet", "")
 							return
 						}
-						// signedWithPath must be valid
-						if !pathExistsInSecretConfigs(alias.SignedWithPath, config.Secrets) && !alias.SelfSigned {
-							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].SignedWithPath, name, "signedWithPath", "signedWithPathNotFound", "")
+						if !pathExistsInSecretAgentConfiguration(alias.DestinationPath, config.Secrets) {
+							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases[aliasIndex].DestinationPath,
+								name, "destinationPath", "destinationPathNotValid", "")
 							return
 						}
-						// Self Signed shoudn't have a signed with path
-						if alias.SelfSigned && len(alias.SignedWithPath) != 0 && alias.Algorithm == SHA256WithRSA {
-							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].SignedWithPath, name, "selfSigned", "signedWithPathFound", "")
+						if len(alias.Args) == 0 {
+							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases[aliasIndex],
+								name, "args", "argsNotSet", "")
 							return
 						}
-						if alias.SelfSigned && alias.Algorithm != SHA256WithRSA {
-							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].SignedWithPath, name, "selfSigned", "unsupportedAlgorithm", "")
-						}
-						// must have algorithm
-						if len(alias.Algorithm) == 0 {
-							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].Algorithm, name, "algorithm", "algorithmNotSet", "")
-							return
-						}
+
 					}
-				}
-			case TypeTrustStore:
-				for aliasIndex, alias := range key.AliasConfigs {
-					if !pathExistsInSecretConfigs(alias.CAPath, config.Secrets) {
-						sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].AliasConfigs[aliasIndex].CAPath, name, "caPath", "caPathWithPathNotFound", "")
-						return
-					}
-					if len(alias.CAPath) == 0 {
-						sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].CAPath, name, "caPath", "caPathNotFound", "")
-						return
-					}
+
 				}
 			}
 		}
 	}
 }
 
-func pathExistsInSecretConfigs(path []string, secrets []*SecretConfig) bool {
-	found := false
-	if len(path) == 0 {
-		return found
-	}
-path:
-	for _, secret := range secrets {
-		if secret.Name == path[0] {
-			for _, key := range secret.Keys {
-				if key.Name == path[1] {
-					if len(path) == 2 {
-						found = true
-						break path
-					}
-					for _, alias := range key.AliasConfigs {
-						if alias.Alias == path[2] {
-							found = true
-							break path
-						}
-					}
+func pathExistsInSecretAgentConfiguration(path string, secrets []*SecretConfig) bool {
+	secretIdx := -1
+
+	iterator := reflect.ValueOf(secrets)
+	pathSlice := strings.Split(path, PathDelimiter)
+	for _, pathSliceMember := range pathSlice {
+		for idx := 0; idx < iterator.Len(); idx++ {
+			// if the "Name" field of the iterator matches the pathSliceMember
+			if iterator.Index(idx).Elem().FieldByName("Name").Interface() == pathSliceMember {
+				// we must have found the secret. Will continue with the keys of that secret
+				if secretIdx == -1 {
+					secretIdx = idx
+					iterator = iterator.Index(idx).Elem().FieldByName("Keys")
+					break
+				} else {
+					// We already found the secret previously and now found the key
+					return true
 				}
 			}
 		}
+		// No secret names matched. No need to continue matching checking the pathSlice
+		if secretIdx == -1 {
+			break
+		}
 	}
-
-	return found
+	return false
 }
