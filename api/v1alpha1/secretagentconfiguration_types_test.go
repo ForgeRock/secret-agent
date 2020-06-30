@@ -6,22 +6,45 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-func TestConfigurationStructLevelValidatorLiteral(t *testing.T) {
+func TestConfigurationStructLevelValidatorCA(t *testing.T) {
 	key := &KeyConfig{
-		Name: "fdsa",
-		Type: TypeLiteral,
+		Name: "foo",
+		Type: KeyConfigTypeCA,
 	}
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
 	validate := validator.New()
 	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
-	// missing Value
+	err := validate.Struct(config)
+	if err != nil {
+		t.Errorf("Expected no error, got: %+v", err)
+	}
+	// Spec must be empty
+	key.Spec = new(KeySpec)
+	config.Secrets[0].Keys[0] = key
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Spec must be empty: Expected error, got none")
+	}
+}
+
+func TestConfigurationStructLevelValidatorLiteral(t *testing.T) {
+	key := &KeyConfig{
+		Name: "fdsa",
+		Type: KeyConfigTypeLiteral,
+	}
+	config := getConfig()
+	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
+	validate := validator.New()
+	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
+	// Missing Value
 	err := validate.Struct(config)
 	if err == nil {
-		t.Error("Expected error, got none")
+		t.Error("Missing Value: Expected error, got none")
 	}
 	// valid
-	config.Secrets[0].Keys[0].Value = "asdfKey"
+	config.Secrets[0].Keys[0].Spec = new(KeySpec)
+	config.Secrets[0].Keys[0].Spec.Value = "asdfKey"
 	err = validate.Struct(config)
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
@@ -31,175 +54,315 @@ func TestConfigurationStructLevelValidatorLiteral(t *testing.T) {
 func TestConfigurationStructLevelValidatorPassword(t *testing.T) {
 	key := &KeyConfig{
 		Name: "fdsa",
-		Type: TypePassword,
+		Type: KeyConfigTypePassword,
 	}
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
 	validate := validator.New()
 	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
-	// missing Length
+	// Missing Length
 	err := validate.Struct(config)
 	if err == nil {
-		t.Error("Expected error, got none")
+		t.Error("Missing Length: Expected error, got none")
 	}
 	// valid
-	config.Secrets[0].Keys[0].Length = 16
+	config.Secrets[0].Keys[0].Spec = new(KeySpec)
+	config.Secrets[0].Keys[0].Spec.Length = new(int)
+	*config.Secrets[0].Keys[0].Spec.Length = 16
 	err = validate.Struct(config)
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
 	}
 }
 
-func TestConfigurationStructLevelValidatorPublicKeySSH(t *testing.T) {
+func TestConfigurationStructLevelValidatorSSH(t *testing.T) {
+	key := &KeyConfig{
+		Name: "foo",
+		Type: KeyConfigTypeSSH,
+	}
+	config := getConfig()
+	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
+	validate := validator.New()
+	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
+	err := validate.Struct(config)
+	if err != nil {
+		t.Errorf("Expected no error, got: %+v", err)
+	}
+	// spec must be empty
+	key.Spec = new(KeySpec)
+	config.Secrets[0].Keys[0] = key
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Spec must be empty: Expected error, got none")
+	}
+}
+
+func TestConfigurationStructLevelValidatorKeyPair(t *testing.T) {
 	key := &KeyConfig{
 		Name: "fdsaKey",
-		Type: TypePublicKeySSH,
+		Type: KeyConfigTypeKeyPair,
+		Spec: &KeySpec{
+			Algorithm:      "ECDSAWithSHA256",
+			CommonName:     "name",
+			Sans:           []string{"*.name", "*.name-repo", "*.name-cts"},
+			SignedWithPath: "asdfSecret/ca",
+		},
+	}
+	ca := &KeyConfig{
+		Name: "ca",
+		Type: KeyConfigTypeCA,
+	}
+	config := getConfig()
+	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
+	config.Secrets[0].Keys = append(config.Secrets[0].Keys, ca)
+	validate := validator.New()
+	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
+	err := validate.Struct(config)
+	if err != nil {
+		t.Errorf("Expected no error, got: %+v", err)
+	}
+
+	// Missing Algorithm
+	config.Secrets[0].Keys[0].Spec.Algorithm = ""
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Missing Algorithm: Expected error, got none")
+	}
+	config.Secrets[0].Keys[0].Spec.Algorithm = "ECDSAWithSHA256"
+
+	// Missing CommonName
+	config.Secrets[0].Keys[0].Spec.CommonName = ""
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Missing CommonName: Expected error, got none")
+	}
+	config.Secrets[0].Keys[0].Spec.CommonName = "name"
+
+	// Missing SignedWith
+	config.Secrets[0].Keys[0].Spec.SignedWithPath = ""
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Missing SignedWith: Expected error, got none")
+	}
+	config.Secrets[0].Keys[0].Spec.SignedWithPath = "asdfSecret/ca"
+
+	// wrong SignedWith path
+	config.Secrets[0].Keys[0].Spec.SignedWithPath = "asdfSecret/wrongSecretName"
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Wrong SignedWith: Expected error, got none")
+	}
+	config.Secrets[0].Keys[0].Spec.SignedWithPath = "asdfSecret/ca"
+
+}
+
+func TestConfigurationStructLevelValidatorTrustStore(t *testing.T) {
+	key := &KeyConfig{
+		Name: "fdsaKey",
+		Type: KeyConfigTypeTrustStore,
+		Spec: &KeySpec{
+			TruststoreImportPaths: []string{"asdfSecret/badKey"},
+		},
 	}
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
 	validate := validator.New()
 	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
-	// missing PrivateKeyPath
+	// Missing PrivateKeyPath
 	err := validate.Struct(config)
 	if err == nil {
-		t.Error("Expected error, got none")
+		t.Error("Missing PrivateKeyPath: Expected error, got none")
 	}
-	// PrivateKeyPath points to non-existent secret/key
-	config.Secrets[0].Keys[0].PrivateKeyPath = []string{"myPrivateKey", "id_rsa"}
+
+	// Valid path
+	key.Spec.TruststoreImportPaths = []string{"asdfSecret/fdsaKey"}
+	config.Secrets[0].Keys[0] = key
 	err = validate.Struct(config)
-	if err == nil {
-		t.Error("Expected error, got none")
+	if err != nil {
+		t.Errorf("Expected no error, got: %+v", err)
 	}
-	// valid
-	secret := &SecretConfig{
-		Name:      "myPrivateKey",
-		Namespace: "default",
-		Keys: []*KeyConfig{
-			{
-				Name: "id_rsa",
-				Type: TypePrivateKey,
+
+}
+
+func TestConfigurationStructLevelValidatorKeytool(t *testing.T) {
+	ca := &KeyConfig{
+		Name: "ca",
+		Type: KeyConfigTypeCA,
+	}
+
+	pwd := &KeyConfig{
+		Name: "pwd",
+		Type: KeyConfigTypePassword,
+		Spec: &KeySpec{},
+	}
+	pwd.Spec.Length = new(int)
+	*pwd.Spec.Length = 32
+
+	keypair := &KeyConfig{
+		Name: "keypa",
+		Type: KeyConfigTypeKeyPair,
+		Spec: &KeySpec{
+			Algorithm:      "SHA256WithRSA",
+			CommonName:     "name",
+			SignedWithPath: "asdfSecret/ca",
+		},
+	}
+
+	keytool := &KeyConfig{
+		Name: "kt",
+		Type: KeyConfigTypeKeytool,
+		Spec: &KeySpec{
+			StoreType:     "pkcs12",
+			StorePassPath: "asdfSecret/pwd",
+			KeyPassPath:   "asdfSecret/pwd",
+			KeytoolAliases: []*KeytoolAliasConfig{
+				{
+					Name:       "ca-cert",
+					Cmd:        "importcert",
+					SourcePath: "asdfSecret/ca",
+				},
+				{
+					Name:       "ssl-keypair",
+					Cmd:        "importcert",
+					SourcePath: "asdfSecret/keypa",
+				},
+				{
+					Name:            "gentest",
+					Cmd:             "genkeypair",
+					Args:            []string{"yadayada", "foo", "bar"},
+					DestinationPath: "asdfSecret/kt",
+				},
 			},
 		},
 	}
-	config.Secrets = append(config.Secrets, secret)
-	err = validate.Struct(config)
+	config := getConfig()
+	config.Secrets[0].Keys = append(config.Secrets[0].Keys, ca)
+	config.Secrets[0].Keys = append(config.Secrets[0].Keys, pwd)
+	config.Secrets[0].Keys = append(config.Secrets[0].Keys, keypair)
+	config.Secrets[0].Keys = append(config.Secrets[0].Keys, keytool)
+	validate := validator.New()
+	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
+	err := validate.Struct(config)
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
 	}
+
+	// Missing StoreType
+	config.Secrets[0].Keys[3].Spec.StoreType = ""
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Missing StoreType: Expected error, got none")
+	}
+	config.Secrets[0].Keys[3].Spec.StoreType = "pkcs12"
+
+	// Missing StorePassPath
+	config.Secrets[0].Keys[3].Spec.StorePassPath = ""
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Missing StorePassPath: Expected error, got none")
+	}
+	config.Secrets[0].Keys[3].Spec.StorePassPath = "asdfSecret/pwd"
+
+	// wrong StorePassPath
+	config.Secrets[0].Keys[3].Spec.StorePassPath = "asdfSecret/wrongpath"
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Wrong StorePassPath: Expected error, got none")
+	}
+	config.Secrets[0].Keys[3].Spec.StorePassPath = "asdfSecret/pwd"
+
+	// Missing KeyPassPath
+	config.Secrets[0].Keys[3].Spec.KeyPassPath = ""
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Missing KeyPassPath: Expected error, got none")
+	}
+	config.Secrets[0].Keys[3].Spec.KeyPassPath = "asdfSecret/pwd"
+
+	// wrong KeyPassPath
+	config.Secrets[0].Keys[3].Spec.KeyPassPath = "asdfSecret/wrongpath"
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Wrong KeyPassPath: Expected error, got none")
+	}
+	config.Secrets[0].Keys[3].Spec.KeyPassPath = "asdfSecret/pwd"
+
+	// Missing Alias SourcePath
+	config.Secrets[0].Keys[3].Spec.KeytoolAliases[0].SourcePath = ""
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Missing Alias SourcePath: Expected error, got none")
+	}
+	config.Secrets[0].Keys[3].Spec.KeytoolAliases[0].SourcePath = "asdfSecret/ca"
+
+	// wrong Alias SourcePath
+	config.Secrets[0].Keys[3].Spec.KeytoolAliases[0].SourcePath = "asdfSecret/wrong"
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Wrong Alias SourcePath: Expected error, got none")
+	}
+	config.Secrets[0].Keys[3].Spec.KeytoolAliases[0].SourcePath = "asdfSecret/ca"
+
+	// Missing Alias DestinationPath
+	config.Secrets[0].Keys[3].Spec.KeytoolAliases[2].DestinationPath = ""
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Missing Alias DestinationPath: Expected error, got none")
+	}
+	config.Secrets[0].Keys[3].Spec.KeytoolAliases[2].DestinationPath = "asdfSecret/kt"
+
+	// wrong Alias DestinationPath
+	config.Secrets[0].Keys[3].Spec.KeytoolAliases[2].DestinationPath = "asdfSecret/wrong"
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Wrong Alias DestinationPath: Expected error, got none")
+	}
+	config.Secrets[0].Keys[3].Spec.KeytoolAliases[2].DestinationPath = "asdfSecret/kt"
+
+	// Missing keytoolAliases
+	config.Secrets[0].Keys[3].Spec.KeytoolAliases = nil
+	err = validate.Struct(config)
+	if err == nil {
+		t.Error("Missing keytoolAliases: Expected error, got none")
+	}
+	config.Secrets[0].Keys[3].Spec.KeytoolAliases = keytool.Spec.KeytoolAliases
 }
 
-func TestConfigurationStructLevelValidatorPKCS12(t *testing.T) {
-	alias := &AliasConfig{
-		Alias:  "fdsaAlias",
-		Type:   TypeCACopyAlias,
-		CAPath: []string{"asdfSecret", "fdsaPassword"},
-	}
-	passwordKey := &KeyConfig{
-		Name:   "fdsaPassword",
-		Type:   TypePassword,
-		Length: 32,
-	}
+func TestConfigurationStructLevelValidatorDuplicateSecretName(t *testing.T) {
 	key := &KeyConfig{
-		Name:          "fdsaKey",
-		Type:          TypePKCS12,
-		KeyPassPath:   []string{"asdfSecret", "fdsaPassword"},
-		StorePassPath: []string{"asdfSecret", "fdsaPassword"},
+		Name: "foo",
+		Type: KeyConfigTypeCA,
 	}
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
-	config.Secrets[0].Keys = append(config.Secrets[0].Keys, passwordKey)
+	// duplicate the secret
+	config.Secrets = append(config.Secrets, config.Secrets[0])
 	validate := validator.New()
 	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
-	// missing aliasConfigs
 	err := validate.Struct(config)
 	if err == nil {
 		t.Error("Expected error, got none")
 	}
-	key.AliasConfigs = append(key.AliasConfigs, alias)
-	// valid
-	err = validate.Struct(config)
-	if err != nil {
-		t.Errorf("Expected no error, got: %+v", err)
-	}
 
-	// missing keyPassPath
-	key.KeyPassPath = nil
-	err = validate.Struct(config)
-	if err == nil {
-		t.Error("Expected error, got none")
-	}
-	// keyPassPath must be valid
-	key.KeyPassPath = []string{"asdfSecret", "non-existent"}
-	err = validate.Struct(config)
-	if err == nil {
-		t.Error("Expected error, got none")
-	}
-	key.KeyPassPath = []string{"asdfSecret", "fdsaPassword"}
-	// missing storePassPath
-	key.StorePassPath = nil
-	err = validate.Struct(config)
-	if err == nil {
-		t.Error("Expected error, got none")
-	}
-	// storePassPath must be valid
-	key.StorePassPath = []string{"asdfSecret", "non-existent"}
-	err = validate.Struct(config)
-	if err == nil {
-		t.Error("Expected error, got none")
-	}
-	key.StorePassPath = []string{"asdfSecret", "fdsaPassword"}
 }
-
-func TestConfigurationStructLevelValidatorCA(t *testing.T) {
-	alias := &AliasConfig{
-		Alias: "fdsaAlias",
-		Type:  TypeCACopyAlias,
-	}
-	passwordKey := &KeyConfig{
-		Name:   "fdsaPassword",
-		Type:   TypePassword,
-		Length: 32,
-	}
+func TestConfigurationStructLevelValidatorDuplicateKeys(t *testing.T) {
 	key := &KeyConfig{
-		Name:          "fdsaKey",
-		Type:          TypePKCS12,
-		AliasConfigs:  []*AliasConfig{alias},
-		KeyPassPath:   []string{"asdfSecret", "fdsaPassword"},
-		StorePassPath: []string{"asdfSecret", "fdsaPassword"},
+		Name: "foo",
+		Type: KeyConfigTypeCA,
 	}
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
-	config.Secrets[0].Keys = append(config.Secrets[0].Keys, passwordKey)
+	// duplicate the key
+	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
 	validate := validator.New()
 	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
-	// missing caPath
 	err := validate.Struct(config)
 	if err == nil {
 		t.Error("Expected error, got none")
 	}
-	// caPath points to non-existent secret/key
-	config.Secrets[0].Keys[0].AliasConfigs[0].CAPath = []string{"mySecret1", "deployment-ca.pin"}
-	err = validate.Struct(config)
-	if err == nil {
-		t.Error("Expected error, got none")
-	}
-	// valid
-	secret := &SecretConfig{
-		Name:      "mySecret1",
-		Namespace: "default",
-		Keys: []*KeyConfig{
-			{
-				Name:   "deployment-ca.pin",
-				Type:   TypePassword,
-				Length: 32,
-			},
-		},
-	}
-	config.Secrets = append(config.Secrets, secret)
-	err = validate.Struct(config)
-	if err != nil {
-		t.Errorf("Expected no error, got: %+v", err)
-	}
+}
+
+func TestConfigurationStructLevelValidatorDuplicateKeytoolAlias(t *testing.T) {
 }
 
 func getConfig() *SecretAgentConfigurationSpec {

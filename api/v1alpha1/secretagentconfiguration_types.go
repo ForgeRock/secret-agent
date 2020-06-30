@@ -28,10 +28,10 @@ type SecretAgentConfigurationSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// +kubebuilder:validation:Required
-	AppConfig AppConfig `json:"appConfig" yaml:"appConfig,omitempty"`
+	AppConfig AppConfig `json:"appConfig"`
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
-	Secrets []*SecretConfig `json:"secrets" yaml:"secrets,omitempty" validate:"dive,unique=Name"`
+	Secrets []*SecretConfig `json:"secrets" validate:"dive,unique=Name"`
 }
 
 // SecretAgentConfigurationStatus defines the observed state of SecretAgentConfiguration
@@ -74,50 +74,14 @@ func init() {
 	SchemeBuilder.Register(&SecretAgentConfiguration{}, &SecretAgentConfigurationList{})
 }
 
+const (
+	// PathDelimiter is used for reference paths in the SecretAgentConfiguration
+	PathDelimiter string = "/"
+)
+
 // SecretsManager Specifies which cloud secret manager will be used
 // +kubebuilder:validation:Enum=none;GCP;AWS
 type SecretsManager string
-
-// Algorithm Specifies which keystore algorithm to use
-// +kubebuilder:validation:Enum=ECDSAWithSHA256;SHA256WithRSA
-type Algorithm string
-
-// Algorithm strings
-const (
-	ECDSAWithSHA256 Algorithm = "ECDSAWithSHA256"
-	SHA256WithRSA   Algorithm = "SHA256WithRSA"
-)
-
-// KeyConfigType Specifies which key type to use
-// +kubebuilder:validation:Enum=literal;password;privateKey;publicKeySSH;ca;caPrivateKey;caCopy;pkcs12;jceks;jks;truststore
-type KeyConfigType string
-
-// AliasConfigType Specifies which alias config type to use
-// +kubebuilder:validation:Enum=caCopy;keyPair;hmacKey;aesKey
-type AliasConfigType string
-
-// Key Config Type Strings
-const (
-	TypeLiteral      KeyConfigType = "literal"
-	TypePassword     KeyConfigType = "password"
-	TypePrivateKey   KeyConfigType = "privateKey"
-	TypePublicKeySSH KeyConfigType = "publicKeySSH"
-	TypeCA           KeyConfigType = "ca"
-	TypeCAPrivateKey KeyConfigType = "caPrivateKey"
-	TypeCACopy       KeyConfigType = "caCopy"
-	TypePKCS12       KeyConfigType = "pkcs12"
-	TypeJCEKS        KeyConfigType = "jceks"
-	TypeJKS          KeyConfigType = "jks"
-	TypeTrustStore   KeyConfigType = "truststore"
-)
-
-// Alias Config Type Strings
-const (
-	TypeCACopyAlias AliasConfigType = "caCopy"
-	TypeKeyPair     AliasConfigType = "keyPair"
-	TypeHMACKey     AliasConfigType = "hmacKey"
-	TypeAESKey      AliasConfigType = "aesKey"
-)
 
 // SecretsManager Strings
 const (
@@ -127,42 +91,142 @@ const (
 	SecretsManagerAzure SecretsManager = "Azure"
 )
 
+// AlgorithmType Specifies which keystore algorithm to use
+// +kubebuilder:validation:Enum=ECDSAWithSHA256;SHA256WithRSA
+type AlgorithmType string
+
+// AlgorithmType strings
+const (
+	AlgorithmTypeECDSAWithSHA256 AlgorithmType = "ECDSAWithSHA256"
+	AlgorithmTypeSHA256WithRSA   AlgorithmType = "SHA256WithRSA"
+)
+
+// StoreType Specifies which keystore store type to use
+// +kubebuilder:validation:Enum=pkcs12;jceks;jks
+type StoreType string
+
+// StoreType strings
+const (
+	StoreTypePkcs12 StoreType = "pkcs12"
+	StoreTypeJceks  StoreType = "jceks"
+	StoreTypeJks    StoreType = "jks"
+)
+
+// KeyConfigType Specifies which key type to use
+// +kubebuilder:validation:Enum=ca;literal;password;ssh;keyPair;truststore;keytool;
+type KeyConfigType string
+
+// Key Config Type Strings
+const (
+	KeyConfigTypeCA         KeyConfigType = "ca"
+	KeyConfigTypeLiteral    KeyConfigType = "literal"
+	KeyConfigTypePassword   KeyConfigType = "password"
+	KeyConfigTypeSSH        KeyConfigType = "ssh"
+	KeyConfigTypeKeyPair    KeyConfigType = "keyPair"
+	KeyConfigTypeTrustStore KeyConfigType = "truststore"
+	KeyConfigTypeKeytool    KeyConfigType = "keytool"
+)
+
+// KeytoolCmd Specifies the keytool command to use.
+// +kubebuilder:validation:Enum=genkeypair;genseckey;importcert;importpassword
+type KeytoolCmd string
+
+// Key Config Type Strings
+const (
+	KeytoolCmdGenkeypair     KeytoolCmd = "genkeypair"
+	KeytoolCmdGenseckey      KeytoolCmd = "genseckey"
+	KeytoolCmdImportcert     KeytoolCmd = "importcert"
+	KeytoolCmdImportpassword KeytoolCmd = "importpassword"
+)
+
 // AppConfig is the configuration for the forgeops-secrets application
 type AppConfig struct {
 	// +kubebuilder:validation:Required
-	CreateKubernetesObjects bool `json:"createKubernetesObjects" yaml:"createKubernetesObjects"`
+	CreateKubernetesObjects bool `json:"createKubernetesObjects"`
 	// +kubebuilder:validation:Required
-	SecretsManager SecretsManager `json:"secretsManager" yaml:"secretsManager,omitempty"`
-	GCPProjectID   string         `json:"gcpProjectID,omitempty" yaml:"gcpProjectID,omitempty"`
-	AWSRegion      string         `json:"awsRegion,omitempty" yaml:"awsRegion,omitempty"`
-	AzureVaultName string         `json:"azureVaultName,omitempty" yaml:"azureVaultName,omitempty"`
+	SecretsManager SecretsManager `json:"secretsManager"`
+	GCPProjectID   string         `json:"gcpProjectID,omitempty"`
+	AWSRegion      string         `json:"awsRegion,omitempty"`
+	AzureVaultName string         `json:"azureVaultName,omitempty"`
+
+	// Optional number of times the operator will attempt to generate secrets. Defaults to 3
+	MaxRetries *int `json:"maxRetries,omitempty"`
+
+	// Optional backoff time in seconds before retrying secret generation. Defaults to 2
+	BackOffSecs *int `json:"backOffSecs,omitempty"`
 }
 
 // SecretConfig is the configuration for a specific Kubernetes secret
 type SecretConfig struct {
 	// +kubebuilder:validation:Required
-	Name      string `json:"name" yaml:"name,omitempty"`
-	Namespace string `json:"-" yaml:"namespace,omitempty"`
+	Name      string `json:"name"`
+	Namespace string `json:"-"`
+
+	// This flag tells the controller to generate the secret only if the controller can't find it in k8s or the secret manager.
+	// This is useful if the user wants to enforce the use of the provided secret and avoid ever generating new ones.
+	// Defaults to true.
+	GenerateIfNecessary *bool `json:"generateIfNecessary,omitempty"`
+
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
-	Keys []*KeyConfig `json:"keys" yaml:"keys,omitempty" validate:"dive,unique=Name"`
+	Keys []*KeyConfig `json:"keys" validate:"dive,unique=Name"`
 }
 
 // KeyConfig is the configuration for a specific data key
 type KeyConfig struct {
 	// +kubebuilder:validation:Required
-	Name string `json:"name" yaml:"name,omitempty"`
+	Name string `json:"name"`
 	// +kubebuilder:validation:Required
-	Type           KeyConfigType  `json:"type" yaml:"type,omitempty"`
-	Value          string         `json:"value,omitempty" yaml:"value,omitempty"`
-	Length         int            `json:"length,omitempty" yaml:"length,omitempty"`
-	CAPath         []string       `json:"caPath,omitempty" yaml:"caPath,omitempty"`
-	PrivateKeyPath []string       `json:"privateKeyPath,omitempty" yaml:"privateKeyPath,omitempty"`
-	StorePassPath  []string       `json:"storePassPath,omitempty" yaml:"storePassPath,omitempty"`
-	KeyPassPath    []string       `json:"keyPassPath,omitempty" yaml:"keyPassPath,omitempty"`
-	AliasConfigs   []*AliasConfig `json:"keystoreAliases,omitempty" yaml:"keystoreAliases,omitempty,omitempty"`
-	Node           *Node          `json:"-" yaml:"node,omitempty"`
+	Type KeyConfigType `json:"type"`
+	Spec *KeySpec      `json:"spec,omitempty"`
+
+	// TODO Delete all items below this line
+	Value          string         `json:"value,omitempty"`
+	Length         int            `json:"length,omitempty"`
+	CAPath         []string       `json:"caPath,omitempty"`
+	PrivateKeyPath []string       `json:"privateKeyPath,omitempty"`
+	StorePassPath  []string       `json:"storePassPath,omitempty"`
+	KeyPassPath    []string       `json:"keyPassPath,omitempty"`
+	AliasConfigs   []*AliasConfig `json:"keystoreAliases,omitempty"`
+	Node           *Node          `json:"-"`
 }
+
+// KeySpec is the configuration for each key
+type KeySpec struct {
+	Value                 string        `json:"value,omitempty"`
+	Algorithm             AlgorithmType `json:"algorithm,omitempty"`
+	CommonName            string        `json:"commonName,omitempty"`
+	SignedWithPath        string        `json:"signedWithPath,omitempty"`
+	StoreType             StoreType     `json:"storeType,omitempty"`
+	StorePassPath         string        `json:"storePassPath,omitempty"`
+	KeyPassPath           string        `json:"keyPassPath,omitempty"`
+	Sans                  []string      `json:"sans,omitempty"`
+	TruststoreImportPaths []string      `json:"truststoreImportPaths,omitempty"`
+
+	// +kubebuilder:validation:Minimun=16
+	Length *int `json:"length,omitempty"`
+
+	// +kubebuilder:validation:MinItems=1
+	KeytoolAliases []*KeytoolAliasConfig `json:"keytoolAliases,omitempty" validate:"dive,unique=Name"`
+}
+
+// KeytoolAliasConfig is the configuration for a keystore alias
+type KeytoolAliasConfig struct {
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+	// +kubebuilder:validation:Required
+	Cmd             KeytoolCmd `json:"cmd"`
+	Args            []string   `json:"args,omitempty"`
+	SourcePath      string     `json:"sourcePath,omitempty"`
+	DestinationPath string     `json:"destinationPath,omitempty"`
+}
+
+// TODO
+/////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////
+//// EVERYTHING BELOW THIS LINE IS UP FOR THE CHOPPING BLOCK////
+////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////
 
 // AliasConfig is the configuration for a keystore alias
 type AliasConfig struct {
@@ -191,3 +255,40 @@ type Node struct {
 	AliasConfig  *AliasConfig  `yaml:"aliasConfig,omitempty"`
 	Value        []byte        `yaml:"value,omitempty"`
 }
+
+// Key Config Type Strings
+const (
+	TypeLiteral      KeyConfigType = "literal"
+	TypePassword     KeyConfigType = "password"
+	TypePrivateKey   KeyConfigType = "privateKey"
+	TypePublicKeySSH KeyConfigType = "publicKeySSH"
+	TypeCA           KeyConfigType = "ca"
+	TypeCAPrivateKey KeyConfigType = "caPrivateKey"
+	TypeCACopy       KeyConfigType = "caCopy"
+	TypePKCS12       KeyConfigType = "pkcs12"
+	TypeJCEKS        KeyConfigType = "jceks"
+	TypeJKS          KeyConfigType = "jks"
+	TypeTrustStore   KeyConfigType = "truststore"
+)
+
+// AliasConfigType Specifies which alias config type to use
+// +kubebuilder:validation:Enum=caCopy;keyPair;hmacKey;aesKey
+type AliasConfigType string
+
+// Alias Config Type Strings
+const (
+	TypeCACopyAlias AliasConfigType = "caCopy"
+	TypeKeyPair     AliasConfigType = "keyPair"
+	TypeHMACKey     AliasConfigType = "hmacKey"
+	TypeAESKey      AliasConfigType = "aesKey"
+)
+
+// Algorithm Specifies which keystore algorithm to use
+// +kubebuilder:validation:Enum=ECDSAWithSHA256;SHA256WithRSA
+type Algorithm string
+
+// Algorithm strings
+const (
+	ECDSAWithSHA256 Algorithm = "ECDSAWithSHA256"
+	SHA256WithRSA   Algorithm = "SHA256WithRSA"
+)
