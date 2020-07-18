@@ -42,7 +42,7 @@ func (rCA *RootCA) LoadReferenceData(data []map[string][]byte) error {
 	return nil
 }
 
-// LoadSecretFromManager populates CertKeyPair data from secret manager
+// LoadSecretFromManager populates RootCA data from secret manager
 func (rCA *RootCA) LoadSecretFromManager(ctx context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
 	var err error
 	caPemFmt := fmt.Sprintf("%s_%s", namespace, "ca.pem")
@@ -58,7 +58,7 @@ func (rCA *RootCA) LoadSecretFromManager(ctx context.Context, config *v1alpha1.A
 	return nil
 }
 
-// EnsureSecretManager populates secrete manager from CertKeyPair data
+// EnsureSecretManager populates secrete manager from RootCA data
 func (rCA *RootCA) EnsureSecretManager(ctx context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
 	var err error
 	caPemFmt := fmt.Sprintf("%s_%s", namespace, "ca.pem")

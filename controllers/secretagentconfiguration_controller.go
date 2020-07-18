@@ -75,19 +75,22 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		var keyInterface generator.KeyMgr
 	secretKeys:
 		for _, key := range secretReq.Keys {
+			log.Info("reconciling secret", "secret_name", secretReq.Name,
+				"data_key", key.Name, "secret_type", string(key.Type))
+
 			switch key.Type {
 			case v1alpha1.KeyConfigTypeCA:
-				log.Info("reconciling secret",
-					"secret_name", secretReq.Name,
-					"data_key", key.Name,
-					"secret_type", string(key.Type))
 				keyInterface = generator.NewRootCA()
 			case v1alpha1.KeyConfigTypeKeyPair:
-				log.Info("reconciling secret",
-					"secret_name", secretReq.Name,
-					"data_key", key.Name,
-					"secret_type", string(key.Type))
 				keyInterface, err = generator.NewCertKeyPair(key)
+				if err != nil {
+					log.Error(err, "error looking up secret ref",
+						"secret_name", secretReq.Name,
+						"data_key", key.Name,
+						"secret_type", string(key.Type))
+				}
+			case v1alpha1.KeyConfigTypePassword:
+				keyInterface, err = generator.NewPassword(key)
 				if err != nil {
 					log.Error(err, "error looking up secret ref",
 						"secret_name", secretReq.Name,
