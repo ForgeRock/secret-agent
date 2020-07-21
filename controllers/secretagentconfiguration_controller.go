@@ -112,7 +112,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					"secret_name", secretReq.Name,
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
-				keyInterface.LoadSecretFromManager(ctx, &instance.Spec.AppConfig, instance.Namespace, key.Name)
+				keyInterface.LoadSecretFromManager(ctx, &instance.Spec.AppConfig, instance.Namespace, secretReq.Name)
 			} else {
 				// load from kubernetes
 				log.Info("loading secret from kubernetes",
@@ -169,16 +169,20 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 						"data_key", key.Name,
 						"secret_type", string(key.Type))
 					keyInterface.EnsureSecretManager(ctx, &instance.Spec.AppConfig,
-						instance.Namespace, key.Name)
+						instance.Namespace, secretReq.Name)
 				}
 			}
 
-			// apply, updates per key, do we want to wait until the end (could crash and lose the whole secret)
 			log.Info("applying to kubernetes",
 				"secret_name", secretReq.Name,
 				"data_key", key.Name,
 				"secret_type", string(key.Type))
 			keyInterface.ToKubernetes(secObject)
+			secObject.Labels = labelsForSecretAgent(instance.Name)
+			// Set SecretAgentConfiguration instance as the owner and controller of the k8ssecret
+			if err := ctrl.SetControllerReference(&instance, secObject, reconciler.Scheme); err != nil {
+				return ctrl.Result{}, err
+			}
 			op, err := k8ssecrets.ApplySecrets(reconciler.Client, secObject)
 			if err != nil {
 				log.Error(err, "couldnt apply secret",
@@ -192,7 +196,40 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 				"secret_name", secretReq.Name)
 		}
 	}
+	if err := reconciler.updateStatus(ctx, &instance); err != nil {
+		log.Error(err, "Failed to update status", "instance.name", instance.Name)
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
+}
+
+func labelsForSecretAgent(name string) map[string]string {
+	return map[string]string{"managed-by-secret-agent": "true", "secret-agent-configuration-name": name}
+}
+
+func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.Context, instance *v1alpha1.SecretAgentConfiguration) error {
+	// Update the SecretAgentConfiguration status with the object names
+	secretList := &corev1.SecretList{}
+	listOpts := []client.ListOption{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels(labelsForSecretAgent(instance.Name)),
+	}
+	if err := reconciler.List(ctx, secretList, listOpts...); err != nil {
+		return err
+	}
+	var secretNames []string
+	for _, secret := range secretList.Items {
+		secretNames = append(secretNames, secret.Name)
+	}
+	totalManagedObjects := len(secretNames) // TODO Need to add AWS + GCP resources
+	// Always Update status.k8sSecrets
+	instance.Status.ManagedK8sSecrets = secretNames
+	instance.Status.TotalManagedObjects = totalManagedObjects
+
+	if err := reconciler.Status().Update(ctx, instance); err != nil {
+		return err
+	}
+	return nil
 }
 
 var (

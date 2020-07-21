@@ -20,7 +20,7 @@ citest: int-test
 	echo "Test successful"
 
 # Run unit and integration tests (backwards compatability)
-test: int-test
+test tests: int-test
 
 # Run unit tests
 unit-test: generate fmt vet manifests
