@@ -197,11 +197,15 @@ func (kp *CertKeyPair) ToKubernetes(secObject *corev1.Secret) {
 
 // LoadReferenceData loads references from data
 func (kp *CertKeyPair) LoadReferenceData(data []map[string][]byte) error {
+	var err error
 	if len(data) == 0 {
 		return errors.New("secret reference value not found")
 	}
 	rootCAData := data[0]
-	kp.RootCA = NewRootCA()
+	kp.RootCA, err = NewRootCA()
+	if err != nil {
+		return err
+	}
 	kp.RootCA.LoadFromData(rootCAData)
 	if kp.RootCA.IsEmpty() {
 		return errors.New("signing CA couldn't be loaded")

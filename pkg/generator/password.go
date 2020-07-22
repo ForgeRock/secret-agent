@@ -42,7 +42,7 @@ func (pwd *Password) LoadSecretFromManager(context context.Context, config *v1al
 	return nil
 }
 
-// EnsureSecretManager populates secrete manager from Password data
+// EnsureSecretManager populates secrets manager from Password data
 func (pwd *Password) EnsureSecretManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
 	var err error
 	pwdFmt := fmt.Sprintf("%s_%s_%s", namespace, secretName, pwd.Name)

@@ -9,7 +9,10 @@ import (
 )
 
 func TestRootCA(t *testing.T) {
-	rootCA := NewRootCA()
+	rootCA, err := NewRootCA()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
 
 	// test IsEmpty when empty
 	if empty := rootCA.IsEmpty(); !empty {

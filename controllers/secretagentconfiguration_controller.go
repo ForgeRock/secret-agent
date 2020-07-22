@@ -90,30 +90,30 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 
 			switch key.Type {
 			case v1alpha1.KeyConfigTypeCA:
-				keyInterface = generator.NewRootCA()
+				keyInterface, err = generator.NewRootCA()
 			case v1alpha1.KeyConfigTypeKeyPair:
 				keyInterface, err = generator.NewCertKeyPair(key)
-				if err != nil {
-					log.Error(err, "error looking up secret ref",
-						"secret_name", secretReq.Name,
-						"data_key", key.Name,
-						"secret_type", string(key.Type))
-				}
+
 			case v1alpha1.KeyConfigTypePassword:
 				keyInterface, err = generator.NewPassword(key)
-				if err != nil {
-					log.Error(err, "error looking up secret ref",
-						"secret_name", secretReq.Name,
-						"data_key", key.Name,
-						"secret_type", string(key.Type))
-				}
+
+			case v1alpha1.KeyConfigTypeLiteral:
+				keyInterface, err = generator.NewLiteral(key)
+
 			default:
+				// TODO We should never hit this case. We should fail the reconcile if we reach this point
 				// We continue through all keys in a secret skipping unsupported types
 				log.V(0).Info("secret type not implemented skipping key",
 					"secret_name", secretReq.Name,
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
 				break secretKeys
+			}
+			if err != nil {
+				log.Error(err, "error looking up secret ref",
+					"secret_name", secretReq.Name,
+					"data_key", key.Name,
+					"secret_type", string(key.Type))
 			}
 			// load from secret manager
 			useSecMgr := instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone

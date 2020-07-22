@@ -28,9 +28,9 @@ type RootCA struct {
 }
 
 // NewRootCA create new RootCA struct
-func NewRootCA() *RootCA {
+func NewRootCA() (*RootCA, error) {
 	cert := &Certificate{}
-	return &RootCA{Cert: cert}
+	return &RootCA{Cert: cert}, nil
 }
 
 // References return names of secrets that should be looked up

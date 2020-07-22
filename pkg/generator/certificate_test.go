@@ -15,7 +15,10 @@ import (
 func TestKeyPair(t *testing.T) {
 	loadKeyRefs := func(testKeyMgr KeyMgr) error {
 		// loading references
-		rootCA := NewRootCA()
+		rootCA, err := NewRootCA()
+		if err != nil {
+			t.Fatalf("Expected no error, got: %+v", err)
+		}
 		rootCA.Generate()
 		rootCAData := make([]map[string][]byte, 1)
 		rootCAData[0] = make(map[string][]byte, 2)
