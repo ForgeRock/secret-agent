@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -56,6 +57,22 @@ func (kp *CertKeyPair) LoadSecretFromManager(context context.Context, config *v1
 // EnsureSecretManager populates secrete manager from CertKeyPair data
 func (kp *CertKeyPair) EnsureSecretManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
 	return nil
+}
+
+// InSecret return true if the key is one found in the secret
+func (kp *CertKeyPair) InSecret(secObject *corev1.Secret) bool {
+
+	publicPemKey := fmt.Sprintf("%s.pem", kp.Name)
+	privatePemKey := fmt.Sprintf("%s-private.pem", kp.Name)
+	if secObject.Data == nil || secObject.Data[publicPemKey] == nil ||
+		secObject.Data[privatePemKey] == nil || kp.IsEmpty() {
+		return false
+	}
+	if bytes.Compare(secObject.Data[publicPemKey], kp.Cert.CertPEM) == 0 &&
+		bytes.Compare(secObject.Data[privatePemKey], kp.Cert.PrivateKeyPEM) == 0 {
+		return true
+	}
+	return false
 }
 
 // Generate generate a key pair

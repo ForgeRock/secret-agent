@@ -30,19 +30,13 @@ spec:
         - --enable-leader-election
         - --keytoolPath=/usr/local/openjdk-11/bin/keytool
         - --opensslPath=/usr/bin/openssl
+        - --webhook-service-ns=$(SERVICE_NAMESPACE)
+        - --webhook-service-name=$(SERVICE_NAME)
+        - --webhook-secret-name=$(WEBHOOK_SECRET_NAME)
+        - --validating-webhook-name=$(VALIDATING_WEBHOOK_CONFIGURATION_NAME)
+        - --mutating-webhook-name=$(MUTATING_WEBHOOK_CONFIGURATION_NAME) 
         image: controller:latest
         name: manager
-        env:
-        - name: SERVICE_NAMESPACE
-          value: $(SERVICE_NAMESPACE)
-        - name: WEBHOOK_SECRET_NAME
-          value: $(WEBHOOK_SECRET_NAME)
-        - name: VALIDATING_WEBHOOK_CONFIGURATION
-          value: $(VALIDATING_WEBHOOK_CONFIGURATION_NAME)
-        - name: MUTATING_WEBHOOK_CONFIGURATION
-          value: $(MUTATING_WEBHOOK_CONFIGURATION_NAME) 
-        - name: CERTIFICATE_SANS
-          value: $(SERVICE_NAME).$(SERVICE_NAMESPACE).svc,$(SERVICE_NAME).$(SERVICE_NAMESPACE).svc.cluster.local
         ports:
         - name: webhook-server
           containerPort: 9443

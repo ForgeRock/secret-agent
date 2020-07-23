@@ -3,10 +3,11 @@ package controllers
 import (
 	"context"
 	"errors"
+	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -20,20 +21,27 @@ import (
 	"github.com/ForgeRock/secret-agent/pkg/generator"
 )
 
+var (
+	webhookNamespace                   = flag.String("webhook-service-ns", "", "Namespace name of the webhook service")
+	webhookServiceName                 = flag.String("webhook-service-name", "", "Service name of the webhook")
+	webhookSecretName                  = flag.String("webhook-secret-name", "", "K8s secret to store/read webhook certificates")
+	validatingWebhookConfigurationName = flag.String("validating-webhook-name", "", "Name of the validatingWebhookConfiguration")
+	mutatingWebhookConfigurationName   = flag.String("mutating-webhook-name", "", "Name of the mutatingWebhookConfiguration")
+)
+
 // InitWebhookCertificates creates and injects req certs by the k8s webhooks
 func InitWebhookCertificates(certDir string) error {
 
-	secretName := os.Getenv("WEBHOOK_SECRET_NAME")
-	namespace := os.Getenv("SERVICE_NAMESPACE")
-	validatingWebhookConfigurationName := os.Getenv("VALIDATING_WEBHOOK_CONFIGURATION")
-	mutatingWebhookConfigurationName := os.Getenv("MUTATING_WEBHOOK_CONFIGURATION")
-	val := os.Getenv("CERTIFICATE_SANS")
-	sans := strings.Split(val, ",")
+	sans := []string{
+		fmt.Sprint(*webhookServiceName, ".", *webhookNamespace, ".svc"),
+		fmt.Sprint(*webhookServiceName, ".", *webhookNamespace, ".svc.cluster.local"),
+	}
 
-	if len(secretName) == 0 || len(namespace) == 0 || len(validatingWebhookConfigurationName) == 0 ||
-		len(mutatingWebhookConfigurationName) == 0 || len(sans) == 0 {
-		return errors.New("Need ENVS: WEBHOOK_SECRET_NAME, SERVICE_NAMESPACE, " +
-			"VALIDATING_WEBHOOK_CONFIGURATION, MUTATING_WEBHOOK_CONFIGURATION, CERTIFICATE_SANS")
+	if len(*webhookSecretName) == 0 || len(*webhookNamespace) == 0 || len(*validatingWebhookConfigurationName) == 0 ||
+		len(*mutatingWebhookConfigurationName) == 0 || len(sans) == 0 {
+		return errors.New("If ENABLE_WEBHOOKS is true, must provide: " +
+			"--webhook-secret-name, --webhook-service-name, --webhook-service-namespace, " +
+			"--validating-webhook-name, --mutating-webhook-name")
 	}
 
 	k8sClient, err := getClient()
@@ -41,7 +49,7 @@ func InitWebhookCertificates(certDir string) error {
 		return err
 	}
 
-	rootCAPem, certPEM, keyPEM, err := getWebhookSecret(k8sClient, secretName, namespace)
+	rootCAPem, certPEM, keyPEM, err := getWebhookSecret(k8sClient, *webhookSecretName, *webhookNamespace)
 	if err != nil {
 		// If we couldn't obtain the certs from the k8s secret, generate the certs and patch the k8s secret for future use
 		rootCA, leafCert, err := generateCertificates(sans)
@@ -51,7 +59,8 @@ func InitWebhookCertificates(certDir string) error {
 		}
 
 		// Patching webhook secret
-		if err := patchWebhookSecret(k8sClient, rootCA.CertPEM, leafCert.CertPEM, leafCert.PrivateKeyPEM, secretName, namespace); err != nil {
+		if err := patchWebhookSecret(k8sClient, rootCA.CertPEM, leafCert.CertPEM,
+			leafCert.PrivateKeyPEM, *webhookSecretName, *webhookNamespace); err != nil {
 			return err
 		}
 		rootCAPem = rootCA.CertPEM
@@ -60,12 +69,12 @@ func InitWebhookCertificates(certDir string) error {
 	}
 
 	// Patching validating webhook
-	if err := patchValidatingWebhookConfiguration(k8sClient, rootCAPem, validatingWebhookConfigurationName); err != nil {
+	if err := patchValidatingWebhookConfiguration(k8sClient, rootCAPem, *validatingWebhookConfigurationName); err != nil {
 		return err
 	}
 
 	// Patching mutating webhook
-	if err := patchMutatingWebhookConfiguration(k8sClient, rootCAPem, mutatingWebhookConfigurationName); err != nil {
+	if err := patchMutatingWebhookConfiguration(k8sClient, rootCAPem, *mutatingWebhookConfigurationName); err != nil {
 		return err
 	}
 

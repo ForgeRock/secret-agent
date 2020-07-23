@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"fmt"
@@ -50,6 +51,21 @@ func (pwd *Password) EnsureSecretManager(context context.Context, config *v1alph
 		return err
 	}
 	return nil
+}
+
+// InSecret return true if the key is one found in the secret
+func (pwd *Password) InSecret(secObject *corev1.Secret) bool {
+	if secObject.Data == nil || secObject.Data[pwd.Name] == nil || pwd.IsEmpty() {
+		if secObject.Data[pwd.Name] == nil {
+			return false
+		}
+		return false
+	}
+	if bytes.Compare(pwd.Value, secObject.Data[pwd.Name]) == 0 {
+		return true
+	}
+	return false
+
 }
 
 // Generate generates data

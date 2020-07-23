@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,6 +41,10 @@ type SecretAgentConfigurationReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+var (
+	watchOwnedObjects bool = true
+)
+
 // +kubebuilder:rbac:groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
@@ -47,6 +52,7 @@ type SecretAgentConfigurationReconciler struct {
 
 // Reconcile reconcile loop for CRD controller
 func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	var updatedK8sSecrets bool = false
 	ctx := context.Background()
 	log := reconciler.Log.WithValues("secretagentconfiguration", req.NamespacedName)
 
@@ -62,6 +68,10 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		log.Error(err, "unable to fetch SecretAgentConfiguration")
 		return ctrl.Result{}, err
 	}
+	// Stop watching for secret changes while the reconcile loop is running
+	watchOwnedObjects = false
+	defer func() { watchOwnedObjects = true }()
+	log.V(1).Info("** Reconcile loop start **")
 	for _, secretReq := range instance.Spec.Secrets {
 		// load from secret k8s
 		secObject, err := k8ssecrets.LoadSecret(reconciler.Client, secretReq.Name, instance.Namespace)
@@ -71,11 +81,11 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 				"namespace", instance.Namespace)
 			return ctrl.Result{}, err
 		}
-		log.Info("reconciling secret", "secret_name", secretReq.Name)
+		log.V(1).Info("reconciling secret", "secret_name", secretReq.Name)
 		var keyInterface generator.KeyMgr
 	secretKeys:
 		for _, key := range secretReq.Keys {
-			log.Info("reconciling secret", "secret_name", secretReq.Name,
+			log.V(1).Info("reconciling secret key", "secret_name", secretReq.Name,
 				"data_key", key.Name, "secret_type", string(key.Type))
 
 			switch key.Type {
@@ -99,7 +109,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 				}
 			default:
 				// We continue through all keys in a secret skipping unsupported types
-				log.Info("secret type not implemented skipping key",
+				log.V(0).Info("secret type not implemented skipping key",
 					"secret_name", secretReq.Name,
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
@@ -108,20 +118,26 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			// load from secret manager
 			useSecMgr := instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone
 			if useSecMgr {
-				log.Info("loading secret from secret-manager",
+				log.V(1).Info("loading secret from secret-manager",
 					"secret_name", secretReq.Name,
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
 				keyInterface.LoadSecretFromManager(ctx, &instance.Spec.AppConfig, instance.Namespace, secretReq.Name)
 			} else {
 				// load from kubernetes
-				log.Info("loading secret from kubernetes",
+				log.V(1).Info("loading secret from kubernetes",
 					"secret_name", secretReq.Name,
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
 				keyInterface.LoadFromData(secObject.Data)
 			}
-
+			// If the keyInterface is contained in the current k8s secret, continue with the next secret
+			if keyInterface.InSecret(secObject) {
+				log.V(1).Info("skipping secret key already found in k8s",
+					"secret_name", secretReq.Name,
+					"data_key", key.Name)
+				continue
+			}
 			// Load key references and data
 			var keyRefSecrets []map[string][]byte
 			refs, _ := keyInterface.References()
@@ -151,7 +167,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 
 			// Generate and apply to secret manager
 			if keyInterface.IsEmpty() {
-				log.Info("no secret data found, generating",
+				log.V(0).Info("no secret data found, generating",
 					"secret_name", secretReq.Name,
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
@@ -164,7 +180,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					break secretKeys
 				}
 				if useSecMgr {
-					log.Info("storing secret to secret-manager",
+					log.V(0).Info("storing secret to secret-manager",
 						"secret_name", secretReq.Name,
 						"data_key", key.Name,
 						"secret_type", string(key.Type))
@@ -173,7 +189,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 				}
 			}
 
-			log.Info("applying to kubernetes",
+			log.V(0).Info("applying to kubernetes",
 				"secret_name", secretReq.Name,
 				"data_key", key.Name,
 				"secret_type", string(key.Type))
@@ -190,15 +206,18 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					"secret_namespace", instance.Namespace,
 					"secret_name", secretReq.Name)
 			}
-			log.Info("completed reconcile",
-				"method", op,
-				"secret_namespace", instance.Namespace,
-				"secret_name", secretReq.Name)
+			updatedK8sSecrets = true
 		}
+		log.V(1).Info("completed reconcile for secret",
+			"secret_namespace", instance.Namespace,
+			"secret_name", secretReq.Name)
 	}
-	if err := reconciler.updateStatus(ctx, &instance); err != nil {
-		log.Error(err, "Failed to update status", "instance.name", instance.Name)
-		return ctrl.Result{}, err
+	// Only update the instance's status if there was a k8s operation
+	if updatedK8sSecrets {
+		if err := reconciler.updateStatus(ctx, &instance); err != nil {
+			log.Error(err, "Failed to update status", "instance.name", instance.Name)
+			return ctrl.Result{}, err
+		}
 	}
 	return ctrl.Result{}, nil
 }
@@ -229,6 +248,9 @@ func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.C
 	if err := reconciler.Status().Update(ctx, instance); err != nil {
 		return err
 	}
+	// Updating the instance will trigger a reconcile loop. This only happens at the end of the reconcile loop
+	// Give enough time for the api to update
+	time.Sleep(500 * time.Millisecond)
 	return nil
 }
 
@@ -244,6 +266,9 @@ func (reconciler *SecretAgentConfigurationReconciler) SetupWithManager(mgr ctrl.
 		// grab the secret object, extract the owner...
 		secret := rawObj.(*corev1.Secret)
 		owner := metav1.GetControllerOf(secret)
+		if !watchOwnedObjects {
+			return nil
+		}
 		if owner == nil {
 			return nil
 		}

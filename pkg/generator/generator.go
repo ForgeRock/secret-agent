@@ -21,4 +21,5 @@ type KeyMgr interface {
 	LoadFromData(secData map[string][]byte)
 	IsEmpty() bool
 	ToKubernetes(secObject *corev1.Secret)
+	InSecret(secObject *corev1.Secret) bool
 }

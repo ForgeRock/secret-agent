@@ -20,6 +20,7 @@ import (
 	"flag"
 	"os"
 
+	uberzap "go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -46,17 +47,24 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
+	var certDir string
+	var debug bool
+	var lvl uberzap.AtomicLevel
+
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&certDir, "cert-dir", "/tmp/k8s-webhook-server/serving-certs",
+		"Directory where to store/read the webhook certs. Defaults to /tmp/k8s-webhook-server/serving-certs")
+	flag.BoolVar(&debug, "debug", false, "Set to true to enable debug")
 	flag.Parse()
-
-	ctrl.SetLogger(zap.New(zap.UseDevMode(false)))
-	certDir := os.Getenv("CERT_DIR")
-	if len(certDir) == 0 {
-		certDir = "/tmp/k8s-webhook-server/serving-certs"
+	if debug {
+		lvl = uberzap.NewAtomicLevelAt(uberzap.DebugLevel)
+	} else {
+		lvl = uberzap.NewAtomicLevelAt(uberzap.InfoLevel)
 	}
+	ctrl.SetLogger(zap.New(zap.UseDevMode(false), zap.Level(&lvl)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,

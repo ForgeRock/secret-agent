@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -56,6 +57,20 @@ func (rCA *RootCA) LoadSecretFromManager(ctx context.Context, config *v1alpha1.A
 		return err
 	}
 	return nil
+}
+
+// InSecret return true if the key is one found in the secret
+func (rCA *RootCA) InSecret(secObject *corev1.Secret) bool {
+	if secObject.Data == nil || secObject.Data["ca.pem"] == nil ||
+		secObject.Data["ca-private.pem"] == nil || rCA.IsEmpty() {
+		return false
+	}
+	if bytes.Compare(rCA.Cert.CertPEM, secObject.Data["ca.pem"]) == 0 &&
+		bytes.Compare(rCA.Cert.PrivateKeyPEM, secObject.Data["ca-private.pem"]) == 0 {
+		return true
+	}
+	return false
+
 }
 
 // EnsureSecretManager populates secrete manager from RootCA data
