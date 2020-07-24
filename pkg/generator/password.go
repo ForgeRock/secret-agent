@@ -27,7 +27,7 @@ func (pwd *Password) References() ([]string, []string) {
 }
 
 // LoadReferenceData loads references from data
-func (pwd *Password) LoadReferenceData(data []map[string][]byte) error {
+func (pwd *Password) LoadReferenceData(data map[string][]byte) error {
 	return nil
 }
 

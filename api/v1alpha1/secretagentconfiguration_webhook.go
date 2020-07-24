@@ -18,8 +18,10 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/go-playground/validator/v10"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -61,25 +63,27 @@ func (r *SecretAgentConfiguration) Default() {
 		for keysIndex, key := range secret.Keys {
 			// If we're processing passwords and received no Spec, create a new spec.
 			// We will be defaulting the Length
-			if key.Type == KeyConfigTypePassword && key.Spec == nil {
+			if key.Spec == nil {
 				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec = new(KeySpec)
 			}
-			if key.Spec != nil {
-				if key.Type == KeyConfigTypePassword && key.Spec.Length == nil {
-					r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Length = new(int)
-					*r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Length = 32
-				}
-				key.Spec.SignedWithPath = cleanUpPaths(key.Spec.SignedWithPath)
-				key.Spec.StorePassPath = cleanUpPaths(key.Spec.StorePassPath)
-				key.Spec.KeyPassPath = cleanUpPaths(key.Spec.KeyPassPath)
-				for idx, path := range key.Spec.TruststoreImportPaths {
-					key.Spec.TruststoreImportPaths[idx] = cleanUpPaths(path)
-				}
-				for idx, alias := range key.Spec.KeytoolAliases {
-					key.Spec.KeytoolAliases[idx].SourcePath = cleanUpPaths(alias.SourcePath)
-					key.Spec.KeytoolAliases[idx].DestinationPath = cleanUpPaths(alias.DestinationPath)
 
-				}
+			if key.Type == KeyConfigTypePassword {
+				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Length = new(int)
+				*r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Length = 32
+			}
+			if key.Type == KeyConfigTypeCA && key.Spec.Duration == nil {
+				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Duration = new(metav1.Duration)
+				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Duration.Duration = time.Duration(10 * 365 * 24 * time.Hour) //10yrs
+			}
+			r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.SignedWithPath = cleanUpPaths(key.Spec.SignedWithPath)
+			r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.StorePassPath = cleanUpPaths(key.Spec.StorePassPath)
+			r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.KeyPassPath = cleanUpPaths(key.Spec.KeyPassPath)
+			for idx, path := range key.Spec.TruststoreImportPaths {
+				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.TruststoreImportPaths[idx] = cleanUpPaths(path)
+			}
+			for idx, alias := range key.Spec.KeytoolAliases {
+				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.KeytoolAliases[idx].SourcePath = cleanUpPaths(alias.SourcePath)
+				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.KeytoolAliases[idx].DestinationPath = cleanUpPaths(alias.DestinationPath)
 			}
 		}
 	}
@@ -174,20 +178,13 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 				return
 			}
 
-			if key.Type != KeyConfigTypeCA && key.Type != KeyConfigTypeSSH {
-				if key.Spec == nil {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex], name,
-						"Name", "missingSpec", "")
-					return
-				}
-			}
-
 			switch key.Type {
 			case KeyConfigTypeCA:
-				// must have empty spec. No extra specs should be specified
-				if key.Spec != nil {
-					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec, name,
-						"Spec", "specUnwantedValues", "")
+				// must set DistinguishedName
+				if key.Spec.DistinguishedName == nil || key.Spec.DistinguishedName.isEmpty() {
+					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.DistinguishedName, name,
+						"distinguishedName", "distinguishedNameValueEmpty", "")
+					return
 				}
 			case KeyConfigTypeLiteral:
 				// must have Value
@@ -197,14 +194,14 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 				}
 			case KeyConfigTypePassword:
 				// must have Length
-				if *key.Spec.Length == 0 {
+				if key.Spec.Length == nil || *key.Spec.Length == 0 {
 					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.Length, name,
 						"length", "passwordLengthZero", "")
 				}
 			// if type publicKeySSH, must have privateKey
 			case KeyConfigTypeSSH:
 				// must have empty spec. No extra specs should be specified
-				if key.Spec != nil {
+				if !key.Spec.isEmpty() {
 					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec, name,
 						"Spec", "specUnwantedValues", "")
 				}
@@ -216,7 +213,7 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 					return
 				}
 				// must set DistinguishedName
-				if key.Spec.DistinguishedName == nil {
+				if key.Spec.DistinguishedName == nil || key.Spec.DistinguishedName.isEmpty() {
 					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.DistinguishedName, name,
 						"distinguishedName", "distinguishedNameValueEmpty", "")
 					return

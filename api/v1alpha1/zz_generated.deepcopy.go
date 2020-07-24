@@ -21,6 +21,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -207,6 +208,11 @@ func (in *KeySpec) DeepCopyInto(out *KeySpec) {
 		in, out := &in.TruststoreImportPaths, &out.TruststoreImportPaths
 		*out = make([]string, len(*in))
 		copy(*out, *in)
+	}
+	if in.Duration != nil {
+		in, out := &in.Duration, &out.Duration
+		*out = new(v1.Duration)
+		**out = **in
 	}
 	if in.Length != nil {
 		in, out := &in.Length, &out.Length

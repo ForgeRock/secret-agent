@@ -21,16 +21,19 @@ import (
 
 // RootCA root certificate
 type RootCA struct {
-	ValidDurtaion time.Duration
-	Cert          *Certificate
-	// TODO add distinguishednames
-	CommonName string
+	ValidDuration     time.Duration
+	Cert              *Certificate
+	DistinguishedName *v1alpha1.DistinguishedName
 }
 
 // NewRootCA create new RootCA struct
-func NewRootCA() (*RootCA, error) {
+func NewRootCA(keyConfig *v1alpha1.KeyConfig) (*RootCA, error) {
 	cert := &Certificate{}
-	return &RootCA{Cert: cert}, nil
+	rCA := &RootCA{Cert: cert,
+		ValidDuration:     keyConfig.Spec.Duration.Duration,
+		DistinguishedName: keyConfig.Spec.DistinguishedName,
+	}
+	return rCA, nil
 }
 
 // References return names of secrets that should be looked up
@@ -39,7 +42,7 @@ func (rCA *RootCA) References() ([]string, []string) {
 }
 
 // LoadReferenceData loads references from data
-func (rCA *RootCA) LoadReferenceData(data []map[string][]byte) error {
+func (rCA *RootCA) LoadReferenceData(data map[string][]byte) error {
 	return nil
 }
 
@@ -173,10 +176,18 @@ func (rCA *RootCA) Generate() error {
 	certTemplate := &x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			CommonName: rCA.CommonName,
+			Country:            rCA.DistinguishedName.Country,
+			Organization:       rCA.DistinguishedName.Organization,
+			OrganizationalUnit: rCA.DistinguishedName.OrganizationalUnit,
+			Locality:           rCA.DistinguishedName.Locality,
+			Province:           rCA.DistinguishedName.Province,
+			StreetAddress:      rCA.DistinguishedName.StreetAddress,
+			PostalCode:         rCA.DistinguishedName.PostalCode,
+			SerialNumber:       rCA.DistinguishedName.SerialNumber,
+			CommonName:         rCA.DistinguishedName.CommonName,
 		},
 		NotBefore:          time.Now(),
-		NotAfter:           time.Now().Add(10 * 365 * 24 * time.Hour), // + 10 years
+		NotAfter:           time.Now().Add(rCA.ValidDuration),
 		IsCA:               true,
 		SignatureAlgorithm: x509.ECDSAWithSHA256,
 		ExtKeyUsage: []x509.ExtKeyUsage{

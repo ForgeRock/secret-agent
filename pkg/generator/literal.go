@@ -24,7 +24,7 @@ func (literal *Literal) References() ([]string, []string) {
 }
 
 // LoadReferenceData loads references from data
-func (literal *Literal) LoadReferenceData(data []map[string][]byte) error {
+func (literal *Literal) LoadReferenceData(data map[string][]byte) error {
 	return nil
 }
 

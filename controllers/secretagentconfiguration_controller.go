@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -56,7 +57,6 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	ctx := context.Background()
 	log := reconciler.Log.WithValues("secretagentconfiguration", req.NamespacedName)
 
-	// TODO update for new spec
 	var instance v1alpha1.SecretAgentConfiguration
 	if err := reconciler.Get(ctx, req.NamespacedName, &instance); err != nil {
 		if k8serror.IsNotFound(err) {
@@ -82,39 +82,20 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			return ctrl.Result{}, err
 		}
 		log.V(1).Info("reconciling secret", "secret_name", secretReq.Name)
-		var keyInterface generator.KeyMgr
 	secretKeys:
 		for _, key := range secretReq.Keys {
 			log.V(1).Info("reconciling secret key", "secret_name", secretReq.Name,
 				"data_key", key.Name, "secret_type", string(key.Type))
 
-			switch key.Type {
-			case v1alpha1.KeyConfigTypeCA:
-				keyInterface, err = generator.NewRootCA()
-			case v1alpha1.KeyConfigTypeKeyPair:
-				keyInterface, err = generator.NewCertKeyPair(key)
-
-			case v1alpha1.KeyConfigTypePassword:
-				keyInterface, err = generator.NewPassword(key)
-
-			case v1alpha1.KeyConfigTypeLiteral:
-				keyInterface, err = generator.NewLiteral(key)
-
-			default:
-				// TODO We should never hit this case. We should fail the reconcile if we reach this point
-				// We continue through all keys in a secret skipping unsupported types
-				log.V(0).Info("secret type not implemented skipping key",
-					"secret_name", secretReq.Name,
-					"data_key", key.Name,
-					"secret_type", string(key.Type))
-				break secretKeys
-			}
+			keyInterface, err := routeKeyInterface(secretReq.Name, key)
 			if err != nil {
-				log.Error(err, "error looking up secret ref",
+				log.Error(err, "error routing secret key type",
 					"secret_name", secretReq.Name,
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
+				continue secretKeys
 			}
+
 			// load from secret manager
 			useSecMgr := instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone
 			if useSecMgr {
@@ -139,9 +120,10 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 				continue
 			}
 			// Load key references and data
-			var keyRefSecrets []map[string][]byte
+			keyRefSecrets := make(map[string][]byte)
 			refs, _ := keyInterface.References()
 			for _, ref := range refs {
+
 				secRefObject, err := k8ssecrets.LoadSecret(reconciler.Client, ref, instance.Namespace)
 				if err != nil {
 					log.Error(err, "error looking up secret ref",
@@ -154,8 +136,9 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 						"secret_ref", ref)
 					break secretKeys
 				}
-				keyRefSecrets = append(keyRefSecrets, secRefObject.Data)
-
+				for k, v := range secRefObject.Data {
+					keyRefSecrets[k] = v
+				}
 			}
 			if err := keyInterface.LoadReferenceData(keyRefSecrets); err != nil {
 				log.Error(err, "error loading references skipping key",
@@ -252,6 +235,27 @@ func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.C
 	// Give enough time for the api to update
 	time.Sleep(500 * time.Millisecond)
 	return nil
+}
+
+func routeKeyInterface(secretName string, key *v1alpha1.KeyConfig) (generator.KeyMgr, error) {
+	switch key.Type {
+	case v1alpha1.KeyConfigTypeCA:
+		return generator.NewRootCA(key)
+	case v1alpha1.KeyConfigTypeKeyPair:
+		return generator.NewCertKeyPair(key)
+	case v1alpha1.KeyConfigTypePassword:
+		return generator.NewPassword(key)
+	case v1alpha1.KeyConfigTypeLiteral:
+		return generator.NewLiteral(key)
+		// PR #69
+		// case v1alpha1.KeyConfigTypeKeytool:
+		// return generator.NewKeyTool(key)
+	default:
+		// TODO we should never hit this point once all types are implmeneted.
+		// We should actually error out
+		// We continue through all keys in a secret skipping unsupported types
+		return nil, errors.New("Key type not implemented")
+	}
 }
 
 var (

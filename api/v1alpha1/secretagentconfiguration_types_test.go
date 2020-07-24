@@ -10,6 +10,12 @@ func TestConfigurationStructLevelValidatorCA(t *testing.T) {
 	key := &KeyConfig{
 		Name: "foo",
 		Type: KeyConfigTypeCA,
+		Spec: &KeySpec{
+			Duration: nil,
+			DistinguishedName: &DistinguishedName{
+				CommonName: "bar",
+			},
+		},
 	}
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
@@ -19,19 +25,13 @@ func TestConfigurationStructLevelValidatorCA(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
 	}
-	// Spec must be empty
-	key.Spec = new(KeySpec)
-	config.Secrets[0].Keys[0] = key
-	err = validate.Struct(config)
-	if err == nil {
-		t.Error("Spec must be empty: Expected error, got none")
-	}
 }
 
 func TestConfigurationStructLevelValidatorLiteral(t *testing.T) {
 	key := &KeyConfig{
 		Name: "fdsa",
 		Type: KeyConfigTypeLiteral,
+		Spec: &KeySpec{},
 	}
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
@@ -55,6 +55,7 @@ func TestConfigurationStructLevelValidatorPassword(t *testing.T) {
 	key := &KeyConfig{
 		Name: "fdsa",
 		Type: KeyConfigTypePassword,
+		Spec: &KeySpec{},
 	}
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
@@ -66,7 +67,6 @@ func TestConfigurationStructLevelValidatorPassword(t *testing.T) {
 		t.Error("Missing Length: Expected error, got none")
 	}
 	// valid
-	config.Secrets[0].Keys[0].Spec = new(KeySpec)
 	config.Secrets[0].Keys[0].Spec.Length = new(int)
 	*config.Secrets[0].Keys[0].Spec.Length = 16
 	err = validate.Struct(config)
@@ -79,6 +79,7 @@ func TestConfigurationStructLevelValidatorSSH(t *testing.T) {
 	key := &KeyConfig{
 		Name: "foo",
 		Type: KeyConfigTypeSSH,
+		Spec: &KeySpec{},
 	}
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
@@ -87,13 +88,6 @@ func TestConfigurationStructLevelValidatorSSH(t *testing.T) {
 	err := validate.Struct(config)
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
-	}
-	// spec must be empty
-	key.Spec = new(KeySpec)
-	config.Secrets[0].Keys[0] = key
-	err = validate.Struct(config)
-	if err == nil {
-		t.Error("Spec must be empty: Expected error, got none")
 	}
 }
 
@@ -111,6 +105,12 @@ func TestConfigurationStructLevelValidatorKeyPair(t *testing.T) {
 	ca := &KeyConfig{
 		Name: "ca",
 		Type: KeyConfigTypeCA,
+		Spec: &KeySpec{
+			Duration: nil,
+			DistinguishedName: &DistinguishedName{
+				CommonName: "foo",
+			},
+		},
 	}
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
@@ -190,6 +190,12 @@ func TestConfigurationStructLevelValidatorKeytool(t *testing.T) {
 	ca := &KeyConfig{
 		Name: "ca",
 		Type: KeyConfigTypeCA,
+		Spec: &KeySpec{
+			Duration: nil,
+			DistinguishedName: &DistinguishedName{
+				CommonName: "bar",
+			},
+		},
 	}
 
 	pwd := &KeyConfig{
@@ -336,6 +342,12 @@ func TestConfigurationStructLevelValidatorDuplicateSecretName(t *testing.T) {
 	key := &KeyConfig{
 		Name: "foo",
 		Type: KeyConfigTypeCA,
+		Spec: &KeySpec{
+			Duration: nil,
+			DistinguishedName: &DistinguishedName{
+				CommonName: "bar",
+			},
+		},
 	}
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
@@ -353,6 +365,12 @@ func TestConfigurationStructLevelValidatorDuplicateKeys(t *testing.T) {
 	key := &KeyConfig{
 		Name: "foo",
 		Type: KeyConfigTypeCA,
+		Spec: &KeySpec{
+			Duration: nil,
+			DistinguishedName: &DistinguishedName{
+				CommonName: "bar",
+			},
+		},
 	}
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)

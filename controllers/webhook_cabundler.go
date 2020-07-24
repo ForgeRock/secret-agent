@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -50,7 +51,7 @@ func InitWebhookCertificates(certDir string) error {
 	}
 
 	rootCAPem, certPEM, keyPEM, err := getWebhookSecret(k8sClient, *webhookSecretName, *webhookNamespace)
-	if err != nil {
+	if err != nil || len(rootCAPem) == 0 || len(certPEM) == 0 || len(keyPEM) == 0 {
 		// If we couldn't obtain the certs from the k8s secret, generate the certs and patch the k8s secret for future use
 		rootCA, leafCert, err := generateCertificates(sans)
 		if err != nil {
@@ -118,40 +119,59 @@ func getClient() (client.Client, error) {
 
 // generateCertificates generates the root CA and leaf certificate to be used by the webhook
 func generateCertificates(sans []string) (rootCA, leafCert *generator.Certificate, err error) {
-	rootCA, err = generator.GenerateRootCA("secret-agent")
-	if err != nil {
-		return
-	}
-	leafCert, err = generator.GenerateSignedCert(rootCA, v1alpha1.ECDSAWithSHA256, "", sans)
-	if err != nil {
-		return
+
+	rCA := generator.RootCA{
+		ValidDuration: 100 * 365 * 24 * time.Hour, //100 yrs
+		Cert:          &generator.Certificate{},
+		DistinguishedName: &v1alpha1.DistinguishedName{
+			CommonName: "secret-agent",
+		},
 	}
 
+	certKeyPair := generator.CertKeyPair{
+		RootCA: &rCA,
+		Cert:   &generator.Certificate{},
+		V1Spec: &v1alpha1.KeySpec{
+			Sans:              sans,
+			Algorithm:         v1alpha1.AlgorithmTypeECDSAWithSHA256,
+			DistinguishedName: &v1alpha1.DistinguishedName{},
+		},
+	}
+	err = rCA.Generate()
+	if err != nil {
+		return
+	}
+	err = certKeyPair.Generate()
+	if err != nil {
+		return
+	}
+	rootCA = rCA.Cert
+	leafCert = certKeyPair.Cert
 	return
 }
 
-// getWebhookSecret patches the named TLS secret with the TLS information
-func getWebhookSecret(k client.Client, name, namespace string) (rootCAPem, certPEM, keyPEM []byte, err error) {
+// getWebhookSecret extract the webhook secret data from from k8s api
+func getWebhookSecret(k client.Client, secretName, namespace string) (rootCAPem, certPEM, keyPEM []byte, err error) {
 
 	k8sSecret := &corev1.Secret{}
-	if err = k.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, k8sSecret); err != nil {
+	if err = k.Get(context.TODO(), types.NamespacedName{Name: secretName, Namespace: namespace}, k8sSecret); err != nil {
 		return
 	}
 	var ok bool
 	// secret found, let's grab the contents
 	rootCAPem, ok = k8sSecret.Data["ca.crt"]
 	if !ok {
-		err = errors.New("Secret key ca.crt not found in " + name)
+		err = errors.New("Secret key ca.crt not found in " + secretName)
 		return
 	}
 	certPEM, ok = k8sSecret.Data["tls.crt"]
 	if !ok {
-		err = errors.New("Secret key tls.crt not found in " + name)
+		err = errors.New("Secret key tls.crt not found in " + secretName)
 		return
 	}
 	keyPEM, ok = k8sSecret.Data["tls.key"]
 	if !ok {
-		err = errors.New("Secret key tls.key not found in " + name)
+		err = errors.New("Secret key tls.key not found in " + secretName)
 		return
 	}
 

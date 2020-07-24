@@ -2,8 +2,6 @@ package generator
 
 import (
 	"bytes"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"regexp"
 	"testing"
@@ -15,22 +13,27 @@ import (
 func TestKeyPair(t *testing.T) {
 	loadKeyRefs := func(testKeyMgr KeyMgr) error {
 		// loading references
-		rootCA, err := NewRootCA()
-		if err != nil {
-			t.Fatalf("Expected no error, got: %+v", err)
+		rootCA := RootCA{
+			Cert: &Certificate{},
+			DistinguishedName: &v1alpha1.DistinguishedName{
+				CommonName: "foo",
+			},
 		}
 		rootCA.Generate()
-		rootCAData := make([]map[string][]byte, 1)
-		rootCAData[0] = make(map[string][]byte, 2)
-		rootCAData[0]["ca.pem"] = rootCA.Cert.CertPEM
-		rootCAData[0]["ca-private.pem"] = rootCA.Cert.PrivateKeyPEM
+		rootCAData := make(map[string][]byte, 1)
+		rootCAData = make(map[string][]byte, 2)
+		rootCAData["ca.pem"] = rootCA.Cert.CertPEM
+		rootCAData["ca-private.pem"] = rootCA.Cert.PrivateKeyPEM
 		return testKeyMgr.LoadReferenceData(rootCAData)
 	}
 	key := &v1alpha1.KeyConfig{
 		Name: "myname",
-		Type: v1alpha1.KeyConfigTypeCA,
+		Type: v1alpha1.KeyConfigTypeKeyPair,
 		Spec: &v1alpha1.KeySpec{
-			Algorithm: "SHA256WithRSA",
+			Algorithm: v1alpha1.AlgorithmTypeSHA256WithRSA,
+			DistinguishedName: &v1alpha1.DistinguishedName{
+				CommonName: "bar",
+			},
 		},
 	}
 	testKeyMgr, err := NewCertKeyPair(key)
@@ -124,93 +127,5 @@ func TestKeyPair(t *testing.T) {
 	}
 	if !bytes.Equal(testSecret.Data[privK8Key], testGenKeyMgr.Cert.PrivateKeyPEM) {
 		t.Error("expected seceret data and ca private pem to match")
-	}
-}
-
-func TestGenerateRootCA(t *testing.T) {
-	rootCA, err := GenerateRootCA("ForgeRock")
-	if err != nil {
-		t.Fatalf("Expected no error, got: %+v", err)
-	}
-	if !regexp.MustCompile(`-----BEGIN CERTIFICATE-----`).Match(rootCA.CertPEM) {
-		t.Error("Expected '-----BEGIN CERTIFICATE-----' match, found none")
-	}
-	if !regexp.MustCompile(`BEGIN EC PRIVATE KEY`).Match(rootCA.PrivateKeyPEM) {
-		t.Error("Expected BEGIN EC PRIVATE KEY match, found none")
-	}
-}
-
-func TestGenerateSignedCert(t *testing.T) {
-	rootCA, err := GenerateRootCA("ForgeRock")
-	if err != nil {
-		t.Fatalf("Expected no error, got: %+v", err)
-	}
-
-	// ECDSAWithSHA256
-	cert, err := GenerateSignedCert(rootCA, v1alpha1.ECDSAWithSHA256, "my-common-name", []string{"asdf", "fdsa"})
-	if err != nil {
-		t.Errorf("Expected no error, got: %+v", err)
-	}
-	if !regexp.MustCompile(`-----BEGIN CERTIFICATE-----`).Match(cert.CertPEM) {
-		t.Error("Expected '-----BEGIN CERTIFICATE-----' match, found none")
-	}
-	if !regexp.MustCompile(`BEGIN EC PRIVATE KEY`).Match(cert.PrivateKeyPEM) {
-		t.Error("Expected BEGIN EC PRIVATE KEY match, found none")
-	}
-	// check root and sans
-	roots := x509.NewCertPool()
-	roots.AddCert(rootCA.Cert)
-	block, _ := pem.Decode(cert.CertPEM)
-	if block == nil {
-		t.Fatal("Unable to decode cert")
-	}
-	parsedCert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		t.Fatalf("Expected no error, got: %+v", err)
-	}
-	opts := x509.VerifyOptions{
-		DNSName: "asdf",
-		Roots:   roots,
-	}
-	if _, err := parsedCert.Verify(opts); err != nil {
-		t.Errorf("Expected no error, got: %+v", err)
-	}
-	// check common name
-	if parsedCert.Subject.CommonName != "my-common-name" {
-		t.Errorf("Expected commonName 'my-common-name', got: %s", parsedCert.Subject.CommonName)
-	}
-
-	// SHA256WithRSA
-	cert, err = GenerateSignedCert(rootCA, v1alpha1.SHA256WithRSA, "my-common-name", []string{"asdf", "fdsa"})
-	if err != nil {
-		t.Errorf("Expected no error, got: %+v", err)
-	}
-	if !regexp.MustCompile(`-----BEGIN CERTIFICATE-----`).Match(cert.CertPEM) {
-		t.Error("Expected '-----BEGIN CERTIFICATE-----' match, found none")
-	}
-	if !regexp.MustCompile(`BEGIN RSA PRIVATE KEY`).Match(cert.PrivateKeyPEM) {
-		t.Error("Expected BEGIN RSA PRIVATE KEY match, found none")
-	}
-	// check root and sans
-	roots = x509.NewCertPool()
-	roots.AddCert(rootCA.Cert)
-	block, _ = pem.Decode(cert.CertPEM)
-	if block == nil {
-		t.Fatal("Unable to decode cert")
-	}
-	parsedCert, err = x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		t.Fatalf("Expected no error, got: %+v", err)
-	}
-	opts = x509.VerifyOptions{
-		DNSName: "asdf",
-		Roots:   roots,
-	}
-	if _, err := parsedCert.Verify(opts); err != nil {
-		t.Errorf("Expected no error, got: %+v", err)
-	}
-	// check common name
-	if parsedCert.Subject.CommonName != "my-common-name" {
-		t.Errorf("Expected commonName 'my-common-name', got: %s", parsedCert.Subject.CommonName)
 	}
 }

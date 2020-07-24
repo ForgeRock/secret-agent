@@ -72,46 +72,15 @@ type SecretAgentConfigurationList struct {
 
 // DistinguishedName certificate subject data
 type DistinguishedName struct {
-	Country            []string `json:"country,omitempty" yaml:"country,omitempty"`
-	Organization       []string `json:"organization,omitempty" yaml:"organization,omitempty"`
-	OrganizationalUnit []string `json:"organizationUnit,omitempty" yaml:"organizationUnit,omitempty"`
-	Locality           []string `json:"locality,omitempty" yaml:"locality,omitempty"`
-	Province           []string `json:"province,omitempty" yaml:"province,omitempty"`
-	StreetAddress      []string `json:"streetAddress,omitempty" yaml:"streetAddress,omitempty"`
-	PostalCode         []string `json:"postalCode,omitempty" yaml:"postalCode,omitempty"`
-	SerialNumber       string   `json:"serialNumber,omitempty" yaml:"serialNumber,omitempty"`
-	CommonName         string   `json:"commonName,omitempty" yaml:"commonName,omitempty,flow"`
-}
-
-func (dn *DistinguishedName) isEmpty() bool {
-	if len(dn.Country) != 0 {
-		return true
-	}
-	if len(dn.Organization) != 0 {
-		return true
-	}
-	if len(dn.OrganizationalUnit) != 0 {
-		return true
-	}
-	if len(dn.Locality) != 0 {
-		return true
-	}
-	if len(dn.Province) != 0 {
-		return true
-	}
-	if len(dn.StreetAddress) != 0 {
-		return true
-	}
-	if len(dn.PostalCode) != 0 {
-		return true
-	}
-	if dn.SerialNumber == "" {
-		return true
-	}
-	if dn.CommonName == "" {
-		return true
-	}
-	return false
+	Country            []string `json:"country,omitempty"`
+	Organization       []string `json:"organization,omitempty"`
+	OrganizationalUnit []string `json:"organizationUnit,omitempty"`
+	Locality           []string `json:"locality,omitempty"`
+	Province           []string `json:"province,omitempty"`
+	StreetAddress      []string `json:"streetAddress,omitempty"`
+	PostalCode         []string `json:"postalCode,omitempty"`
+	SerialNumber       string   `json:"serialNumber,omitempty"`
+	CommonName         string   `json:"commonName,omitempty"`
 }
 
 func init() {
@@ -246,6 +215,7 @@ type KeySpec struct {
 	KeyPassPath           string             `json:"keyPassPath,omitempty"`
 	Sans                  []string           `json:"sans,omitempty"`
 	TruststoreImportPaths []string           `json:"truststoreImportPaths,omitempty"`
+	Duration              *metav1.Duration   `json:"Duration,omitempty"`
 
 	// +kubebuilder:validation:Minimun=16
 	Length *int `json:"length,omitempty"`
@@ -263,6 +233,77 @@ type KeytoolAliasConfig struct {
 	Args            []string   `json:"args,omitempty"`
 	SourcePath      string     `json:"sourcePath,omitempty"`
 	DestinationPath string     `json:"destinationPath,omitempty"`
+}
+
+func (ks *KeySpec) isEmpty() bool {
+	if len(ks.Value) != 0 {
+		return false
+	}
+	if len(ks.Algorithm) != 0 {
+		return false
+	}
+	if ks.DistinguishedName != nil && !ks.DistinguishedName.isEmpty() {
+		return false
+	}
+	if len(ks.SignedWithPath) != 0 {
+		return false
+	}
+	if len(ks.StoreType) != 0 {
+		return false
+	}
+	if len(ks.StorePassPath) != 0 {
+		return false
+	}
+	if len(ks.KeyPassPath) != 0 {
+		return false
+	}
+	if len(ks.Sans) != 0 {
+		return false
+	}
+	if ks.Duration != nil {
+		return false
+	}
+	if len(ks.TruststoreImportPaths) != 0 {
+		return false
+	}
+	if ks.Length != nil {
+		return false
+	}
+	if len(ks.KeytoolAliases) != 0 {
+		return false
+	}
+	return true
+}
+
+func (dn *DistinguishedName) isEmpty() bool {
+	if len(dn.Country) != 0 {
+		return false
+	}
+	if len(dn.Organization) != 0 {
+		return false
+	}
+	if len(dn.OrganizationalUnit) != 0 {
+		return false
+	}
+	if len(dn.Locality) != 0 {
+		return false
+	}
+	if len(dn.Province) != 0 {
+		return false
+	}
+	if len(dn.StreetAddress) != 0 {
+		return false
+	}
+	if len(dn.PostalCode) != 0 {
+		return false
+	}
+	if dn.SerialNumber == "" {
+		return false
+	}
+	if dn.CommonName == "" {
+		return false
+	}
+	return true
 }
 
 // TODO

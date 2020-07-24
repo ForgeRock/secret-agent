@@ -4,12 +4,27 @@ import (
 	"bytes"
 	"regexp"
 	"testing"
+	"time"
 
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestRootCA(t *testing.T) {
-	rootCA, err := NewRootCA()
+	kc := &v1alpha1.KeyConfig{
+		Name: "testConfig",
+		Type: "ca",
+		Spec: &v1alpha1.KeySpec{
+			Duration: nil,
+			DistinguishedName: &v1alpha1.DistinguishedName{
+				CommonName: "foo",
+			},
+		},
+	}
+	kc.Spec.Duration = new(metav1.Duration)
+	kc.Spec.Duration.Duration, _ = time.ParseDuration("90d")
+	rootCA, err := NewRootCA(kc)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}

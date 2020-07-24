@@ -11,7 +11,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"net"
 	"strings"
@@ -196,17 +195,14 @@ func (kp *CertKeyPair) ToKubernetes(secObject *corev1.Secret) {
 }
 
 // LoadReferenceData loads references from data
-func (kp *CertKeyPair) LoadReferenceData(data []map[string][]byte) error {
-	var err error
+func (kp *CertKeyPair) LoadReferenceData(data map[string][]byte) error {
 	if len(data) == 0 {
 		return errors.New("secret reference value not found")
 	}
-	rootCAData := data[0]
-	kp.RootCA, err = NewRootCA()
-	if err != nil {
-		return err
+	kp.RootCA = &RootCA{
+		Cert: &Certificate{},
 	}
-	kp.RootCA.LoadFromData(rootCAData)
+	kp.RootCA.LoadFromData(data)
 	if kp.RootCA.IsEmpty() {
 		return errors.New("signing CA couldn't be loaded")
 	}
@@ -252,16 +248,6 @@ func dnToPkixName(dn *v1alpha1.DistinguishedName) *pkix.Name {
 ////////////////////////////
 // TODO remove  below
 ///////////////////////////
-
-// GenerateTrustStoreBundle foobar
-func GenerateTrustStoreBundle(rootCA []byte) ([]byte, error) {
-	rawCertBundle, err := ioutil.ReadFile("/etc/ssl/certs/ca-certificates.crt")
-	if err != nil {
-		return []byte{}, err
-	}
-	return append(rawCertBundle, rootCA...), nil
-
-}
 
 // GenerateSignedCert issues a certificate signed by the provided root CA
 func GenerateSignedCert(rootCA *Certificate, algorithm v1alpha1.Algorithm, commonName string, sans []string) (*Certificate, error) {
@@ -345,46 +331,6 @@ func GenerateSignedCert(rootCA *Certificate, algorithm v1alpha1.Algorithm, commo
 		return cert, errors.WithStack(err)
 	}
 	return cert, nil
-}
-
-// GenerateSelfSignedCertPEM generates a self signed certificate with an expire date based on a unix timestamp
-func GenerateSelfSignedCertPEM(commonName string, expire int) ([]byte, []byte, []byte, error) {
-	var err error
-	cert := &Certificate{}
-	cert.PrivateKeyRSA, err = rsa.GenerateKey(rand.Reader, 3072)
-	if err != nil {
-		return []byte{}, []byte{}, []byte{}, errors.WithStack(errors.New("Unable to generate RSA key"))
-	}
-	marshaledPrivateKey := x509.MarshalPKCS1PrivateKey(cert.PrivateKeyRSA)
-	cert.PrivateKeyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: marshaledPrivateKey})
-	// prepare cert template
-	notBefore := time.Unix(0, 0)
-	notAfter := time.Unix(int64(expire), 0)
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
-	if err != nil {
-		return []byte{}, []byte{}, []byte{}, errors.WithStack(errors.New("Unable to create serial number for cert"))
-	}
-	certTemplate := &x509.Certificate{
-		SerialNumber:          serialNumber,
-		NotBefore:             notBefore,
-		NotAfter:              notAfter,
-		BasicConstraintsValid: true,
-		IsCA:                  false,
-		SignatureAlgorithm:    x509.SHA256WithRSA,
-	}
-	if len(commonName) != 0 {
-		certTemplate.Subject = pkix.Name{
-			CommonName: commonName,
-		}
-	}
-	certBytes, err := x509.CreateCertificate(rand.Reader, certTemplate, certTemplate, &cert.PrivateKeyRSA.PublicKey, cert.PrivateKeyRSA)
-	if err != nil {
-		return []byte{}, []byte{}, []byte{}, errors.WithStack(err)
-	}
-	cert.CertPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
-	certAndKeyPEM := append(cert.CertPEM, cert.PrivateKeyPEM...)
-	return certAndKeyPEM, cert.CertPEM, cert.PrivateKeyPEM, nil
 }
 
 // GenerateRootCA  gen
