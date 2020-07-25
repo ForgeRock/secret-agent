@@ -6,7 +6,6 @@ import (
 
 	// Allow kubeconfig auth providers such as "GCP"
 
-	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -65,48 +64,4 @@ func ApplySecrets(rclient client.Client, secret *corev1.Secret) (string, error) 
 	}
 
 	return operation, nil
-}
-
-// GenerateSecretAPIObjects generates a list of secrets references that can be used to target the Kubernetes API
-func GenerateSecretAPIObjects(secretConfig *v1alpha1.SecretConfig) *corev1.Secret {
-	// prepare Kubernetes Secret
-	k8sSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: secretConfig.Name, Namespace: secretConfig.Namespace},
-		Data:       map[string][]byte{},
-	}
-	for _, keyConfig := range secretConfig.Keys {
-		k8sSecret.Data[keyConfig.Name] = keyConfig.Node.Value
-	}
-	return k8sSecret
-
-}
-
-////////
-// TO REMOVE
-///////
-// LoadExisting loads any existing secrets in the Kubernetes API into the memory store
-func LoadExisting(rclient client.Client, secretsConfig []*v1alpha1.SecretConfig) error {
-	for _, secretConfig := range secretsConfig {
-
-		k8sSecret := &corev1.Secret{}
-		if err := rclient.Get(context.TODO(), types.NamespacedName{Name: secretConfig.Name, Namespace: secretConfig.Namespace}, k8sSecret); err != nil {
-			if k8sErrors.IsNotFound(err) {
-				continue
-			}
-			return errors.WithStack(err)
-		}
-
-		for _, keyConfig := range secretConfig.Keys {
-			// only load from Kubernetes if not in memory store (node.Value),
-			//   since SecretsManager is source of truth if in use
-			if len(keyConfig.Node.Value) != 0 {
-				continue
-			}
-			if value, exists := k8sSecret.Data[keyConfig.Name]; exists {
-				keyConfig.Node.Value = value
-			}
-		}
-	}
-
-	return nil
 }

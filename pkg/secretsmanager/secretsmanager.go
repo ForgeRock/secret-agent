@@ -44,6 +44,7 @@ func EnsureSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName st
 	return nil
 }
 
+// LoadSecret Loads secrets from the configured secret manager
 func LoadSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName string) ([]byte, error) {
 	secretName = idSafe(secretName)
 	var value []byte
@@ -68,7 +69,7 @@ func LoadSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName stri
 
 // GCP FUNCS
 
-// loadGCPSecretByNameloads a single secret out of Google SecretManager, if it exists
+// loadGCPSecretByID loads a single secret out of Google SecretManager, if it exists
 func loadGCPSecretByID(ctx context.Context, projectID string, secretID string) ([]byte, error) {
 	client, err := secretmanager.NewClient(ctx)
 	if err != nil {
@@ -161,7 +162,7 @@ func newAzureClient() (*keyvault.BaseClient, error) {
 }
 
 ///////////////
-// TO REMOVE
+// TODO REMOVE
 //////////////
 
 // loadAzureSecrets loads any existing secrets in Azure Key Valut into the memory store

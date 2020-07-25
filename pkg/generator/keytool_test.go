@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/pkg/errors"
@@ -19,7 +20,22 @@ func TestImportCertFromPEM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
-	rootCA, err := GenerateRootCA("ForgeRock")
+	GenerateRootCA := func() (rootCA *Certificate, err error) {
+		rCA := RootCA{
+			ValidDuration: 100 * 365 * 24 * time.Hour, //100 yrs
+			Cert:          &Certificate{},
+			DistinguishedName: &v1alpha1.DistinguishedName{
+				CommonName: "secret-agent",
+			},
+		}
+		err = rCA.Generate()
+		if err != nil {
+			return
+		}
+		rootCA = rCA.Cert
+		return
+	}
+	rootCA, err := GenerateRootCA()
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
@@ -64,13 +80,38 @@ func TestImportKeyPairFromPEMs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
-	rootCA, err := GenerateRootCA("ForgeRock")
-	if err != nil {
-		t.Fatalf("Expected no error, got: %+v", err)
+
+	GenerateSignedCert := func(algorithm v1alpha1.AlgorithmType) (leafCert *Certificate, err error) {
+		rCA := RootCA{
+			ValidDuration: 100 * 365 * 24 * time.Hour, //100 yrs
+			Cert:          &Certificate{},
+			DistinguishedName: &v1alpha1.DistinguishedName{
+				CommonName: "secret-agent",
+			},
+		}
+		certKeyPair := CertKeyPair{
+			RootCA: &rCA,
+			Cert:   &Certificate{},
+			V1Spec: &v1alpha1.KeySpec{
+				Sans:              []string{"asdf", "fdsa"},
+				Algorithm:         algorithm,
+				DistinguishedName: &v1alpha1.DistinguishedName{},
+			},
+		}
+		err = rCA.Generate()
+		if err != nil {
+			return
+		}
+		err = certKeyPair.Generate()
+		if err != nil {
+			return
+		}
+		leafCert = certKeyPair.Cert
+		return
 	}
 
 	// ECDSAWithSHA256
-	cert, err := GenerateSignedCert(rootCA, v1alpha1.ECDSAWithSHA256, "my-common-name", []string{"asdf", "fdsa"})
+	cert, err := GenerateSignedCert(v1alpha1.AlgorithmTypeECDSAWithSHA256)
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
 	}
@@ -107,7 +148,7 @@ func TestImportKeyPairFromPEMs(t *testing.T) {
 	}
 
 	// SHA256WithRSA
-	cert, err = GenerateSignedCert(rootCA, v1alpha1.SHA256WithRSA, "my-common-name", []string{"asdf", "fdsa"})
+	cert, err = GenerateSignedCert(v1alpha1.AlgorithmTypeSHA256WithRSA)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}

@@ -57,7 +57,6 @@ var _ = Describe("SecretAgentConfiguration", func() {
 				Name:      "foo",
 				Namespace: "default",
 			}
-			//TODO: Create a bigger test CR Sample object
 			created = &SecretAgentConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
@@ -70,11 +69,106 @@ var _ = Describe("SecretAgentConfiguration", func() {
 					},
 					Secrets: []*SecretConfig{
 						{
-							Name: "testkey1",
+							Name: "testkeyLiteral",
 							Keys: []*KeyConfig{
 								{
 									Name: "username",
 									Type: "literal",
+									Spec: &KeySpec{
+										Value: "literal",
+									},
+								},
+							},
+						},
+						{
+							Name: "testkeyPassword",
+							Keys: []*KeyConfig{
+								{
+									Name: "pwd",
+									Type: "password",
+									Spec: &KeySpec{
+										Length: new(int),
+									},
+								},
+							},
+						},
+						{
+							Name: "testkeySSH",
+							Keys: []*KeyConfig{
+								{
+									Name: "ssh",
+									Type: "ssh",
+									Spec: &KeySpec{},
+								},
+							},
+						},
+						{
+							Name: "testkeyCA",
+							Keys: []*KeyConfig{
+								{
+									Name: "ca",
+									Type: "ca",
+									Spec: &KeySpec{
+										DistinguishedName: &DistinguishedName{
+											CommonName: "foobar",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "testkeyKeyPair",
+							Keys: []*KeyConfig{
+								{
+									Name: "kp",
+									Type: "keyPair",
+									Spec: &KeySpec{
+										Algorithm: "ECDSAWithSHA256",
+										DistinguishedName: &DistinguishedName{
+											CommonName: "foobar",
+										},
+										Sans:           []string{"foo", "bar"},
+										SignedWithPath: "path/1",
+									},
+								},
+							},
+						},
+						{
+							Name: "testkeyTruststore",
+							Keys: []*KeyConfig{
+								{
+									Name: "pwd",
+									Type: "password",
+									Spec: &KeySpec{
+										TruststoreImportPaths: []string{"path/1", "path/2"},
+									},
+								},
+							},
+						},
+						{
+							Name: "testkeyKeytool",
+							Keys: []*KeyConfig{
+								{
+									Name: "kt",
+									Type: "keytool",
+									Spec: &KeySpec{
+										StoreType:     "jceks",
+										StorePassPath: "path/1",
+										KeyPassPath:   "path/2",
+										KeytoolAliases: []*KeytoolAliasConfig{
+											{
+												Name:            "name1",
+												Cmd:             "genkeypair",
+												Args:            []string{"arg1", "arg2"},
+												DestinationPath: "path/3",
+											},
+											{
+												Name:       "name2",
+												Cmd:        "importcert",
+												SourcePath: "path/4",
+											},
+										},
+									},
 								},
 							},
 						},

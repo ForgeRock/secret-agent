@@ -192,16 +192,6 @@ type KeyConfig struct {
 	// +kubebuilder:validation:Required
 	Type KeyConfigType `json:"type"`
 	Spec *KeySpec      `json:"spec,omitempty"`
-
-	// TODO Delete all items below this line
-	Value          string         `json:"value,omitempty"`
-	Length         int            `json:"length,omitempty"`
-	CAPath         []string       `json:"caPath,omitempty"`
-	PrivateKeyPath []string       `json:"privateKeyPath,omitempty"`
-	StorePassPath  []string       `json:"storePassPath,omitempty"`
-	KeyPassPath    []string       `json:"keyPassPath,omitempty"`
-	AliasConfigs   []*AliasConfig `json:"keystoreAliases,omitempty"`
-	Node           *Node          `json:"-"`
 }
 
 // KeySpec is the configuration for each key
@@ -341,39 +331,10 @@ type Node struct {
 	Value        []byte        `yaml:"value,omitempty"`
 }
 
-// Key Config Type Strings
-const (
-	TypeLiteral      KeyConfigType = "literal"
-	TypePassword     KeyConfigType = "password"
-	TypePrivateKey   KeyConfigType = "privateKey"
-	TypePublicKeySSH KeyConfigType = "publicKeySSH"
-	TypeCA           KeyConfigType = "ca"
-	TypeCAPrivateKey KeyConfigType = "caPrivateKey"
-	TypeCACopy       KeyConfigType = "caCopy"
-	TypePKCS12       KeyConfigType = "pkcs12"
-	TypeJCEKS        KeyConfigType = "jceks"
-	TypeJKS          KeyConfigType = "jks"
-	TypeTrustStore   KeyConfigType = "truststore"
-)
-
 // AliasConfigType Specifies which alias config type to use
 // +kubebuilder:validation:Enum=caCopy;keyPair;hmacKey;aesKey
 type AliasConfigType string
 
-// Alias Config Type Strings
-const (
-	TypeCACopyAlias AliasConfigType = "caCopy"
-	TypeKeyPair     AliasConfigType = "keyPair"
-	TypeHMACKey     AliasConfigType = "hmacKey"
-	TypeAESKey      AliasConfigType = "aesKey"
-)
-
 // Algorithm Specifies which keystore algorithm to use
 // +kubebuilder:validation:Enum=ECDSAWithSHA256;SHA256WithRSA
 type Algorithm string
-
-// Algorithm strings
-const (
-	ECDSAWithSHA256 Algorithm = "ECDSAWithSHA256"
-	SHA256WithRSA   Algorithm = "SHA256WithRSA"
-)

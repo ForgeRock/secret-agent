@@ -89,7 +89,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 
 			keyInterface, err := routeKeyInterface(secretReq.Name, key)
 			if err != nil {
-				log.Error(err, "error routing secret key type",
+				log.V(0).Info("error routing secret key type",
 					"secret_name", secretReq.Name,
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
@@ -190,6 +190,8 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					"secret_name", secretReq.Name)
 			}
 			updatedK8sSecrets = true
+			// Give enough time for the api to update the secret to avoid race conditions
+			time.Sleep(100 * time.Millisecond)
 		}
 		log.V(1).Info("completed reconcile for secret",
 			"secret_namespace", instance.Namespace,
@@ -233,7 +235,7 @@ func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.C
 	}
 	// Updating the instance will trigger a reconcile loop. This only happens at the end of the reconcile loop
 	// Give enough time for the api to update
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	return nil
 }
 

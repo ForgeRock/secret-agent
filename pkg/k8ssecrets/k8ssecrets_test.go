@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,16 +13,7 @@ import (
 	fake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestLoadExisting(t *testing.T) {
-	secretsConfig := getSecretsConfig()
-	node := &v1alpha1.Node{Path: []string{"asdfSecret", "username"}}
-	key := &v1alpha1.KeyConfig{
-		Name:  "username",
-		Type:  "literal",
-		Value: "admin",
-		Node:  node,
-	}
-	secretsConfig[0].Keys = append(secretsConfig[0].Keys, key)
+func TestLoadSecret(t *testing.T) {
 
 	k8sSecret1 := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -43,54 +33,23 @@ func TestLoadExisting(t *testing.T) {
 			"otherkey": []byte(`admin`),
 		},
 	}
-
 	scheme := runtime.NewScheme()
 	clientgoscheme.AddToScheme(scheme)
-	client := fake.NewFakeClientWithScheme(scheme, k8sSecret1, k8sSecret2)
-	// loads when unset in Node
-	err := LoadExisting(client, secretsConfig)
+	client := fake.NewFakeClientWithScheme(scheme, k8sSecret2)
+	// Secret is not present in the client, expect an error
+	found, err := LoadSecret(client, k8sSecret1.ObjectMeta.Name, k8sSecret1.ObjectMeta.Namespace)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
-	if string(node.Value) != "admin" {
-		t.Errorf("Expected 'admin', got: '%+v'", string(node.Value))
+	if len(found.Data) != 0 {
+		t.Fatalf("Expected an empty secret: %+v", found)
 	}
-	// does not load when set in Node
-	node.Value = []byte("existingAdmin")
-	err = LoadExisting(client, secretsConfig)
+	client = fake.NewFakeClientWithScheme(scheme, k8sSecret1, k8sSecret2)
+	// Secret should load this time
+	_, err = LoadSecret(client, k8sSecret1.ObjectMeta.Name, k8sSecret1.ObjectMeta.Namespace)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
-	if string(node.Value) != "existingAdmin" {
-		t.Errorf("Expected 'existingAdmin', got: '%+v'", string(node.Value))
-	}
-}
-
-func TestGenerateSecretAPIObjects(t *testing.T) {
-	secretsConfig := getSecretsConfig()
-	node := &v1alpha1.Node{
-		Path:  []string{"asdfSecret", "username"},
-		Value: []byte("admin"),
-	}
-	key := &v1alpha1.KeyConfig{
-		Name: "username",
-		Node: node,
-	}
-	secretsConfig[0].Keys = append(secretsConfig[0].Keys, key)
-
-	for _, secret := range secretsConfig {
-		k8sSecret := GenerateSecretAPIObjects(secret)
-		if k8sSecret.ObjectMeta.Name != "asdfSecret" {
-			t.Errorf("Expected asdfSecret, got: %s", k8sSecret.ObjectMeta.Name)
-		}
-		if string(k8sSecret.Data["username"]) != "admin" {
-			t.Errorf("Expected 'admin', got: '%s'", string(k8sSecret.Data["username"]))
-		}
-		if len(k8sSecret.Data) != 1 {
-			t.Errorf("Expected 1 key, got: %d", len(k8sSecret.Data))
-		}
-	}
-
 }
 
 func TestApplySecrets(t *testing.T) {
@@ -143,15 +102,5 @@ func TestApplySecrets(t *testing.T) {
 		if len(k8sSecret.Data) != len(writtenSecret.Data) {
 			t.Errorf("Expected 1 key, got: %d", len(k8sSecret.Data))
 		}
-	}
-}
-
-func getSecretsConfig() []*v1alpha1.SecretConfig {
-	return []*v1alpha1.SecretConfig{
-		{
-			Name:      "asdfSecret",
-			Namespace: "default",
-			Keys:      []*v1alpha1.KeyConfig{},
-		},
 	}
 }
