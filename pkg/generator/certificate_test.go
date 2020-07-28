@@ -21,7 +21,6 @@ func TestKeyPair(t *testing.T) {
 		}
 		rootCA.Generate()
 		rootCAData := make(map[string][]byte, 1)
-		rootCAData = make(map[string][]byte, 2)
 		rootCAData["ca.pem"] = rootCA.Cert.CertPEM
 		rootCAData["ca-private.pem"] = rootCA.Cert.PrivateKeyPEM
 		return testKeyMgr.LoadReferenceData(rootCAData)
@@ -108,7 +107,13 @@ func TestKeyPair(t *testing.T) {
 	if isEmpty := testKeyMgr.IsEmpty(); isEmpty {
 		t.Error("Expected keypair to not be empty")
 	}
-	testGenKeyMgr, _ := NewCertKeyPair(key)
+	testGenKeyMgr, err := NewCertKeyPair(key)
+	if err != nil {
+		t.Fatalf("Expected no error got: %v", err)
+	}
+	if testGenKeyMgr == nil {
+		t.Errorf("tf")
+	}
 	loadKeyRefs(testGenKeyMgr)
 	if err := testGenKeyMgr.Generate(); err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)

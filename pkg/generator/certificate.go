@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -215,15 +214,9 @@ func NewCertKeyPair(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
 		Cert: &Certificate{},
 	}
 	keyPair.Name = keyConfig.Name
-	if keyConfig.Spec.SignedWithPath != "" {
-		paths := strings.Split(keyConfig.Spec.SignedWithPath, "/")
-		if len(paths) != 2 {
-			return &CertKeyPair{}, errors.New("SignedWithPath should be exactly a secret name and a data key")
-		}
-		secretRef, dataKey := paths[0], paths[1]
-		keyPair.refName = secretRef
-		keyPair.refDataKey = dataKey
-	}
+	secretRef, dataKey := handleRefPath(keyConfig.Spec.SignedWithPath)
+	keyPair.refName = secretRef
+	keyPair.refDataKey = dataKey
 	keyPair.V1Spec = keyConfig.Spec
 	return keyPair, nil
 }

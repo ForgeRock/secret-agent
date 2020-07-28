@@ -95,7 +95,6 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					"secret_type", string(key.Type))
 				continue secretKeys
 			}
-
 			// load from secret manager
 			useSecMgr := instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone
 			if useSecMgr {
@@ -125,6 +124,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			for _, ref := range refs {
 
 				secRefObject, err := k8ssecrets.LoadSecret(reconciler.Client, ref, instance.Namespace)
+
 				if err != nil {
 					log.Error(err, "error looking up secret ref",
 						"secret_name", secretReq.Name,
@@ -171,7 +171,6 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 						instance.Namespace, secretReq.Name)
 				}
 			}
-
 			log.V(0).Info("applying to kubernetes",
 				"secret_name", secretReq.Name,
 				"data_key", key.Name,
