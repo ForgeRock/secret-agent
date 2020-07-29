@@ -1,45 +1,29 @@
 package generator
 
 import (
-	"regexp"
 	"testing"
+
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 
-func TestGenerateRSAPrivateKey(t *testing.T) {
-	value, err := generateRSAPrivateKey()
+func TestGenerateSSH(t *testing.T) {
+	kc := &v1alpha1.KeyConfig{
+		Name: "testConfig",
+		Type: "ssh",
+		Spec: &v1alpha1.KeySpec{},
+	}
+	ssh, err := NewSSH(kc)
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
 	}
-	// check privateKey
-	if !regexp.MustCompile(`BEGIN RSA PRIVATE KEY`).Match(value) {
-		t.Error("Expected PRIVATE KEY match, found none")
-	}
-}
-
-func TestGenerateRSAPublicKey(t *testing.T) {
-	privateKey, err := generateRSAPrivateKey()
-	if err != nil {
-		t.Fatalf("Expected no error, got: %+v", err)
-	}
-	value, err := getRSAPublicKeyFromPrivateKey(privateKey)
+	err = ssh.Generate()
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
 	}
-	if !regexp.MustCompile(`BEGIN RSA PUBLIC KEY`).Match(value) {
-		t.Error("Expected BEGIN RSA PUBLIC KEY match, found none")
+	if len(ssh.PrivateKeyPEM) == 0 {
+		t.Errorf("Length of PrivateKeyPEM should be different than zero")
 	}
-}
-
-func TestGetRSAPublicKeySSHFromPrivateKey(t *testing.T) {
-	privateKey, err := generateRSAPrivateKey()
-	if err != nil {
-		t.Fatalf("Expected no error, got: %+v", err)
-	}
-	value, err := getRSAPublicKeySSHFromPrivateKey(privateKey)
-	if err != nil {
-		t.Errorf("Expected no error, got: %+v", err)
-	}
-	if !regexp.MustCompile(`ssh-rsa AAAA`).Match(value) {
-		t.Error("Expected ssh-rsa AAAA match, found none")
+	if len(ssh.PublicKeyPEM) == 0 {
+		t.Errorf("Length of PublicKeyPEM should be different than zero")
 	}
 }

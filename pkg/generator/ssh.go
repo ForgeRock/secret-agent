@@ -2,71 +2,142 @@ package generator
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
 	"github.com/pkg/errors"
-	"golang.org/x/crypto/ssh"
+	sshlib "golang.org/x/crypto/ssh"
+	corev1 "k8s.io/api/core/v1"
 )
 
-func generateRSAPrivateKey() ([]byte, error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+// SSH randomly generated of specified length
+type SSH struct {
+	Name          string
+	PrivateKeyRSA *rsa.PrivateKey
+	PrivateKeyPEM []byte
+	PublicKeyPEM  []byte
+}
+
+// References return names of secrets that should be looked up
+func (ssh *SSH) References() ([]string, []string) {
+	return []string{}, []string{}
+}
+
+// LoadReferenceData loads references from data
+func (ssh *SSH) LoadReferenceData(data map[string][]byte) error {
+	return nil
+}
+
+// LoadSecretFromManager populates SSH data from secret manager
+func (ssh *SSH) LoadSecretFromManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+	var err error
+	sshPrivateFmt := fmt.Sprintf("%s_%s_%s", namespace, secretName, ssh.Name)
+	sshPublicFmt := fmt.Sprintf("%s_%s_%s.pub", namespace, secretName, ssh.Name)
+
+	ssh.PrivateKeyPEM, err = secretsmanager.LoadSecret(context, config, sshPrivateFmt)
 	if err != nil {
-		return []byte{}, errors.WithStack(err)
+		return err
+	}
+	ssh.PublicKeyPEM, err = secretsmanager.LoadSecret(context, config, sshPublicFmt)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// EnsureSecretManager populates secrets manager from SSH data
+func (ssh *SSH) EnsureSecretManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+	sshPrivateFmt := fmt.Sprintf("%s_%s_%s", namespace, secretName, ssh.Name)
+	sshPublicFmt := fmt.Sprintf("%s_%s_%s.pub", namespace, secretName, ssh.Name)
+
+	if err := secretsmanager.EnsureSecret(context, config, sshPrivateFmt, ssh.PrivateKeyPEM); err != nil {
+		return err
+	}
+
+	if err := secretsmanager.EnsureSecret(context, config, sshPublicFmt, ssh.PublicKeyPEM); err != nil {
+		return err
+	}
+	return nil
+}
+
+// InSecret return true if the key is one found in the secret
+func (ssh *SSH) InSecret(secObject *corev1.Secret) bool {
+	if secObject.Data == nil || secObject.Data[ssh.Name] == nil || ssh.IsEmpty() {
+		return false
+	}
+	if bytes.Compare(ssh.PrivateKeyPEM, secObject.Data[ssh.Name]) == 0 &&
+		bytes.Compare(ssh.PublicKeyPEM, secObject.Data[fmt.Sprintf("%s.pub", ssh.Name)]) == 0 {
+		return true
+	}
+	return false
+
+}
+
+// Generate generates data
+func (ssh *SSH) Generate() error {
+	var err error
+
+	ssh.PrivateKeyRSA, err = rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	publicKey, err := sshlib.NewPublicKey(&ssh.PrivateKeyRSA.PublicKey)
+	if err != nil {
+		return errors.WithStack(err)
 	}
 
 	buffer := &bytes.Buffer{}
 	block := &pem.Block{
 		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+		Bytes: x509.MarshalPKCS1PrivateKey(ssh.PrivateKeyRSA),
 	}
-	err = pem.Encode(buffer, block)
-	if err != nil {
-		return []byte{}, errors.WithStack(err)
+	if err := pem.Encode(buffer, block); err != nil {
+		return errors.WithStack(err)
 	}
 
-	return buffer.Bytes(), nil
+	ssh.PrivateKeyPEM = buffer.Bytes()
+	ssh.PublicKeyPEM = sshlib.MarshalAuthorizedKey(publicKey)
+
+	return nil
+
 }
 
-func getRSAPublicKeyFromPrivateKey(privateKeyPEM []byte) ([]byte, error) {
-	block, _ := pem.Decode(privateKeyPEM)
-	if block == nil || block.Type != "RSA PRIVATE KEY" {
-		return []byte{}, errors.WithStack(errors.New("failed to decode PEM block containing private key"))
+// IsEmpty boolean determines if the struct is empty
+func (ssh *SSH) IsEmpty() bool {
+	if len(ssh.PrivateKeyPEM) == 0 || len(ssh.PublicKeyPEM) == 0 {
+		return true
 	}
-	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		return []byte{}, errors.WithStack(err)
-	}
+	return false
 
-	block = &pem.Block{
-		Type:  "RSA PUBLIC KEY",
-		Bytes: x509.MarshalPKCS1PublicKey(&privateKey.PublicKey),
-	}
-	buffer := &bytes.Buffer{}
-	err = pem.Encode(buffer, block)
-	if err != nil {
-		return []byte{}, errors.WithStack(err)
-	}
-
-	return buffer.Bytes(), nil
 }
 
-func getRSAPublicKeySSHFromPrivateKey(privateKeyPEM []byte) ([]byte, error) {
-	block, _ := pem.Decode(privateKeyPEM)
-	if block == nil || block.Type != "RSA PRIVATE KEY" {
-		return []byte{}, errors.WithStack(errors.New("failed to decode PEM block containing private key"))
-	}
-	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		return []byte{}, errors.WithStack(err)
-	}
+// LoadFromData loads data from kubernetes secret
+func (ssh *SSH) LoadFromData(secData map[string][]byte) {
+	ssh.PrivateKeyPEM = secData[ssh.Name]
+	ssh.PublicKeyPEM = secData[fmt.Sprintf("%s.pub", ssh.Name)]
+	return
+}
 
-	publicKey, err := ssh.NewPublicKey(&privateKey.PublicKey)
-	if err != nil {
-		return []byte{}, errors.WithStack(err)
+// ToKubernetes "marshals" object to kubernetes object
+func (ssh *SSH) ToKubernetes(secret *corev1.Secret) {
+	// data could be nil
+	if secret.Data == nil {
+		secret.Data = make(map[string][]byte)
 	}
+	secret.Data[ssh.Name] = ssh.PrivateKeyPEM
+	secret.Data[fmt.Sprintf("%s.pub", ssh.Name)] = ssh.PublicKeyPEM
+}
 
-	return ssh.MarshalAuthorizedKey(publicKey), nil
+// NewSSH creates new SSH type for reconcilation
+func NewSSH(keyConfig *v1alpha1.KeyConfig) (*SSH, error) {
+	ssh := &SSH{
+		Name: keyConfig.Name,
+	}
+	return ssh, nil
 }

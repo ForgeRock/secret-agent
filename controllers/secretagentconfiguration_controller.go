@@ -248,6 +248,8 @@ func routeKeyInterface(secretName string, key *v1alpha1.KeyConfig) (generator.Ke
 		return generator.NewPassword(key)
 	case v1alpha1.KeyConfigTypeLiteral:
 		return generator.NewLiteral(key)
+	case v1alpha1.KeyConfigTypeSSH:
+		return generator.NewSSH(key)
 		// PR #69
 		// case v1alpha1.KeyConfigTypeKeytool:
 		// return generator.NewKeyTool(key)
