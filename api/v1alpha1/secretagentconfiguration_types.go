@@ -38,11 +38,12 @@ type SecretAgentConfigurationSpec struct {
 type SecretAgentConfigurationStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	TotalManagedObjects int      `json:"totalManagedObjects,omitempty"`
-	ManagedK8sSecrets   []string `json:"managedK8sSecrets,omitempty"`
-	ManagedAWSSecrets   []string `json:"managedAWSSecrets,omitempty"`
-	ManagedGCPSecrets   []string `json:"managedGCPSecrets,omitempty"`
-	ManagedAzureSecrets []string `json:"managedAzureSecrets,omitempty"`
+	State               SecretAgentConfState `json:"state,omitempty"`
+	TotalManagedObjects int                  `json:"totalManagedObjects,omitempty"`
+	ManagedK8sSecrets   []string             `json:"managedK8sSecrets,omitempty"`
+	ManagedAWSSecrets   []string             `json:"managedAWSSecrets,omitempty"`
+	ManagedGCPSecrets   []string             `json:"managedGCPSecrets,omitempty"`
+	ManagedAzureSecrets []string             `json:"managedAzureSecrets,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -69,6 +70,16 @@ type SecretAgentConfigurationList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []SecretAgentConfiguration `json:"items"`
 }
+
+// SecretAgentConfState is used to keep track of the SAC state
+type SecretAgentConfState string
+
+// SecretsManager Strings
+const (
+	SecretAgentConfigurationCompleted  SecretAgentConfState = "Completed"
+	SecretAgentConfigurationInProgress SecretAgentConfState = "InProgress"
+	SecretAgentConfigurationError      SecretAgentConfState = "ErrorFound"
+)
 
 // DistinguishedName certificate subject data
 type DistinguishedName struct {

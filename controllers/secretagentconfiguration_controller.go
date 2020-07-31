@@ -22,9 +22,12 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 
@@ -54,6 +57,8 @@ var (
 // Reconcile reconcile loop for CRD controller
 func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var updatedK8sSecrets bool = false
+	var rescheduleRetry bool = false
+	var errorFound bool = false
 	ctx := context.Background()
 	log := reconciler.Log.WithValues("secretagentconfiguration", req.NamespacedName)
 
@@ -93,6 +98,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					"secret_name", secretReq.Name,
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
+				errorFound = true
 				continue secretKeys
 			}
 			// load from secret manager
@@ -129,11 +135,13 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					log.Error(err, "error looking up secret ref",
 						"secret_name", secretReq.Name,
 						"secret_ref", ref)
+					rescheduleRetry, errorFound = true, true
 				}
 				if (&corev1.Secret{}) == secObject {
 					log.Error(err, "secret ref not found, skipping key",
 						"secret_name", secretReq.Name,
 						"secret_ref", ref)
+					rescheduleRetry, errorFound = true, true
 					break secretKeys
 				}
 				for k, v := range secRefObject.Data {
@@ -145,6 +153,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					"secret_name", secretReq.Name,
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
+				rescheduleRetry, errorFound = true, true
 				break secretKeys
 			}
 
@@ -160,6 +169,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 						"secret_name", secretReq.Name,
 						"data_key", key.Name,
 						"secret_type", string(key.Type))
+					errorFound = true
 					break secretKeys
 				}
 				if useSecMgr {
@@ -187,6 +197,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					"method", op,
 					"secret_namespace", instance.Namespace,
 					"secret_name", secretReq.Name)
+				rescheduleRetry, errorFound = true, true
 			}
 			updatedK8sSecrets = true
 			// Give enough time for the api to update the secret to avoid race conditions
@@ -198,19 +209,22 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	}
 	// Only update the instance's status if there was a k8s operation
 	if updatedK8sSecrets {
-		if err := reconciler.updateStatus(ctx, &instance); err != nil {
+		if err := reconciler.updateStatus(ctx, &instance, rescheduleRetry, errorFound); err != nil {
 			log.Error(err, "Failed to update status", "instance.name", instance.Name)
 			return ctrl.Result{}, err
 		}
 	}
-	return ctrl.Result{}, nil
+	if rescheduleRetry {
+		log.V(1).Info("Reconcile loop failed. Retry rescheduled")
+	}
+	return ctrl.Result{Requeue: rescheduleRetry}, nil
 }
 
 func labelsForSecretAgent(name string) map[string]string {
 	return map[string]string{"managed-by-secret-agent": "true", "secret-agent-configuration-name": name}
 }
 
-func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.Context, instance *v1alpha1.SecretAgentConfiguration) error {
+func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.Context, instance *v1alpha1.SecretAgentConfiguration, inProgress, errorFound bool) error {
 	// Update the SecretAgentConfiguration status with the object names
 	secretList := &corev1.SecretList{}
 	listOpts := []client.ListOption{
@@ -228,6 +242,14 @@ func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.C
 	// Always Update status.k8sSecrets
 	instance.Status.ManagedK8sSecrets = secretNames
 	instance.Status.TotalManagedObjects = totalManagedObjects
+
+	if errorFound {
+		instance.Status.State = v1alpha1.SecretAgentConfigurationError
+	} else if inProgress {
+		instance.Status.State = v1alpha1.SecretAgentConfigurationInProgress
+	} else {
+		instance.Status.State = v1alpha1.SecretAgentConfigurationCompleted
+	}
 
 	if err := reconciler.Status().Update(ctx, instance); err != nil {
 		return err
@@ -290,9 +312,16 @@ func (reconciler *SecretAgentConfigurationReconciler) SetupWithManager(mgr ctrl.
 		return err
 	}
 
+	rateLimiter := workqueue.NewMaxOfRateLimiter(
+		workqueue.NewItemExponentialFailureRateLimiter(200*time.Millisecond, 10*time.Hour),
+		// 10 qps, 10 Burst
+		&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(10), 10)},
+	)
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.SecretAgentConfiguration{}).
 		Owns(&corev1.Secret{}).
+		WithOptions(controller.Options{RateLimiter: rateLimiter}).
 		Complete(reconciler)
 
 }
