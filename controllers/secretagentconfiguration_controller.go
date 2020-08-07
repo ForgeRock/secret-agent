@@ -272,9 +272,10 @@ func routeKeyInterface(secretName string, key *v1alpha1.KeyConfig) (generator.Ke
 		return generator.NewLiteral(key)
 	case v1alpha1.KeyConfigTypeSSH:
 		return generator.NewSSH(key)
-		// PR #69
-		// case v1alpha1.KeyConfigTypeKeytool:
-		// return generator.NewKeyTool(key)
+	case v1alpha1.KeyConfigTypeKeytool:
+		return generator.NewKeyTool(key)
+	case v1alpha1.KeyConfigTypeTrustStore:
+		return generator.NewTrustStore(key)
 	default:
 		// TODO we should never hit this point once all types are implmeneted.
 		// We should actually error out

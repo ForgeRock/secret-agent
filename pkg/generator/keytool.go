@@ -94,7 +94,7 @@ func (kp *KeyTool) baseCommand(execCmd string, baseArgs []string) func(cmdName s
 func (kp *KeyTool) loadAliasManager(alias *v1alpha1.KeytoolAliasConfig) {
 	switch alias.Cmd {
 	case v1alpha1.KeytoolCmdImportpassword:
-		pwdAlias := NewKeyToolImportPassword(alias, kp.keyToolCmd)
+		pwdAlias := NewKeyToolImportPassword(alias)
 		kp.aliasMgrs = append(kp.aliasMgrs, pwdAlias)
 		return
 	}
@@ -186,8 +186,7 @@ func (kp *KeyTool) LoadFromData(secData map[string][]byte) {
 	if keyStoreBytes, ok := secData[kp.Name]; ok {
 		kp.storeBytes = keyStoreBytes
 	}
-	defer os.RemoveAll(kp.storePath)
-	ioutil.WriteFile(kp.storePath, kp.storeBytes, 0600)
+
 }
 
 // IsEmpty test if the keystore is empty
@@ -195,7 +194,7 @@ func (kp *KeyTool) IsEmpty() bool {
 	return len(kp.storeBytes) == 0
 }
 
-// ToKubernetes
+// ToKubernetes serializes data to kubernetes secret
 func (kp *KeyTool) ToKubernetes(secObject *corev1.Secret) {
 	if secObject.Data == nil {
 		secObject.Data = make(map[string][]byte)

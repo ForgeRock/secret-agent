@@ -99,7 +99,6 @@ func (kp *CertKeyPair) Generate() error {
 		marshaledPrivateKey := x509.MarshalPKCS1PrivateKey(kp.Cert.PrivateKeyRSA)
 		kp.Cert.PrivateKeyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: marshaledPrivateKey})
 	}
-
 	// prepare cert template
 	notBefore := time.Now().Add(time.Minute * -5)
 	notAfter := notBefore.Add(10 * 365 * 24 * time.Hour) // 10yrs

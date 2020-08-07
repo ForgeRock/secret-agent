@@ -8,11 +8,10 @@ import (
 )
 
 // NewKeyToolImportPassword create a new password alias manager
-func NewKeyToolImportPassword(alias *v1alpha1.KeytoolAliasConfig, keyToolCmd cmdRunner) *KeyToolImportPassword {
+func NewKeyToolImportPassword(alias *v1alpha1.KeytoolAliasConfig) *KeyToolImportPassword {
 	return &KeyToolImportPassword{
 		v1aliasConfig: alias,
 		refData:       []byte{},
-		keyToolCmd:    keyToolCmd,
 	}
 }
 
@@ -22,7 +21,6 @@ type KeyToolImportPassword struct {
 	refName       string
 	refDataKey    string
 	refData       []byte
-	keyToolCmd    cmdRunner
 }
 
 // Reference get list of refences needed for generated a alias

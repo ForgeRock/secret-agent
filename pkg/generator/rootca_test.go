@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestRootCA(t *testing.T) {
+func makeTestNewRootCA(t *testing.T) (*RootCA, error) {
 	kc := &v1alpha1.KeyConfig{
 		Name: "testConfig",
 		Type: "ca",
@@ -25,6 +26,15 @@ func TestRootCA(t *testing.T) {
 	kc.Spec.Duration = new(metav1.Duration)
 	kc.Spec.Duration.Duration, _ = time.ParseDuration("90d")
 	rootCA, err := NewRootCA(kc)
+	if err != nil {
+		t.Errorf("Expected no error, got: %+v", err)
+		return rootCA, errors.WithStack(err)
+	}
+	return rootCA, nil
+}
+
+func TestRootCA(t *testing.T) {
+	rootCA, err := makeTestNewRootCA(t)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}

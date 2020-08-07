@@ -18,10 +18,12 @@ require (
 	go.uber.org/zap v1.10.0
 	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
+	google.golang.org/appengine v1.6.6
 	google.golang.org/genproto v0.0.0-20200511104702-f5ebc3bea380
 	google.golang.org/grpc v1.29.1
 	k8s.io/api v0.17.8
 	k8s.io/apimachinery v0.17.8
 	k8s.io/client-go v0.17.8
 	sigs.k8s.io/controller-runtime v0.5.9
+	software.sslmate.com/src/go-pkcs12 v0.0.0-20200619203921-c9ed90bd32dc
 )
