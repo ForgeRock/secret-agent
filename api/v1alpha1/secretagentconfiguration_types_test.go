@@ -237,10 +237,9 @@ func TestConfigurationStructLevelValidatorKeytool(t *testing.T) {
 					SourcePath: "asdfSecret/keypa",
 				},
 				{
-					Name:            "gentest",
-					Cmd:             "genkeypair",
-					Args:            []string{"yadayada", "foo", "bar"},
-					DestinationPath: "asdfSecret/kt",
+					Name: "gentest",
+					Cmd:  "genkeypair",
+					Args: []string{"yadayada", "foo", "bar"},
 				},
 			},
 		},
@@ -312,22 +311,6 @@ func TestConfigurationStructLevelValidatorKeytool(t *testing.T) {
 		t.Error("Wrong Alias SourcePath: Expected error, got none")
 	}
 	config.Secrets[0].Keys[3].Spec.KeytoolAliases[0].SourcePath = "asdfSecret/ca"
-
-	// Missing Alias DestinationPath
-	config.Secrets[0].Keys[3].Spec.KeytoolAliases[2].DestinationPath = ""
-	err = validate.Struct(config)
-	if err == nil {
-		t.Error("Missing Alias DestinationPath: Expected error, got none")
-	}
-	config.Secrets[0].Keys[3].Spec.KeytoolAliases[2].DestinationPath = "asdfSecret/kt"
-
-	// wrong Alias DestinationPath
-	config.Secrets[0].Keys[3].Spec.KeytoolAliases[2].DestinationPath = "asdfSecret/wrong"
-	err = validate.Struct(config)
-	if err == nil {
-		t.Error("Wrong Alias DestinationPath: Expected error, got none")
-	}
-	config.Secrets[0].Keys[3].Spec.KeytoolAliases[2].DestinationPath = "asdfSecret/kt"
 
 	// Missing keytoolAliases
 	config.Secrets[0].Keys[3].Spec.KeytoolAliases = nil

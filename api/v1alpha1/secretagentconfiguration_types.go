@@ -230,10 +230,9 @@ type KeytoolAliasConfig struct {
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 	// +kubebuilder:validation:Required
-	Cmd             KeytoolCmd `json:"cmd"`
-	Args            []string   `json:"args,omitempty"`
-	SourcePath      string     `json:"sourcePath,omitempty"`
-	DestinationPath string     `json:"destinationPath,omitempty"`
+	Cmd        KeytoolCmd `json:"cmd"`
+	Args       []string   `json:"args,omitempty"`
+	SourcePath string     `json:"sourcePath,omitempty"`
 }
 
 func (ks *KeySpec) isEmpty() bool {

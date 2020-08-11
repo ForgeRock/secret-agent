@@ -157,10 +157,9 @@ var _ = Describe("SecretAgentConfiguration", func() {
 										KeyPassPath:   "path/2",
 										KeytoolAliases: []*KeytoolAliasConfig{
 											{
-												Name:            "name1",
-												Cmd:             "genkeypair",
-												Args:            []string{"arg1", "arg2"},
-												DestinationPath: "path/3",
+												Name: "name1",
+												Cmd:  "genkeypair",
+												Args: []string{"arg1", "arg2"},
 											},
 											{
 												Name:       "name2",

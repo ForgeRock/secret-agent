@@ -9,10 +9,10 @@ import (
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 
-func TestImportPassword(t *testing.T) {
+func TestGenKeyPair(t *testing.T) {
 	length := 32
 	kc := &v1alpha1.KeyConfig{
-		Name: "testimportpass",
+		Name: "test",
 		Type: "password",
 		Spec: &v1alpha1.KeySpec{
 			Length: &length,
@@ -27,9 +27,11 @@ func TestImportPassword(t *testing.T) {
 			KeyPassPath:   "keypass/pass",
 			KeytoolAliases: []*v1alpha1.KeytoolAliasConfig{
 				{
-					Name:       "testimportpass",
-					Cmd:        "importpassword",
-					SourcePath: "testpass/pass",
+					Name: "testkp",
+					Cmd:  "genkeypair",
+					Args: []string{"-keyalg", "RSA", "-keysize", "2048",
+						"-sigalg", "SHA256WITHRSA", "-validity", "3650",
+						"-dname", "CN=testkp,O=SA,L=Bristol,ST=Bristol,C=UK"},
 				},
 			},
 		},
@@ -63,7 +65,7 @@ func TestImportPassword(t *testing.T) {
 	}
 	baseCmd := keyToolMgr.baseCommand(*keytoolPath, baseArgs)
 	args := []string{
-		"-alias", "testimportpass",
+		"-alias", "testkp",
 	}
 	if _, err := os.Stat(keyToolMgr.storePath); !os.IsNotExist(err) {
 		t.Error("expected keyToolMgr to cleanup store but didn't")

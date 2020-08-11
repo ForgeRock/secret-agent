@@ -76,12 +76,12 @@ type KeyTool struct {
 	keyPassValue   string
 }
 
-func (kp *KeyTool) baseCommand(execCmd string, baseArgs []string) func(cmdName string, args []string) *exec.Cmd {
+func (kt *KeyTool) baseCommand(execCmd string, baseArgs []string) func(cmdName string, args []string) *exec.Cmd {
 	baseArgs = []string{
-		"-storetype", string(kp.V1Spec.StoreType),
-		"-storepass", kp.keyPassValue,
-		"-keypass", kp.storePassValue,
-		"-keystore", kp.storePath,
+		"-storetype", string(kt.V1Spec.StoreType),
+		"-storepass", kt.keyPassValue,
+		"-keypass", kt.storePassValue,
+		"-keystore", kt.storePath,
 	}
 	return func(cmdName string, args []string) *exec.Cmd {
 		cmdArgs := []string{}
@@ -91,42 +91,46 @@ func (kp *KeyTool) baseCommand(execCmd string, baseArgs []string) func(cmdName s
 		return exec.Command(execCmd, cmdArgs...)
 	}
 }
-func (kp *KeyTool) loadAliasManager(alias *v1alpha1.KeytoolAliasConfig) {
+func (kt *KeyTool) loadAliasManager(alias *v1alpha1.KeytoolAliasConfig) {
 	switch alias.Cmd {
 	case v1alpha1.KeytoolCmdImportpassword:
 		pwdAlias := NewKeyToolImportPassword(alias)
-		kp.aliasMgrs = append(kp.aliasMgrs, pwdAlias)
-		return
+		kt.aliasMgrs = append(kt.aliasMgrs, pwdAlias)
+
+	case v1alpha1.KeytoolCmdGenkeypair:
+		kpAlias := NewKeyToolGenKeyPair(alias)
+		kt.aliasMgrs = append(kt.aliasMgrs, kpAlias)
 	}
+	return
 }
 
 // InSecret return true if the key is one found in the secret
-func (kp *KeyTool) InSecret(secObject *corev1.Secret) bool {
-	if secObject.Data == nil || secObject.Data[kp.Name] == nil || kp.IsEmpty() {
+func (kt *KeyTool) InSecret(secObject *corev1.Secret) bool {
+	if secObject.Data == nil || secObject.Data[kt.Name] == nil || kt.IsEmpty() {
 		return false
 	}
-	if bytes.Compare(kp.storeBytes, secObject.Data[kp.Name]) == 0 {
+	if bytes.Compare(kt.storeBytes, secObject.Data[kt.Name]) == 0 {
 		return true
 	}
 	return false
 }
 
 // References all names the ids of references required for generation
-func (kp *KeyTool) References() ([]string, []string) {
+func (kt *KeyTool) References() ([]string, []string) {
 	refNames := []string{}
 	refDataKeys := []string{}
-	for _, mgr := range kp.aliasMgrs {
+	for _, mgr := range kt.aliasMgrs {
 		_refNames, _refDataKeys := mgr.References()
 		refNames = append(refNames, _refNames...)
 		refDataKeys = append(refDataKeys, _refDataKeys...)
 	}
-	if kp.V1Spec.StorePassPath != "" {
-		storePassName, storePassDataKey := handleRefPath(kp.V1Spec.StorePassPath)
+	if kt.V1Spec.StorePassPath != "" {
+		storePassName, storePassDataKey := handleRefPath(kt.V1Spec.StorePassPath)
 		refNames = append(refNames, storePassName)
 		refDataKeys = append(refDataKeys, storePassDataKey)
 	}
-	if kp.V1Spec.KeyPassPath != "" {
-		keyPassName, keyPassDataKey := handleRefPath(kp.V1Spec.KeyPassPath)
+	if kt.V1Spec.KeyPassPath != "" {
+		keyPassName, keyPassDataKey := handleRefPath(kt.V1Spec.KeyPassPath)
 		refNames = append(refNames, keyPassName)
 		refDataKeys = append(refDataKeys, keyPassDataKey)
 	}
@@ -134,12 +138,12 @@ func (kp *KeyTool) References() ([]string, []string) {
 }
 
 // LoadReferenceData load all alias reference data
-func (kp *KeyTool) LoadReferenceData(data map[string][]byte) error {
-	_, keyPassDataKey := handleRefPath(kp.V1Spec.KeyPassPath)
-	_, storePassDataKey := handleRefPath(kp.V1Spec.StorePassPath)
-	kp.storePassValue = string(data[storePassDataKey])
-	kp.keyPassValue = string(data[keyPassDataKey])
-	for _, mgr := range kp.aliasMgrs {
+func (kt *KeyTool) LoadReferenceData(data map[string][]byte) error {
+	_, keyPassDataKey := handleRefPath(kt.V1Spec.KeyPassPath)
+	_, storePassDataKey := handleRefPath(kt.V1Spec.StorePassPath)
+	kt.storePassValue = string(data[storePassDataKey])
+	kt.keyPassValue = string(data[keyPassDataKey])
+	for _, mgr := range kt.aliasMgrs {
 		if err := mgr.LoadReferenceData(data); err != nil {
 			return err
 		}
@@ -148,63 +152,64 @@ func (kp *KeyTool) LoadReferenceData(data map[string][]byte) error {
 }
 
 // LoadSecretFromManager load keystore from secrete manager
-func (kp *KeyTool) LoadSecretFromManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+func (kt *KeyTool) LoadSecretFromManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
 	return nil
 }
 
 // EnsureSecretManager adds keystore to secret manager
-func (kp *KeyTool) EnsureSecretManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+func (kt *KeyTool) EnsureSecretManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
 	return nil
 }
 
 // Generate keystore and all of its aliases
-func (kp *KeyTool) Generate() error {
+func (kt *KeyTool) Generate() error {
 	// clean up after ourselves, we store as bytes in memory
-	defer os.RemoveAll(kp.storePath)
+	defer os.RemoveAll(kt.storePath)
 	baseArgs := []string{
-		"-storetype", string(kp.V1Spec.StoreType),
-		"-storepass", kp.storePassValue,
-		"-keypass", kp.keyPassValue,
-		"-keystore", kp.storePath,
+		"-storetype", string(kt.V1Spec.StoreType),
+		"-storepass", kt.storePassValue,
+		"-keypass", kt.keyPassValue,
+		"-keystore", kt.storePath,
 	}
 	cmd := baseCommand(*keytoolPath, baseArgs)
-	for _, mgr := range kp.aliasMgrs {
+	for _, mgr := range kt.aliasMgrs {
 		if err := mgr.Generate(cmd); err != nil {
 			return err
 		}
 	}
-	storeBytes, err := ioutil.ReadFile(kp.storePath)
+	storeBytes, err := ioutil.ReadFile(kt.storePath)
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	kp.storeBytes = storeBytes
+	kt.storeBytes = storeBytes
 	return nil
 }
 
 // LoadFromData keystore from from bytes
-func (kp *KeyTool) LoadFromData(secData map[string][]byte) {
-	if keyStoreBytes, ok := secData[kp.Name]; ok {
-		kp.storeBytes = keyStoreBytes
+func (kt *KeyTool) LoadFromData(secData map[string][]byte) {
+	if keyStoreBytes, ok := secData[kt.Name]; ok {
+		kt.storeBytes = keyStoreBytes
 	}
 
 }
 
 // IsEmpty test if the keystore is empty
-func (kp *KeyTool) IsEmpty() bool {
-	return len(kp.storeBytes) == 0
+func (kt *KeyTool) IsEmpty() bool {
+	return len(kt.storeBytes) == 0
 }
 
 // ToKubernetes serializes data to kubernetes secret
-func (kp *KeyTool) ToKubernetes(secObject *corev1.Secret) {
+func (kt *KeyTool) ToKubernetes(secObject *corev1.Secret) {
 	if secObject.Data == nil {
 		secObject.Data = make(map[string][]byte)
 	}
-	secObject.Data[kp.Name] = kp.storeBytes
+	secObject.Data[kt.Name] = kt.storeBytes
 }
 
 ///////////////////
 // TODO chopping block or maybe relocate
 //////////////////
+
 // GetKeystore reads the keystore file and returns it's contents
 //   it assumes the file was created during the alias commands
 func GetKeystore(nodePath []string) ([]byte, error) {

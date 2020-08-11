@@ -23,7 +23,7 @@ type KeyToolImportPassword struct {
 	refData       []byte
 }
 
-// Reference get list of refences needed for generated a alias
+// References get list of refences needed for generated a alias
 func (kp *KeyToolImportPassword) References() ([]string, []string) {
 	kp.refName, kp.refDataKey = handleRefPath(kp.v1aliasConfig.SourcePath)
 	return []string{kp.refName}, []string{kp.refDataKey}

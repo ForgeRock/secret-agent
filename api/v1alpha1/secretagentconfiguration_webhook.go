@@ -83,7 +83,6 @@ func (r *SecretAgentConfiguration) Default() {
 			}
 			for idx, alias := range key.Spec.KeytoolAliases {
 				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.KeytoolAliases[idx].SourcePath = cleanUpPaths(alias.SourcePath)
-				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.KeytoolAliases[idx].DestinationPath = cleanUpPaths(alias.DestinationPath)
 			}
 		}
 	}
@@ -312,16 +311,6 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 							return
 						}
 					case KeytoolCmdGenkeypair, KeytoolCmdGenseckey:
-						if alias.DestinationPath == "" {
-							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases[aliasIndex],
-								name, "destinationPass", "destinationPassNotSet", "")
-							return
-						}
-						if !pathExistsInSecretAgentConfiguration(alias.DestinationPath, config.Secrets) {
-							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases[aliasIndex].DestinationPath,
-								name, "destinationPath", "destinationPathNotValid", "")
-							return
-						}
 						if len(alias.Args) == 0 {
 							sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.KeytoolAliases[aliasIndex],
 								name, "args", "argsNotSet", "")
