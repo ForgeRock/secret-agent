@@ -67,8 +67,8 @@ func (ts *TrustStore) References() ([]string, []string) {
 
 // LoadReferenceData load all alias reference data
 func (ts *TrustStore) LoadReferenceData(data map[string][]byte) error {
-	for _, key := range ts.refDataKeys {
-		if value, ok := data[key]; ok {
+	for index, key := range ts.refDataKeys {
+		if value, ok := data[fmt.Sprintf("%s/%s", ts.refKeys[index], key)]; ok {
 			ts.refData = append(ts.refData, value...)
 		} else {
 			return errors.New(fmt.Sprintf("Reference Data Not Foundi for key: %s", key))

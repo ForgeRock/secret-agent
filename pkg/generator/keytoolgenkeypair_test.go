@@ -51,7 +51,8 @@ func TestGenKeyPair(t *testing.T) {
 	}
 	keyToolMgr.References()
 	keyToolMgr.LoadReferenceData(map[string][]byte{
-		"pass": pwdMgr.Value,
+		"storepass/pass": pwdMgr.Value,
+		"keypass/pass":   []byte("password1"),
 	})
 	err = keyToolMgr.Generate()
 	if err != nil {
@@ -59,11 +60,11 @@ func TestGenKeyPair(t *testing.T) {
 	}
 	baseArgs := []string{
 		"-storetype", string(keyToolMgr.V1Spec.StoreType),
-		"-storepass", keyToolMgr.storePassValue,
+		// "-storepass", keyToolMgr.storePassValue,
 		"-keypass", keyToolMgr.keyPassValue,
 		"-keystore", keyToolMgr.storePath,
 	}
-	baseCmd := keyToolMgr.baseCommand(*keytoolPath, baseArgs)
+	baseCmd := execCommand(*keytoolPath, baseArgs)
 	args := []string{
 		"-alias", "testkp",
 	}

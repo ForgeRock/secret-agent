@@ -31,7 +31,8 @@ func init() {
 
 type cmdRunner func(cmdName string, args []string) *exec.Cmd
 
-func baseCommand(execCmd string, baseArgs []string) func(cmdName string, args []string) *exec.Cmd {
+// used for openssl and tests
+func execCommand(execCmd string, baseArgs []string) func(cmdName string, args []string) *exec.Cmd {
 	return func(cmdName string, args []string) *exec.Cmd {
 		cmdArgs := []string{}
 		cmdArgs = append(cmdArgs, cmdName)
@@ -96,7 +97,6 @@ func (kt *KeyTool) loadAliasManager(alias *v1alpha1.KeytoolAliasConfig) {
 	case v1alpha1.KeytoolCmdImportpassword:
 		pwdAlias := NewKeyToolImportPassword(alias)
 		kt.aliasMgrs = append(kt.aliasMgrs, pwdAlias)
-
 	case v1alpha1.KeytoolCmdGenkeypair:
 		kpAlias := NewKeyToolGenKeyPair(alias)
 		kt.aliasMgrs = append(kt.aliasMgrs, kpAlias)
@@ -105,11 +105,11 @@ func (kt *KeyTool) loadAliasManager(alias *v1alpha1.KeytoolAliasConfig) {
 }
 
 // InSecret return true if the key is one found in the secret
-func (kt *KeyTool) InSecret(secObject *corev1.Secret) bool {
-	if secObject.Data == nil || secObject.Data[kt.Name] == nil || kt.IsEmpty() {
+func (kp *KeyTool) InSecret(secObject *corev1.Secret) bool {
+	if secObject.Data == nil || secObject.Data[kp.Name] == nil || kp.IsEmpty() {
 		return false
 	}
-	if bytes.Compare(kt.storeBytes, secObject.Data[kt.Name]) == 0 {
+	if bytes.Compare(kp.storeBytes, secObject.Data[kp.Name]) == 0 {
 		return true
 	}
 	return false
@@ -139,10 +139,8 @@ func (kt *KeyTool) References() ([]string, []string) {
 
 // LoadReferenceData load all alias reference data
 func (kt *KeyTool) LoadReferenceData(data map[string][]byte) error {
-	_, keyPassDataKey := handleRefPath(kt.V1Spec.KeyPassPath)
-	_, storePassDataKey := handleRefPath(kt.V1Spec.StorePassPath)
-	kt.storePassValue = string(data[storePassDataKey])
-	kt.keyPassValue = string(data[keyPassDataKey])
+	kt.storePassValue = string(data[kt.V1Spec.StorePassPath])
+	kt.keyPassValue = string(data[kt.V1Spec.KeyPassPath])
 	for _, mgr := range kt.aliasMgrs {
 		if err := mgr.LoadReferenceData(data); err != nil {
 			return err
@@ -171,7 +169,7 @@ func (kt *KeyTool) Generate() error {
 		"-keypass", kt.keyPassValue,
 		"-keystore", kt.storePath,
 	}
-	cmd := baseCommand(*keytoolPath, baseArgs)
+	cmd := kt.baseCommand(*keytoolPath, baseArgs)
 	for _, mgr := range kt.aliasMgrs {
 		if err := mgr.Generate(cmd); err != nil {
 			return err
@@ -209,7 +207,6 @@ func (kt *KeyTool) ToKubernetes(secObject *corev1.Secret) {
 ///////////////////
 // TODO chopping block or maybe relocate
 //////////////////
-
 // GetKeystore reads the keystore file and returns it's contents
 //   it assumes the file was created during the alias commands
 func GetKeystore(nodePath []string) ([]byte, error) {

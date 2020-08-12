@@ -49,7 +49,9 @@ func TestImportPassword(t *testing.T) {
 	}
 	keyToolMgr.References()
 	keyToolMgr.LoadReferenceData(map[string][]byte{
-		"pass": pwdMgr.Value,
+		"storepass/pass": []byte("storepassword"),
+		"keypass/pass":   []byte("storepassword"),
+		"testpass/pass":  pwdMgr.Value,
 	})
 	err = keyToolMgr.Generate()
 	if err != nil {
@@ -61,7 +63,7 @@ func TestImportPassword(t *testing.T) {
 		"-keypass", keyToolMgr.keyPassValue,
 		"-keystore", keyToolMgr.storePath,
 	}
-	baseCmd := keyToolMgr.baseCommand(*keytoolPath, baseArgs)
+	baseCmd := execCommand(*keytoolPath, baseArgs)
 	args := []string{
 		"-alias", "testimportpass",
 	}

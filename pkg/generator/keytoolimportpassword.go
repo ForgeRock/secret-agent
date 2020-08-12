@@ -31,7 +31,7 @@ func (kp *KeyToolImportPassword) References() ([]string, []string) {
 
 // LoadReferenceData loads data from references
 func (kp *KeyToolImportPassword) LoadReferenceData(data map[string][]byte) error {
-	if value, ok := data[kp.refDataKey]; ok {
+	if value, ok := data[kp.v1aliasConfig.SourcePath]; ok {
 		kp.refData = value
 	}
 	return nil

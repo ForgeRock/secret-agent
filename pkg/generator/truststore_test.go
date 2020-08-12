@@ -31,7 +31,9 @@ func TestTrustStore(t *testing.T) {
 		t.Fatalf("expected no error found: %s", err)
 	}
 	tsMgr.References()
-	tsMgr.LoadReferenceData(testSecret.Data)
+	tsMgr.LoadReferenceData(map[string][]byte{
+		"testconfig/ca.pem": testSecret.Data["ca.pem"],
+	})
 	tsMgr.Generate()
 	parsed, err := pkcs12.DecodeTrustStore(tsMgr.Value, "changeit")
 	if err != nil {

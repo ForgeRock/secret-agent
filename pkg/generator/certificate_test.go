@@ -21,8 +21,9 @@ func TestKeyPair(t *testing.T) {
 		}
 		rootCA.Generate()
 		rootCAData := make(map[string][]byte, 1)
-		rootCAData["ca.pem"] = rootCA.Cert.CertPEM
-		rootCAData["ca-private.pem"] = rootCA.Cert.PrivateKeyPEM
+		rootCAData["foo/ca.pem"] = rootCA.Cert.CertPEM
+		rootCAData["foo/ca-private.pem"] = rootCA.Cert.PrivateKeyPEM
+
 		return testKeyMgr.LoadReferenceData(rootCAData)
 	}
 	key := &v1alpha1.KeyConfig{

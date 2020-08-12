@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -126,8 +127,8 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			}
 			// Load key references and data
 			keyRefSecrets := make(map[string][]byte)
-			refs, _ := keyInterface.References()
-			for _, ref := range refs {
+			refs, refDataKeys := keyInterface.References()
+			for index, ref := range refs {
 
 				secRefObject, err := k8ssecrets.LoadSecret(reconciler.Client, ref, instance.Namespace)
 
@@ -144,8 +145,18 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					rescheduleRetry, errorFound = true, true
 					break secretKeys
 				}
-				for k, v := range secRefObject.Data {
-					keyRefSecrets[k] = v
+				dataKey := fmt.Sprintf("%s/%s", ref, refDataKeys[index])
+				if val, ok := secRefObject.Data[dataKey]; ok {
+					keyRefSecrets[dataKey] = val
+
+				} else {
+
+					log.Error(err, "secret ref data not found, skipping key",
+						"secret_name", secretReq.Name,
+						"secret_ref", ref,
+						"secret_dataKey", dataKey)
+					rescheduleRetry, errorFound = true, true
+					break secretKeys
 				}
 			}
 			if err := keyInterface.LoadReferenceData(keyRefSecrets); err != nil {

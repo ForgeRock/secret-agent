@@ -197,10 +197,11 @@ func (kp *CertKeyPair) LoadReferenceData(data map[string][]byte) error {
 	if len(data) == 0 {
 		return errors.New("secret reference value not found")
 	}
-	kp.RootCA = &RootCA{
-		Cert: &Certificate{},
+	rootData := map[string][]byte{
+		"ca.pem":         data[fmt.Sprintf("%s/%s", kp.refName, "ca.pem")],
+		"ca-private.pem": data[fmt.Sprintf("%s/%s", kp.refName, "ca-private.pem")],
 	}
-	kp.RootCA.LoadFromData(data)
+	kp.RootCA.LoadFromData(rootData)
 	if kp.RootCA.IsEmpty() {
 		return errors.New("signing CA couldn't be loaded")
 	}
@@ -209,8 +210,12 @@ func (kp *CertKeyPair) LoadReferenceData(data map[string][]byte) error {
 
 // NewCertKeyPair creates new CertKeyPair type for reconcilation
 func NewCertKeyPair(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
-	keyPair := &CertKeyPair{
+	rootCA := &RootCA{
 		Cert: &Certificate{},
+	}
+	keyPair := &CertKeyPair{
+		Cert:   &Certificate{},
+		RootCA: rootCA,
 	}
 	keyPair.Name = keyConfig.Name
 	secretRef, dataKey := handleRefPath(keyConfig.Spec.SignedWithPath)
