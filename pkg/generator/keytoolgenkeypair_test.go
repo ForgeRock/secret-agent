@@ -10,14 +10,6 @@ import (
 )
 
 func TestGenKeyPair(t *testing.T) {
-	length := 32
-	kc := &v1alpha1.KeyConfig{
-		Name: "test",
-		Type: "password",
-		Spec: &v1alpha1.KeySpec{
-			Length: &length,
-		},
-	}
 	pwdSpec := &v1alpha1.KeyConfig{
 		Name: "testConfig",
 		Type: "keytool",
@@ -41,18 +33,10 @@ func TestGenKeyPair(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pwdMgr, err := NewPassword(kc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = pwdMgr.Generate()
-	if err != nil {
-		t.Fatal(err)
-	}
 	keyToolMgr.References()
 	keyToolMgr.LoadReferenceData(map[string][]byte{
-		"storepass/pass": pwdMgr.Value,
-		"keypass/pass":   []byte("password1"),
+		"storepass/pass": []byte("password1"),
+		"keypass/pass":   []byte("password2"),
 	})
 	err = keyToolMgr.Generate()
 	if err != nil {
@@ -60,7 +44,7 @@ func TestGenKeyPair(t *testing.T) {
 	}
 	baseArgs := []string{
 		"-storetype", string(keyToolMgr.V1Spec.StoreType),
-		// "-storepass", keyToolMgr.storePassValue,
+		"-storepass", keyToolMgr.storePassValue,
 		"-keypass", keyToolMgr.keyPassValue,
 		"-keystore", keyToolMgr.storePath,
 	}
@@ -78,7 +62,7 @@ func TestGenKeyPair(t *testing.T) {
 	if err != nil {
 		t.Fatal(string(results))
 	}
-	if !strings.Contains(string(results), string(pwdMgr.Name)) {
-		t.Errorf("Expected Alias %s to exist but found: \n %s", string(pwdMgr.Name), string(results))
+	if !strings.Contains(string(results), string(pwdSpec.Spec.KeytoolAliases[0].Name)) {
+		t.Errorf("Expected Alias %s to exist but found: \n %s", string(pwdSpec.Spec.KeytoolAliases[0].Name), string(results))
 	}
 }

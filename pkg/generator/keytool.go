@@ -80,8 +80,8 @@ type KeyTool struct {
 func (kt *KeyTool) baseCommand(execCmd string, baseArgs []string) func(cmdName string, args []string) *exec.Cmd {
 	baseArgs = []string{
 		"-storetype", string(kt.V1Spec.StoreType),
-		"-storepass", kt.keyPassValue,
-		"-keypass", kt.storePassValue,
+		"-storepass", kt.storePassValue,
+		"-keypass", kt.keyPassValue,
 		"-keystore", kt.storePath,
 	}
 	return func(cmdName string, args []string) *exec.Cmd {
@@ -93,23 +93,27 @@ func (kt *KeyTool) baseCommand(execCmd string, baseArgs []string) func(cmdName s
 	}
 }
 func (kt *KeyTool) loadAliasManager(alias *v1alpha1.KeytoolAliasConfig) {
+	var ktAlias AliasMgr
 	switch alias.Cmd {
 	case v1alpha1.KeytoolCmdImportpassword:
-		pwdAlias := NewKeyToolImportPassword(alias)
-		kt.aliasMgrs = append(kt.aliasMgrs, pwdAlias)
+		ktAlias = NewKeyToolImportPassword(alias)
+		kt.aliasMgrs = append(kt.aliasMgrs, ktAlias)
 	case v1alpha1.KeytoolCmdGenkeypair:
-		kpAlias := NewKeyToolGenKeyPair(alias)
-		kt.aliasMgrs = append(kt.aliasMgrs, kpAlias)
+		ktAlias = NewKeyToolGenKeyPair(alias)
+		kt.aliasMgrs = append(kt.aliasMgrs, ktAlias)
+	case v1alpha1.KeytoolCmdGenseckey:
+		ktAlias = NewKeyToolGenSecKey(alias)
+		kt.aliasMgrs = append(kt.aliasMgrs, ktAlias)
 	}
 	return
 }
 
 // InSecret return true if the key is one found in the secret
-func (kp *KeyTool) InSecret(secObject *corev1.Secret) bool {
-	if secObject.Data == nil || secObject.Data[kp.Name] == nil || kp.IsEmpty() {
+func (kt *KeyTool) InSecret(secObject *corev1.Secret) bool {
+	if secObject.Data == nil || secObject.Data[kt.Name] == nil || kt.IsEmpty() {
 		return false
 	}
-	if bytes.Compare(kp.storeBytes, secObject.Data[kp.Name]) == 0 {
+	if bytes.Compare(kt.storeBytes, secObject.Data[kt.Name]) == 0 {
 		return true
 	}
 	return false
@@ -207,6 +211,7 @@ func (kt *KeyTool) ToKubernetes(secObject *corev1.Secret) {
 ///////////////////
 // TODO chopping block or maybe relocate
 //////////////////
+
 // GetKeystore reads the keystore file and returns it's contents
 //   it assumes the file was created during the alias commands
 func GetKeystore(nodePath []string) ([]byte, error) {

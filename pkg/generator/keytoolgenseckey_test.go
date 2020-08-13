@@ -9,15 +9,7 @@ import (
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 
-func TestImportPassword(t *testing.T) {
-	length := 32
-	kc := &v1alpha1.KeyConfig{
-		Name: "testimportpass",
-		Type: "password",
-		Spec: &v1alpha1.KeySpec{
-			Length: &length,
-		},
-	}
+func TestGenSecKey(t *testing.T) {
 	pwdSpec := &v1alpha1.KeyConfig{
 		Name: "testConfig",
 		Type: "keytool",
@@ -27,9 +19,9 @@ func TestImportPassword(t *testing.T) {
 			KeyPassPath:   "keypass/pass",
 			KeytoolAliases: []*v1alpha1.KeytoolAliasConfig{
 				{
-					Name:       "testimportpass",
-					Cmd:        "importpassword",
-					SourcePath: "testpass/pass",
+					Name: "seckey",
+					Cmd:  "genseckey",
+					Args: []string{"-keyalg", "HMacSHA512", "-keysize", "256"},
 				},
 			},
 		},
@@ -39,19 +31,10 @@ func TestImportPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pwdMgr, err := NewPassword(kc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = pwdMgr.Generate()
-	if err != nil {
-		t.Fatal(err)
-	}
 	keyToolMgr.References()
 	keyToolMgr.LoadReferenceData(map[string][]byte{
-		"storepass/pass": []byte("storepassword"),
-		"keypass/pass":   []byte("keypassword"),
-		"testpass/pass":  pwdMgr.Value,
+		"storepass/pass": []byte("password1"),
+		"keypass/pass":   []byte("password2"),
 	})
 	err = keyToolMgr.Generate()
 	if err != nil {
@@ -65,7 +48,7 @@ func TestImportPassword(t *testing.T) {
 	}
 	baseCmd := execCommand(*keytoolPath, baseArgs)
 	args := []string{
-		"-alias", "testimportpass",
+		"-alias", "seckey",
 	}
 	if _, err := os.Stat(keyToolMgr.storePath); !os.IsNotExist(err) {
 		t.Error("expected keyToolMgr to cleanup store but didn't")
@@ -77,7 +60,7 @@ func TestImportPassword(t *testing.T) {
 	if err != nil {
 		t.Fatal(string(results))
 	}
-	if !strings.Contains(string(results), string(pwdMgr.Name)) {
-		t.Errorf("Expected Alias %s to exist but found: \n %s", string(pwdMgr.Name), string(results))
+	if !strings.Contains(string(results), string(pwdSpec.Spec.KeytoolAliases[0].Name)) {
+		t.Errorf("Expected Alias %s to exist but found: \n %s", string(pwdSpec.Spec.KeytoolAliases[0].Name), string(results))
 	}
 }

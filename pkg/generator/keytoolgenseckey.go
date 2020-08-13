@@ -5,33 +5,33 @@ import (
 	"github.com/pkg/errors"
 )
 
-// KeyToolGenKeyPair alias password manager
-type KeyToolGenKeyPair struct {
+// KeyToolGenSecKey alias password manager
+type KeyToolGenSecKey struct {
 	v1aliasConfig *v1alpha1.KeytoolAliasConfig
 }
 
-// NewKeyToolGenKeyPair create a new password alias manager
-func NewKeyToolGenKeyPair(alias *v1alpha1.KeytoolAliasConfig) *KeyToolGenKeyPair {
-	return &KeyToolGenKeyPair{
+// NewKeyToolGenSecKey create a new password alias manager
+func NewKeyToolGenSecKey(alias *v1alpha1.KeytoolAliasConfig) *KeyToolGenSecKey {
+	return &KeyToolGenSecKey{
 		v1aliasConfig: alias,
 	}
 }
 
 // References get list of refences needed for generated a alias
-func (kp *KeyToolGenKeyPair) References() ([]string, []string) {
+func (kp *KeyToolGenSecKey) References() ([]string, []string) {
 	return []string{}, []string{}
 }
 
 // LoadReferenceData loads data from references
-func (kp *KeyToolGenKeyPair) LoadReferenceData(data map[string][]byte) error {
+func (kp *KeyToolGenSecKey) LoadReferenceData(data map[string][]byte) error {
 	return nil
 }
 
 // Generate creates keytool password alias entry
-func (kp *KeyToolGenKeyPair) Generate(baseCmd cmdRunner) error {
-	//++ keytool -genkeypair -alias rsajwtsigningkey -dname CN=rsajwtsigningkey,O=ForgeRock,L=Bristol,ST=Bristol,C=UK -keyalg RSA -keysize 2048 -sigalg SHA256WITHRSA --validity 3650
+func (kp *KeyToolGenSecKey) Generate(baseCmd cmdRunner) error {
+	// keytool -genseckey -alias selfservicesigntest -keyalg HmacSHA256 -keysize 256
 	// KS_PROPS="-keystore ${KEYSTORE} -storetype ${STORE_TYPE} -storepass ${STORE_PASS} -keypass ${KEY_PASS}"
-	cmd := "-genkeypair"
+	cmd := "-genseckey"
 	args := []string{
 		"-alias", kp.v1aliasConfig.Name,
 	}
