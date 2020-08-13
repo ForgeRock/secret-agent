@@ -216,7 +216,8 @@ type KeySpec struct {
 	KeyPassPath           string             `json:"keyPassPath,omitempty"`
 	Sans                  []string           `json:"sans,omitempty"`
 	TruststoreImportPaths []string           `json:"truststoreImportPaths,omitempty"`
-	Duration              *metav1.Duration   `json:"Duration,omitempty"`
+	Duration              *metav1.Duration   `json:"duration,omitempty"`
+	UseBinaryCharacters   bool               `json:"useBinaryCharacters,omitempty"`
 
 	// +kubebuilder:validation:Minimun=16
 	Length *int `json:"length,omitempty"`

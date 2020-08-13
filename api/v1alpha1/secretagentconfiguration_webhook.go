@@ -177,6 +177,12 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 				return
 			}
 
+			if key.Spec.UseBinaryCharacters && key.Type != KeyConfigTypePassword {
+				sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.UseBinaryCharacters, name,
+					"useBinaryCharacters", "useBinaryCharactersNotAllowed", "")
+				return
+			}
+
 			switch key.Type {
 			case KeyConfigTypeCA:
 				// must set DistinguishedName

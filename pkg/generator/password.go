@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math/big"
 
+	b64 "encoding/base64"
+
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
@@ -16,9 +18,10 @@ import (
 
 // Password randomly generated of specified length
 type Password struct {
-	Name   string
-	Length int
-	Value  []byte
+	Name       string
+	Length     int
+	Value      []byte
+	BinaryMode bool
 }
 
 // References return names of secrets that should be looked up
@@ -67,15 +70,29 @@ func (pwd *Password) InSecret(secObject *corev1.Secret) bool {
 
 // Generate generates data
 func (pwd *Password) Generate() error {
-
+	var max *big.Int
 	alphanumericBytes := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	bytes := make([]byte, pwd.Length)
 	for i := range bytes {
-		randInt, err := rand.Int(rand.Reader, big.NewInt(int64(len(alphanumericBytes))))
+		if pwd.BinaryMode {
+			max = big.NewInt(int64(255))
+		} else {
+			max = big.NewInt(int64(len(alphanumericBytes)))
+		}
+
+		randInt, err := rand.Int(rand.Reader, max)
 		if err != nil {
 			return errors.WithStack(err)
 		}
-		bytes[i] = alphanumericBytes[int(randInt.Int64())]
+		if pwd.BinaryMode {
+			bytes[i] = uint8(randInt.Int64())
+		} else {
+			bytes[i] = alphanumericBytes[int(randInt.Int64())]
+		}
+	}
+	if pwd.BinaryMode {
+		pwd.Value = []byte(b64.StdEncoding.EncodeToString(bytes))
+		return nil
 	}
 	pwd.Value = bytes
 	return nil
@@ -108,8 +125,9 @@ func (pwd *Password) ToKubernetes(secret *corev1.Secret) {
 // NewPassword creates new Password type for reconcilation
 func NewPassword(keyConfig *v1alpha1.KeyConfig) (*Password, error) {
 	password := &Password{
-		Name:   keyConfig.Name,
-		Length: *keyConfig.Spec.Length,
+		Name:       keyConfig.Name,
+		Length:     *keyConfig.Spec.Length,
+		BinaryMode: keyConfig.Spec.UseBinaryCharacters,
 	}
 	return password, nil
 }
