@@ -49,6 +49,8 @@ func (rCA *RootCA) LoadReferenceData(data map[string][]byte) error {
 // LoadSecretFromManager populates RootCA data from secret manager
 func (rCA *RootCA) LoadSecretFromManager(ctx context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
 	var err error
+	// TODO we shouldn't be hardcoding ca.pem. Use `Name`.ca instead
+
 	caPemFmt := fmt.Sprintf("%s_%s", namespace, "ca.pem")
 	caPrivatePemFmt := fmt.Sprintf("%s_%s", namespace, "ca-private.pem")
 	rCA.Cert.CertPEM, err = secretsmanager.LoadSecret(ctx, config, caPemFmt)

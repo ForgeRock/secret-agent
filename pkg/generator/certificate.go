@@ -44,7 +44,9 @@ type CertKeyPair struct {
 
 // References return names of secrets that should be looked up
 func (kp *CertKeyPair) References() ([]string, []string) {
-	return []string{kp.refName}, []string{kp.refDataKey}
+	priv := fmt.Sprintf("%s-private.pem", kp.refDataKey)
+	pubk := fmt.Sprintf("%s.pem", kp.refDataKey)
+	return []string{kp.refName, kp.refName}, []string{priv, pubk}
 }
 
 // LoadSecretFromManager populates CertKeyPair data from secret manager
@@ -198,8 +200,8 @@ func (kp *CertKeyPair) LoadReferenceData(data map[string][]byte) error {
 		return errors.New("secret reference value not found")
 	}
 	rootData := map[string][]byte{
-		"ca.pem":         data[fmt.Sprintf("%s/%s", kp.refName, "ca.pem")],
-		"ca-private.pem": data[fmt.Sprintf("%s/%s", kp.refName, "ca-private.pem")],
+		"ca.pem":         data[fmt.Sprintf("%s/%s.pem", kp.refName, kp.refDataKey)],
+		"ca-private.pem": data[fmt.Sprintf("%s/%s-private.pem", kp.refName, kp.refDataKey)],
 	}
 	kp.RootCA.LoadFromData(rootData)
 	if kp.RootCA.IsEmpty() {

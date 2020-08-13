@@ -50,7 +50,7 @@ func TestKeyPair(t *testing.T) {
 	}
 
 	// with path
-	key.Spec.SignedWithPath = "foo/bar"
+	key.Spec.SignedWithPath = "foo/ca"
 	testKeyMgr, err = NewCertKeyPair(key)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
@@ -74,14 +74,17 @@ func TestKeyPair(t *testing.T) {
 
 	// ref names
 	refNames, refKeys := testKeyMgr.References()
-	if len(refNames) != 1 || len(refKeys) != 1 {
-		t.Errorf("Expected to find exactly one referenc")
+	if len(refNames) != 2 || len(refKeys) != 2 {
+		t.Errorf("Expected to find exactly two referenc")
 	}
 	if refNames[0] != "foo" {
 		t.Errorf("Expected to find reName of foo, found %s", refNames[0])
 	}
-	if refKeys[0] != "bar" {
-		t.Errorf("Expected to find reName of bar, found %s", refKeys[0])
+	if refKeys[0] != "ca-private.pem" {
+		t.Errorf("Expected to find reName of ca-private.pem, found %s", refKeys[0])
+	}
+	if refKeys[1] != "ca.pem" {
+		t.Errorf("Expected to find reName of ca.pem, found %s", refKeys[0])
 	}
 	// // loading references
 	// rootCA := NewRootCA()

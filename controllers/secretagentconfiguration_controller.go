@@ -146,7 +146,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					break secretKeys
 				}
 				dataKey := fmt.Sprintf("%s/%s", ref, refDataKeys[index])
-				if val, ok := secRefObject.Data[dataKey]; ok {
+				if val, ok := secRefObject.Data[refDataKeys[index]]; ok {
 					keyRefSecrets[dataKey] = val
 
 				} else {
