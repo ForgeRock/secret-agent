@@ -21,6 +21,34 @@ import (
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 
+var (
+	errCertDecode error = errors.New("PEM data couldn't be decoded")
+)
+
+func keyPairFromPemBytes(publicKeyPem []byte, privateKeyPem []byte) (*x509.Certificate, *ecdsa.PrivateKey, error) {
+	// convert back from PEM
+	block, _ := pem.Decode(publicKeyPem)
+	if block == nil {
+		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
+	}
+	parsedCert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
+	}
+
+	// root private key
+	block, _ = pem.Decode(privateKeyPem)
+	if block == nil {
+		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
+	}
+	parsedPrivateKey, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
+	}
+	return parsedCert, parsedPrivateKey, nil
+
+}
+
 // Certificate represents a certificate and its private key
 type Certificate struct {
 	Cert          *x509.Certificate
@@ -32,21 +60,19 @@ type Certificate struct {
 
 // CertKeyPair Private/Public certificates which optionally can be signed by a RootCA
 type CertKeyPair struct {
-	Name       string
-	RootCA     *RootCA
-	Cert       *Certificate
-	V1Spec     *v1alpha1.KeySpec
-	SelfSigned bool
-	refName    string
-	refDataKey string
-	refValue   []byte
+	Name        string
+	RootCA      *RootCA
+	Cert        *Certificate
+	V1Spec      *v1alpha1.KeySpec
+	SelfSigned  bool
+	refName     string
+	refDataKeys []string
+	refValue    []byte
 }
 
 // References return names of secrets that should be looked up
 func (kp *CertKeyPair) References() ([]string, []string) {
-	priv := fmt.Sprintf("%s-private.pem", kp.refDataKey)
-	pubk := fmt.Sprintf("%s.pem", kp.refDataKey)
-	return []string{kp.refName, kp.refName}, []string{priv, pubk}
+	return []string{kp.refName, kp.refName}, kp.refDataKeys
 }
 
 // LoadSecretFromManager populates CertKeyPair data from secret manager
@@ -199,9 +225,9 @@ func (kp *CertKeyPair) LoadReferenceData(data map[string][]byte) error {
 	if len(data) == 0 {
 		return errors.New("secret reference value not found")
 	}
-	rootData := map[string][]byte{
-		"ca.pem":         data[fmt.Sprintf("%s/%s.pem", kp.refName, kp.refDataKey)],
-		"ca-private.pem": data[fmt.Sprintf("%s/%s-private.pem", kp.refName, kp.refDataKey)],
+	rootData := make(map[string][]byte, 2)
+	for _, refDataKey := range kp.refDataKeys {
+		rootData[refDataKey] = data[fmt.Sprintf("%s/%s", kp.refName, refDataKey)]
 	}
 	kp.RootCA.LoadFromData(rootData)
 	if kp.RootCA.IsEmpty() {
@@ -212,17 +238,20 @@ func (kp *CertKeyPair) LoadReferenceData(data map[string][]byte) error {
 
 // NewCertKeyPair creates new CertKeyPair type for reconcilation
 func NewCertKeyPair(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
+	secretRef, dataKey := handleRefPath(keyConfig.Spec.SignedWithPath)
 	rootCA := &RootCA{
-		Cert: &Certificate{},
+		Name:           secretRef,
+		Cert:           &Certificate{},
+		privateKeyName: fmt.Sprintf("%s-private.pem", dataKey),
+		publicKeyName:  fmt.Sprintf("%s.pem", dataKey),
 	}
 	keyPair := &CertKeyPair{
 		Cert:   &Certificate{},
 		RootCA: rootCA,
 	}
 	keyPair.Name = keyConfig.Name
-	secretRef, dataKey := handleRefPath(keyConfig.Spec.SignedWithPath)
 	keyPair.refName = secretRef
-	keyPair.refDataKey = dataKey
+	keyPair.refDataKeys = []string{fmt.Sprintf("%s.pem", dataKey), fmt.Sprintf("%s-private.pem", dataKey)}
 	keyPair.V1Spec = keyConfig.Spec
 	return keyPair, nil
 }

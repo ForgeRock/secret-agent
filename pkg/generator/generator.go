@@ -14,8 +14,9 @@ const (
 )
 
 var (
-	errRefPath   error = errors.New("reference path should be exactly a secret name and a data key")
-	errNoRefPath error = errors.New("no ref path found")
+	errRefPath    error = errors.New("reference path should be exactly a secret name and a data key")
+	errNoRefPath  error = errors.New("no ref path found")
+	errNoRefFound error = errors.New("no reference data found")
 )
 
 // KeyMgr an interface for managing secret data

@@ -91,7 +91,7 @@ func (ts *TrustStore) EnsureSecretManager(context context.Context, config *v1alp
 func (ts *TrustStore) Generate() error {
 	systemBundle, err := ioutil.ReadFile("/etc/ssl/certs/ca-certificates.crt")
 	if err != nil {
-		return errors.WithMessage(err, "error occured when attempting to pull system trust store")
+		return errors.WithMessage(err, "error occured when attempting to read system trust store")
 	}
 	pemBytes := append(ts.Value, systemBundle...)
 	pemBytes = append(pemBytes, ts.refData...)

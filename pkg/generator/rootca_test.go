@@ -71,18 +71,18 @@ func TestRootCA(t *testing.T) {
 
 	// test to kubernetes
 	rootCA.ToKubernetes(testSecret)
-	if !bytes.Equal(testSecret.Data["ca.pem"], rootCA.Cert.CertPEM) {
+	if !bytes.Equal(testSecret.Data[rootCA.publicKeyName], rootCA.Cert.CertPEM) {
 		t.Error("expected secret data and root ca pem to match")
 	}
-	if !bytes.Equal(testSecret.Data["ca-private.pem"], rootCA.Cert.PrivateKeyPEM) {
+	if !bytes.Equal(testSecret.Data[rootCA.privateKeyName], rootCA.Cert.PrivateKeyPEM) {
 		t.Error("expected seceret data and ca private pem to match")
 	}
 
 	// test load data
 	testCAPEM := []byte("this is public")
 	testCAPrivatePEM := []byte("this is private")
-	testSecret.Data["ca.pem"] = testCAPEM
-	testSecret.Data["ca-private.pem"] = testCAPrivatePEM
+	testSecret.Data[rootCA.publicKeyName] = testCAPEM
+	testSecret.Data[rootCA.privateKeyName] = testCAPrivatePEM
 	rootCA.LoadFromData(testSecret.Data)
 	if !bytes.Equal(testCAPEM, rootCA.Cert.CertPEM) {
 		t.Error("expected secret data and root ca pem to match")

@@ -152,7 +152,7 @@ const (
 )
 
 // KeytoolCmd Specifies the keytool command to use.
-// +kubebuilder:validation:Enum=genkeypair;genseckey;importcert;importpassword
+// +kubebuilder:validation:Enum=genkeypair;genseckey;importcert;importpassword;importkeystore
 type KeytoolCmd string
 
 // Key Config Type Strings
@@ -161,6 +161,7 @@ const (
 	KeytoolCmdGenseckey      KeytoolCmd = "genseckey"
 	KeytoolCmdImportcert     KeytoolCmd = "importcert"
 	KeytoolCmdImportpassword KeytoolCmd = "importpassword"
+	KeytoolCmdImportkeystore KeytoolCmd = "importkeystore"
 )
 
 // AppConfig is the configuration for the forgeops-secrets application

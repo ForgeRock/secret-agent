@@ -11,21 +11,18 @@ import (
 )
 
 func TestKeyPair(t *testing.T) {
-	loadKeyRefs := func(testKeyMgr KeyMgr) error {
-		// loading references
-		rootCA := RootCA{
-			Cert: &Certificate{},
-			DistinguishedName: &v1alpha1.DistinguishedName{
-				CommonName: "foo",
-			},
-		}
-		rootCA.Generate()
-		rootCAData := make(map[string][]byte, 1)
-		rootCAData["foo/ca.pem"] = rootCA.Cert.CertPEM
-		rootCAData["foo/ca-private.pem"] = rootCA.Cert.PrivateKeyPEM
-
-		return testKeyMgr.LoadReferenceData(rootCAData)
+	// loading references
+	rootCA := RootCA{
+		Name: "ca",
+		Cert: &Certificate{},
+		DistinguishedName: &v1alpha1.DistinguishedName{
+			CommonName: "foo",
+		},
 	}
+	rootCA.Generate()
+	rootCAData := make(map[string][]byte, 1)
+	rootCAData["foo/ca.pem"] = rootCA.Cert.CertPEM
+	rootCAData["foo/ca-private.pem"] = rootCA.Cert.PrivateKeyPEM
 	key := &v1alpha1.KeyConfig{
 		Name: "myname",
 		Type: v1alpha1.KeyConfigTypeKeyPair,
@@ -75,15 +72,16 @@ func TestKeyPair(t *testing.T) {
 	// ref names
 	refNames, refKeys := testKeyMgr.References()
 	if len(refNames) != 2 || len(refKeys) != 2 {
-		t.Errorf("Expected to find exactly two referenc")
+		t.Errorf("Expected to find exactly two reference names and two keys")
 	}
+	// name of secret ref name
 	if refNames[0] != "foo" {
 		t.Errorf("Expected to find reName of foo, found %s", refNames[0])
 	}
-	if refKeys[0] != "ca-private.pem" {
-		t.Errorf("Expected to find reName of ca-private.pem, found %s", refKeys[0])
+	if refKeys[1] != "ca-private.pem" {
+		t.Errorf("Expected to find reName of ca-private.pem, found %s", refKeys[1])
 	}
-	if refKeys[1] != "ca.pem" {
+	if refKeys[0] != "ca.pem" {
 		t.Errorf("Expected to find reName of ca.pem, found %s", refKeys[0])
 	}
 	// // loading references
@@ -94,18 +92,6 @@ func TestKeyPair(t *testing.T) {
 	// rootCAData[0]["ca.pem"] = rootCA.Cert.CertPEM
 	// rootCAData[0]["ca-private.pem"] = rootCA.Cert.PrivateKeyPEM
 	// err = testKeyMgr.LoadReferenceData(rootCAData)
-	if err := loadKeyRefs(testKeyMgr); err != nil {
-		t.Errorf("Expected no error %s", err)
-	}
-	if err != nil {
-		t.Fatalf("Expected no error, got: %+v", err)
-	}
-	if !regexp.MustCompile(`-----BEGIN CERTIFICATE-----`).Match(testKeyMgr.RootCA.Cert.CertPEM) {
-		t.Error("Expected '-----BEGIN CERTIFICATE-----' match, found none")
-	}
-	if !regexp.MustCompile(`BEGIN EC PRIVATE KEY`).Match(testKeyMgr.RootCA.Cert.PrivateKeyPEM) {
-		t.Error("Expected BEGIN EC PRIVATE KEY match, found none")
-	}
 	testKeyMgr.Cert.PrivateKeyPEM = []byte("foo bar")
 	testKeyMgr.Cert.CertPEM = []byte("foo bar")
 	if isEmpty := testKeyMgr.IsEmpty(); isEmpty {
@@ -118,7 +104,7 @@ func TestKeyPair(t *testing.T) {
 	if testGenKeyMgr == nil {
 		t.Errorf("tf")
 	}
-	loadKeyRefs(testGenKeyMgr)
+	testGenKeyMgr.LoadReferenceData(rootCAData)
 	if err := testGenKeyMgr.Generate(); err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}

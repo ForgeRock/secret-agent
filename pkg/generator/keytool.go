@@ -77,14 +77,24 @@ type KeyTool struct {
 	keyPassValue   string
 }
 
-func (kt *KeyTool) baseCommand(execCmd string, baseArgs []string) func(cmdName string, args []string) *exec.Cmd {
-	baseArgs = []string{
+func (kt *KeyTool) baseCommand(execCmd string) func(cmdName string, args []string) *exec.Cmd {
+	baseArgs := []string{
 		"-storetype", string(kt.V1Spec.StoreType),
 		"-storepass", kt.storePassValue,
 		"-keypass", kt.keyPassValue,
 		"-keystore", kt.storePath,
 	}
 	return func(cmdName string, args []string) *exec.Cmd {
+		// for special cmds
+		switch cmdName {
+		case "-importkeystore":
+			baseArgs = []string{
+				"-deststoretype", string(kt.V1Spec.StoreType),
+				"-deststorepass", kt.keyPassValue,
+				"-destkeypass", kt.storePassValue,
+				"-destkeystore", kt.storePath,
+			}
+		}
 		cmdArgs := []string{}
 		cmdArgs = append(cmdArgs, cmdName)
 		cmdArgs = append(cmdArgs, baseArgs...)
@@ -93,17 +103,19 @@ func (kt *KeyTool) baseCommand(execCmd string, baseArgs []string) func(cmdName s
 	}
 }
 func (kt *KeyTool) loadAliasManager(alias *v1alpha1.KeytoolAliasConfig) {
-	var ktAlias AliasMgr
 	switch alias.Cmd {
 	case v1alpha1.KeytoolCmdImportpassword:
-		ktAlias = NewKeyToolImportPassword(alias)
-		kt.aliasMgrs = append(kt.aliasMgrs, ktAlias)
-	case v1alpha1.KeytoolCmdGenkeypair:
-		ktAlias = NewKeyToolGenKeyPair(alias)
-		kt.aliasMgrs = append(kt.aliasMgrs, ktAlias)
+		pwdAlias := NewKeyToolImportPassword(alias)
+		kt.aliasMgrs = append(kt.aliasMgrs, pwdAlias)
 	case v1alpha1.KeytoolCmdGenseckey:
-		ktAlias = NewKeyToolGenSecKey(alias)
-		kt.aliasMgrs = append(kt.aliasMgrs, ktAlias)
+		genSecAlias := NewKeyToolGenSecKey(alias)
+		kt.aliasMgrs = append(kt.aliasMgrs, genSecAlias)
+	case v1alpha1.KeytoolCmdGenkeypair:
+		kpAlias := NewKeyToolGenKeyPair(alias)
+		kt.aliasMgrs = append(kt.aliasMgrs, kpAlias)
+	case v1alpha1.KeytoolCmdImportkeystore:
+		importKeyStoreAlias := NewKeyToolImportKeystore(alias)
+		kt.aliasMgrs = append(kt.aliasMgrs, importKeyStoreAlias)
 	}
 	return
 }
@@ -167,13 +179,7 @@ func (kt *KeyTool) EnsureSecretManager(context context.Context, config *v1alpha1
 func (kt *KeyTool) Generate() error {
 	// clean up after ourselves, we store as bytes in memory
 	defer os.RemoveAll(kt.storePath)
-	baseArgs := []string{
-		"-storetype", string(kt.V1Spec.StoreType),
-		"-storepass", kt.storePassValue,
-		"-keypass", kt.keyPassValue,
-		"-keystore", kt.storePath,
-	}
-	cmd := kt.baseCommand(*keytoolPath, baseArgs)
+	cmd := kt.baseCommand(*keytoolPath)
 	for _, mgr := range kt.aliasMgrs {
 		if err := mgr.Generate(cmd); err != nil {
 			return err

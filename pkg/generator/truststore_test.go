@@ -20,7 +20,7 @@ func TestTrustStore(t *testing.T) {
 		Name: "myname",
 		Type: v1alpha1.KeyConfigTypeTrustStore,
 		Spec: &v1alpha1.KeySpec{
-			TruststoreImportPaths: []string{"testconfig/ca"},
+			TruststoreImportPaths: []string{"testConfig/ca"},
 		},
 	}
 	tsMgr, err := NewTrustStore(key)
@@ -32,7 +32,7 @@ func TestTrustStore(t *testing.T) {
 	}
 	tsMgr.References()
 	tsMgr.LoadReferenceData(map[string][]byte{
-		"testconfig/ca.pem": testSecret.Data["ca.pem"],
+		"testConfig/ca.pem": testSecret.Data[rootCA.publicKeyName],
 	})
 	tsMgr.Generate()
 	parsed, err := pkcs12.DecodeTrustStore(tsMgr.Value, "changeit")

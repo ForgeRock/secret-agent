@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
@@ -31,8 +32,10 @@ func (kp *KeyToolImportPassword) References() ([]string, []string) {
 
 // LoadReferenceData loads data from references
 func (kp *KeyToolImportPassword) LoadReferenceData(data map[string][]byte) error {
-	if value, ok := data[kp.v1aliasConfig.SourcePath]; ok {
-		kp.refData = value
+	key := fmt.Sprintf("%s/%s", kp.refName, kp.refDataKey)
+	ok := true
+	if kp.refData, ok = data[key]; !ok {
+		return errors.Wrap(errNoRefFound, fmt.Sprintf("no data for %s", key))
 	}
 	return nil
 }

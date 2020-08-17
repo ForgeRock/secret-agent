@@ -10,6 +10,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"math/big"
 	"time"
 
@@ -21,17 +22,23 @@ import (
 
 // RootCA root certificate
 type RootCA struct {
+	Name              string
 	ValidDuration     time.Duration
 	Cert              *Certificate
 	DistinguishedName *v1alpha1.DistinguishedName
+	privateKeyName    string
+	publicKeyName     string
 }
 
 // NewRootCA create new RootCA struct
 func NewRootCA(keyConfig *v1alpha1.KeyConfig) (*RootCA, error) {
 	cert := &Certificate{}
 	rCA := &RootCA{Cert: cert,
+		Name:              keyConfig.Name,
 		ValidDuration:     keyConfig.Spec.Duration.Duration,
 		DistinguishedName: keyConfig.Spec.DistinguishedName,
+		publicKeyName:     fmt.Sprintf("%s.pem", keyConfig.Name),
+		privateKeyName:    fmt.Sprintf("%s-private.pem", keyConfig.Name),
 	}
 	return rCA, nil
 }
@@ -49,10 +56,8 @@ func (rCA *RootCA) LoadReferenceData(data map[string][]byte) error {
 // LoadSecretFromManager populates RootCA data from secret manager
 func (rCA *RootCA) LoadSecretFromManager(ctx context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
 	var err error
-	// TODO we shouldn't be hardcoding ca.pem. Use `Name`.ca instead
-
-	caPemFmt := fmt.Sprintf("%s_%s", namespace, "ca.pem")
-	caPrivatePemFmt := fmt.Sprintf("%s_%s", namespace, "ca-private.pem")
+	caPemFmt := fmt.Sprintf("%s_%s", namespace, rCA.publicKeyName)
+	caPrivatePemFmt := fmt.Sprintf("%s_%s", namespace, rCA.privateKeyName)
 	rCA.Cert.CertPEM, err = secretsmanager.LoadSecret(ctx, config, caPemFmt)
 	if err != nil {
 		return err
@@ -66,12 +71,12 @@ func (rCA *RootCA) LoadSecretFromManager(ctx context.Context, config *v1alpha1.A
 
 // InSecret return true if the key is one found in the secret
 func (rCA *RootCA) InSecret(secObject *corev1.Secret) bool {
-	if secObject.Data == nil || secObject.Data["ca.pem"] == nil ||
-		secObject.Data["ca-private.pem"] == nil || rCA.IsEmpty() {
+	if secObject.Data == nil || secObject.Data[rCA.publicKeyName] == nil ||
+		secObject.Data[rCA.privateKeyName] == nil || rCA.IsEmpty() {
 		return false
 	}
-	if bytes.Compare(rCA.Cert.CertPEM, secObject.Data["ca.pem"]) == 0 &&
-		bytes.Compare(rCA.Cert.PrivateKeyPEM, secObject.Data["ca-private.pem"]) == 0 {
+	if bytes.Compare(rCA.Cert.CertPEM, secObject.Data[rCA.publicKeyName]) == 0 &&
+		bytes.Compare(rCA.Cert.PrivateKeyPEM, secObject.Data[rCA.privateKeyName]) == 0 {
 		return true
 	}
 	return false
@@ -81,8 +86,8 @@ func (rCA *RootCA) InSecret(secObject *corev1.Secret) bool {
 // EnsureSecretManager populates secrete manager from RootCA data
 func (rCA *RootCA) EnsureSecretManager(ctx context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
 	var err error
-	caPemFmt := fmt.Sprintf("%s_%s", namespace, "ca.pem")
-	caPrivatePemFmt := fmt.Sprintf("%s_%s", namespace, "ca-private.pem")
+	caPemFmt := fmt.Sprintf("%s_%s", namespace, rCA.publicKeyName)
+	caPrivatePemFmt := fmt.Sprintf("%s_%s", namespace, rCA.privateKeyName)
 	err = secretsmanager.EnsureSecret(ctx, config, caPemFmt, rCA.Cert.CertPEM)
 	if err != nil {
 		return err
@@ -111,34 +116,17 @@ func (rCA *RootCA) LoadFromData(data map[string][]byte) {
 	if rCA.Cert == nil {
 		rCA.Cert = &Certificate{}
 	}
-	if certPem, ok := data["ca.pem"]; ok {
+	if certPem, ok := data[rCA.publicKeyName]; ok {
 		rCA.Cert.CertPEM = certPem
 	}
-	if certPrivatePem, ok := data["ca-private.pem"]; ok {
+	if certPrivatePem, ok := data[rCA.privateKeyName]; ok {
 		rCA.Cert.PrivateKeyPEM = certPrivatePem
 	}
-
-	// convert back from PEM
-	block, _ := pem.Decode(rCA.Cert.CertPEM)
-	if block == nil {
-		return
-	}
-	parsedCert, err := x509.ParseCertificate(block.Bytes)
+	var err error
+	rCA.Cert.Cert, rCA.Cert.PrivateKeyEC, err = keyPairFromPemBytes(rCA.Cert.CertPEM, rCA.Cert.PrivateKeyPEM)
 	if err != nil {
-		return
+		log.Printf("error decoding %s", err)
 	}
-
-	// root private key
-	block, _ = pem.Decode(rCA.Cert.PrivateKeyPEM)
-	if block == nil {
-		return
-	}
-	parsedPrivateKey, err := x509.ParseECPrivateKey(block.Bytes)
-	if err != nil {
-		return
-	}
-	rCA.Cert.Cert = parsedCert
-	rCA.Cert.PrivateKeyEC = parsedPrivateKey
 }
 
 // ToKubernetes "marshals" object to kubernetes object
@@ -147,8 +135,8 @@ func (rCA *RootCA) ToKubernetes(secret *corev1.Secret) {
 	if secret.Data == nil {
 		secret.Data = make(map[string][]byte)
 	}
-	secret.Data["ca.pem"] = rCA.Cert.CertPEM
-	secret.Data["ca-private.pem"] = rCA.Cert.PrivateKeyPEM
+	secret.Data[rCA.publicKeyName] = rCA.Cert.CertPEM
+	secret.Data[rCA.privateKeyName] = rCA.Cert.PrivateKeyPEM
 }
 
 // Generate generates data
