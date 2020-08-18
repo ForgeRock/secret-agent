@@ -71,7 +71,7 @@ func (r *SecretAgentConfiguration) Default() {
 				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Length = new(int)
 				*r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Length = 32
 			}
-			if key.Type == KeyConfigTypeCA && key.Spec.Duration == nil {
+			if (key.Type == KeyConfigTypeCA || key.Type == KeyConfigTypeKeyPair) && key.Spec.Duration == nil {
 				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Duration = new(metav1.Duration)
 				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Duration.Duration = time.Duration(10 * 365 * 24 * time.Hour) //10yrs
 			}

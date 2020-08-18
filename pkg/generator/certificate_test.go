@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestKeyPair(t *testing.T) {
@@ -23,10 +25,12 @@ func TestKeyPair(t *testing.T) {
 	rootCAData := make(map[string][]byte, 1)
 	rootCAData["foo/ca.pem"] = rootCA.Cert.CertPEM
 	rootCAData["foo/ca-private.pem"] = rootCA.Cert.PrivateKeyPEM
+	testDuration, _ := time.ParseDuration("5y")
 	key := &v1alpha1.KeyConfig{
 		Name: "myname",
 		Type: v1alpha1.KeyConfigTypeKeyPair,
 		Spec: &v1alpha1.KeySpec{
+			Duration:  &metav1.Duration{Duration: testDuration},
 			Algorithm: v1alpha1.AlgorithmTypeSHA256WithRSA,
 			DistinguishedName: &v1alpha1.DistinguishedName{
 				CommonName: "bar",
@@ -116,6 +120,7 @@ func TestKeyPair(t *testing.T) {
 	}
 
 	testSecret := &corev1.Secret{}
+
 	testGenKeyMgr.ToKubernetes(testSecret)
 	if !bytes.Equal(testSecret.Data[pubK8Key], testGenKeyMgr.Cert.CertPEM) {
 		t.Error("expected secret data and root ca pem to match")
@@ -123,4 +128,35 @@ func TestKeyPair(t *testing.T) {
 	if !bytes.Equal(testSecret.Data[privK8Key], testGenKeyMgr.Cert.PrivateKeyPEM) {
 		t.Error("expected seceret data and ca private pem to match")
 	}
+
+	testExpired, _ := time.ParseDuration("-72h")
+	expiredKey := &v1alpha1.KeyConfig{
+		Name: "myname",
+		Type: v1alpha1.KeyConfigTypeKeyPair,
+		Spec: &v1alpha1.KeySpec{
+			Duration:   &metav1.Duration{Duration: testExpired},
+			Algorithm:  v1alpha1.AlgorithmTypeSHA256WithRSA,
+			SelfSigned: true,
+			DistinguishedName: &v1alpha1.DistinguishedName{
+				CommonName: "bar",
+			},
+		},
+	}
+	testKeyMgrExpired, err := NewCertKeyPair(expiredKey)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
+	err = testKeyMgrExpired.Generate()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
+	expectedBefore, _ := time.Parse("0000-Jan-01", "0000-Jan-01")
+	expectedAfter, _ := time.Parse("0000-Jan-01", "0000-Jan-02")
+	if testKeyMgrExpired.Cert.Cert.NotAfter != expectedAfter {
+		t.Fatalf("Expected 0000-Jan-02 as the end date but found %s", testKeyMgrExpired.Cert.Cert.NotBefore.Format("0000-Jan-01"))
+	}
+	if testKeyMgrExpired.Cert.Cert.NotBefore != expectedBefore {
+		t.Fatalf("Expected 0000-Jan-01 as the start date but found %s", testKeyMgrExpired.Cert.Cert.NotBefore.Format("0000-Jan-01"))
+	}
+
 }

@@ -217,6 +217,7 @@ type KeySpec struct {
 	KeyPassPath           string             `json:"keyPassPath,omitempty"`
 	Sans                  []string           `json:"sans,omitempty"`
 	TruststoreImportPaths []string           `json:"truststoreImportPaths,omitempty"`
+	SelfSigned            bool               `json:"selfSigned,omitempty"`
 	Duration              *metav1.Duration   `json:"duration,omitempty"`
 	UseBinaryCharacters   bool               `json:"useBinaryCharacters,omitempty"`
 

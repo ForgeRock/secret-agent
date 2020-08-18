@@ -127,9 +127,23 @@ func (kp *CertKeyPair) Generate() error {
 		marshaledPrivateKey := x509.MarshalPKCS1PrivateKey(kp.Cert.PrivateKeyRSA)
 		kp.Cert.PrivateKeyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: marshaledPrivateKey})
 	}
+	// setup expire
 	// prepare cert template
+	currentTime := time.Now()
 	notBefore := time.Now().Add(time.Minute * -5)
-	notAfter := notBefore.Add(10 * 365 * 24 * time.Hour) // 10yrs
+	notAfter := currentTime.Add(kp.V1Spec.Duration.Duration)
+
+	// forcing an expired/unusable cert
+	// use case for expired: expired certs can be used for encryption but not intended to be part of PKI.
+	// In the event the cert gets used as part of PKI setup, the clients should reject the cert.
+	// They are used for sharing encrypted data between instances of applications.
+	//
+	// if the current time is after the end of the certificates valid date then make the certificate valid duration to be unusable.
+	if currentTime.After(notAfter) {
+		notBefore, _ = time.Parse("0000-Jan-01", "0000-Jan-01")
+		notAfter, _ = time.Parse("0000-Jan-01", "0000-Jan-02")
+	}
+
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
@@ -143,7 +157,6 @@ func (kp *CertKeyPair) Generate() error {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		IsCA:                  false,
-		SignatureAlgorithm:    x509.ECDSAWithSHA256,
 	}
 	pkixName := dnToPkixName(kp.V1Spec.DistinguishedName)
 	if pkixName != nil {
@@ -165,10 +178,24 @@ func (kp *CertKeyPair) Generate() error {
 	case v1alpha1.AlgorithmTypeSHA256WithRSA:
 		publicKey = &kp.Cert.PrivateKeyRSA.PublicKey
 	}
-	signer := &Certificate{Cert: kp.RootCA.Cert.Cert,
-		PrivateKeyEC: kp.RootCA.Cert.PrivateKeyEC,
+	// self sign or root signed
+	var signer *x509.Certificate
+	var signerPrivate interface{}
+	if kp.V1Spec.SelfSigned {
+		signer = certTemplate
+		// self signed certs can use either alg for signing
+		switch kp.V1Spec.Algorithm {
+		case v1alpha1.AlgorithmTypeECDSAWithSHA256:
+			signerPrivate = kp.Cert.PrivateKeyEC
+		case v1alpha1.AlgorithmTypeSHA256WithRSA:
+			signerPrivate = kp.Cert.PrivateKeyRSA
+		}
+	} else {
+		// our RooCA is always ECDSA
+		signer = kp.RootCA.Cert.Cert
+		signerPrivate = kp.RootCA.Cert.PrivateKeyEC
 	}
-	certBytes, err := x509.CreateCertificate(rand.Reader, certTemplate, signer.Cert, publicKey, signer.PrivateKeyEC)
+	certBytes, err := x509.CreateCertificate(rand.Reader, certTemplate, signer, publicKey, signerPrivate)
 	if err != nil {
 		return errors.WithStack(err)
 	}
