@@ -15,18 +15,18 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-var (
-	keytoolPath = flag.String("keytoolPath", "keytool", "The path to the keytool executable")
-	opensslPath = flag.String("opensslPath", "openssl", "The path to the openssl executable")
-	tempDir     = ""
-)
+var keytoolPath *string
+var opensslPath *string
 
 func init() {
-	dir, err := ioutil.TempDir("", "secrets")
-	if err != nil {
-		panic(err)
+	// follow java home if it exists
+	javaHome, exists := os.LookupEnv("JAVA_HOME")
+	defaultKeytoolPath := "/usr/bin/keytool"
+	if exists {
+		defaultKeytoolPath = path.Join(javaHome, "bin/keytool")
 	}
-	tempDir = dir
+	keytoolPath = flag.String("keytoolPath", defaultKeytoolPath, "The path to the keytool executable")
+	opensslPath = flag.String("opensslPath", "/usr/bin/openssl", "The path to the openssl executable")
 }
 
 type cmdRunner func(cmdName string, args []string) *exec.Cmd
