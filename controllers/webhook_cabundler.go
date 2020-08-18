@@ -12,6 +12,8 @@ import (
 
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	k8serror "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -150,12 +152,36 @@ func generateCertificates(sans []string) (rootCA, leafCert *generator.Certificat
 	return
 }
 
+// createWebhookSecret extract the webhook secret data from from k8s api
+func createWebhookSecret(k client.Client, secretName, namespace string) (err error) {
+	k8sSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: namespace,
+		},
+		Data: make(map[string][]byte),
+		Type: "kubernetes.io/tls",
+	}
+	k8sSecret.Data["tls.crt"] = []byte("")
+	k8sSecret.Data["tls.key"] = []byte("")
+	k8sSecret.Data["ca.crt"] = []byte("")
+	if err = k.Create(context.TODO(), k8sSecret); err != nil {
+		return
+	}
+	return
+}
+
 // getWebhookSecret extract the webhook secret data from from k8s api
 func getWebhookSecret(k client.Client, secretName, namespace string) (rootCAPem, certPEM, keyPEM []byte, err error) {
 
 	k8sSecret := &corev1.Secret{}
 	if err = k.Get(context.TODO(), types.NamespacedName{Name: secretName, Namespace: namespace}, k8sSecret); err != nil {
+		if k8serror.IsNotFound(err) {
+			err = createWebhookSecret(k, secretName, namespace)
+			return
+		}
 		return
+
 	}
 	var ok bool
 	// secret found, let's grab the contents

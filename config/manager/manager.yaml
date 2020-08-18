@@ -32,7 +32,7 @@ spec:
         - --opensslPath=/usr/bin/openssl
         - --webhook-service-ns=$(SERVICE_NAMESPACE)
         - --webhook-service-name=$(SERVICE_NAME)
-        - --webhook-secret-name=$(WEBHOOK_SECRET_NAME)
+        - --webhook-secret-name=webhook-server-cert
         - --validating-webhook-name=$(VALIDATING_WEBHOOK_CONFIGURATION_NAME)
         - --mutating-webhook-name=$(MUTATING_WEBHOOK_CONFIGURATION_NAME) 
         image: controller:latest
