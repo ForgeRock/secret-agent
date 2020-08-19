@@ -19,35 +19,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
 )
 
 var (
 	errCertDecode error = errors.New("PEM data couldn't be decoded")
 )
-
-func keyPairFromPemBytes(publicKeyPem []byte, privateKeyPem []byte) (*x509.Certificate, *ecdsa.PrivateKey, error) {
-	// convert back from PEM
-	block, _ := pem.Decode(publicKeyPem)
-	if block == nil {
-		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
-	}
-	parsedCert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
-	}
-
-	// root private key
-	block, _ = pem.Decode(privateKeyPem)
-	if block == nil {
-		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
-	}
-	parsedPrivateKey, err := x509.ParseECPrivateKey(block.Bytes)
-	if err != nil {
-		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
-	}
-	return parsedCert, parsedPrivateKey, nil
-
-}
 
 // Certificate represents a certificate and its private key
 type Certificate struct {
@@ -75,14 +52,38 @@ func (kp *CertKeyPair) References() ([]string, []string) {
 	return []string{kp.refName, kp.refName}, kp.refDataKeys
 }
 
-// LoadSecretFromManager populates CertKeyPair data from secret manager
-func (kp *CertKeyPair) LoadSecretFromManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+// LoadSecretFromManager populates RootCA data from secret manager
+func (kp *CertKeyPair) LoadSecretFromManager(ctx context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+	var err error
+	publicPemKeyFmt := fmt.Sprintf("%s_%s_%s.pem", namespace, secretName, kp.Name)
+	privatePemKeyFmt := fmt.Sprintf("%s_%s_%s-private.pem", namespace, secretName, kp.Name)
+
+	kp.Cert.CertPEM, err = secretsmanager.LoadSecret(ctx, config, publicPemKeyFmt)
+	if err != nil {
+		return err
+	}
+	kp.Cert.PrivateKeyPEM, err = secretsmanager.LoadSecret(ctx, config, privatePemKeyFmt)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
-// EnsureSecretManager populates secrete manager from CertKeyPair data
-func (kp *CertKeyPair) EnsureSecretManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+// EnsureSecretManager populates secrete manager from RootCA data
+func (kp *CertKeyPair) EnsureSecretManager(ctx context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+	var err error
+	publicPemKeyFmt := fmt.Sprintf("%s_%s_%s.pem", namespace, secretName, kp.Name)
+	privatePemKeyFmt := fmt.Sprintf("%s_%s_%s-private.pem", namespace, secretName, kp.Name)
+	err = secretsmanager.EnsureSecret(ctx, config, publicPemKeyFmt, kp.Cert.CertPEM)
+	if err != nil {
+		return err
+	}
+	err = secretsmanager.EnsureSecret(ctx, config, privatePemKeyFmt, kp.Cert.PrivateKeyPEM)
+	if err != nil {
+		return err
+	}
 	return nil
+
 }
 
 // InSecret return true if the key is one found in the secret
@@ -298,4 +299,28 @@ func dnToPkixName(dn *v1alpha1.DistinguishedName) *pkix.Name {
 		SerialNumber:       dn.SerialNumber,
 		CommonName:         dn.CommonName,
 	}
+}
+
+func keyPairFromPemBytes(publicKeyPem []byte, privateKeyPem []byte) (*x509.Certificate, *ecdsa.PrivateKey, error) {
+	// convert back from PEM
+	block, _ := pem.Decode(publicKeyPem)
+	if block == nil {
+		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
+	}
+	parsedCert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
+	}
+
+	// root private key
+	block, _ = pem.Decode(privateKeyPem)
+	if block == nil {
+		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
+	}
+	parsedPrivateKey, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
+	}
+	return parsedCert, parsedPrivateKey, nil
+
 }

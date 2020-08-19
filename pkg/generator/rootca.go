@@ -56,8 +56,8 @@ func (rCA *RootCA) LoadReferenceData(data map[string][]byte) error {
 // LoadSecretFromManager populates RootCA data from secret manager
 func (rCA *RootCA) LoadSecretFromManager(ctx context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
 	var err error
-	caPemFmt := fmt.Sprintf("%s_%s", namespace, rCA.publicKeyName)
-	caPrivatePemFmt := fmt.Sprintf("%s_%s", namespace, rCA.privateKeyName)
+	caPemFmt := fmt.Sprintf("%s_%s_%s", namespace, secretName, rCA.publicKeyName)
+	caPrivatePemFmt := fmt.Sprintf("%s_%s_%s", namespace, secretName, rCA.privateKeyName)
 	rCA.Cert.CertPEM, err = secretsmanager.LoadSecret(ctx, config, caPemFmt)
 	if err != nil {
 		return err
@@ -86,8 +86,8 @@ func (rCA *RootCA) InSecret(secObject *corev1.Secret) bool {
 // EnsureSecretManager populates secrete manager from RootCA data
 func (rCA *RootCA) EnsureSecretManager(ctx context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
 	var err error
-	caPemFmt := fmt.Sprintf("%s_%s", namespace, rCA.publicKeyName)
-	caPrivatePemFmt := fmt.Sprintf("%s_%s", namespace, rCA.privateKeyName)
+	caPemFmt := fmt.Sprintf("%s_%s_%s", namespace, secretName, rCA.publicKeyName)
+	caPrivatePemFmt := fmt.Sprintf("%s_%s_%s", namespace, secretName, rCA.privateKeyName)
 	err = secretsmanager.EnsureSecret(ctx, config, caPemFmt, rCA.Cert.CertPEM)
 	if err != nil {
 		return err
