@@ -17,6 +17,7 @@ import (
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
@@ -49,7 +50,10 @@ type CertKeyPair struct {
 
 // References return names of secrets that should be looked up
 func (kp *CertKeyPair) References() ([]string, []string) {
-	return []string{kp.refName, kp.refName}, kp.refDataKeys
+	if kp.RootCA != nil {
+		return []string{kp.refName, kp.refName}, kp.refDataKeys
+	}
+	return []string{}, []string{}
 }
 
 // LoadSecretFromManager populates RootCA data from secret manager
@@ -132,6 +136,12 @@ func (kp *CertKeyPair) Generate() error {
 	// prepare cert template
 	currentTime := time.Now()
 	notBefore := time.Now().Add(time.Minute * -5)
+	if kp.V1Spec.Duration == nil {
+		kp.V1Spec.Duration = &metav1.Duration{
+			Duration: 10 * 365 * 24 * time.Hour, //10 yrs
+		}
+	}
+
 	notAfter := currentTime.Add(kp.V1Spec.Duration.Duration)
 
 	// forcing an expired/unusable cert
@@ -250,6 +260,10 @@ func (kp *CertKeyPair) ToKubernetes(secObject *corev1.Secret) {
 
 // LoadReferenceData loads references from data
 func (kp *CertKeyPair) LoadReferenceData(data map[string][]byte) error {
+	// this is a self signed cert
+	if kp.RootCA == nil {
+		return nil
+	}
 	if len(data) == 0 {
 		return errors.New("secret reference value not found")
 	}
@@ -266,20 +280,25 @@ func (kp *CertKeyPair) LoadReferenceData(data map[string][]byte) error {
 
 // NewCertKeyPair creates new CertKeyPair type for reconcilation
 func NewCertKeyPair(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
-	secretRef, dataKey := handleRefPath(keyConfig.Spec.SignedWithPath)
-	rootCA := &RootCA{
-		Name:           secretRef,
-		Cert:           &Certificate{},
-		privateKeyName: fmt.Sprintf("%s-private.pem", dataKey),
-		publicKeyName:  fmt.Sprintf("%s.pem", dataKey),
-	}
 	keyPair := &CertKeyPair{
-		Cert:   &Certificate{},
-		RootCA: rootCA,
+		Cert: &Certificate{},
+		Name: keyConfig.Name,
 	}
-	keyPair.Name = keyConfig.Name
-	keyPair.refName = secretRef
-	keyPair.refDataKeys = []string{fmt.Sprintf("%s.pem", dataKey), fmt.Sprintf("%s-private.pem", dataKey)}
+	secretRef, dataKey := handleRefPath(keyConfig.Spec.SignedWithPath)
+	selfSigned := &keyConfig.Spec.SelfSigned != nil && keyConfig.Spec.SelfSigned == true
+	if !selfSigned {
+		rootCA := &RootCA{
+			Name:           secretRef,
+			Cert:           &Certificate{},
+			privateKeyName: fmt.Sprintf("%s-private.pem", dataKey),
+			publicKeyName:  fmt.Sprintf("%s.pem", dataKey),
+		}
+		keyPair.RootCA = rootCA
+		keyPair.refName = secretRef
+		keyPair.refDataKeys = []string{fmt.Sprintf("%s.pem", dataKey), fmt.Sprintf("%s-private.pem", dataKey)}
+	} else if !selfSigned && secretRef == "" {
+		return &CertKeyPair{}, errors.New("expected to find path to a signing key")
+	}
 	keyPair.V1Spec = keyConfig.Spec
 	return keyPair, nil
 }

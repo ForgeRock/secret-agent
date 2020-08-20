@@ -129,7 +129,6 @@ func generateCertificates(sans []string) (rootCA, leafCert *generator.Certificat
 			CommonName: "secret-agent",
 		},
 	}
-
 	certKeyPair := generator.CertKeyPair{
 		RootCA: &rCA,
 		Cert:   &generator.Certificate{},
@@ -137,6 +136,9 @@ func generateCertificates(sans []string) (rootCA, leafCert *generator.Certificat
 			Sans:              sans,
 			Algorithm:         v1alpha1.AlgorithmTypeECDSAWithSHA256,
 			DistinguishedName: &v1alpha1.DistinguishedName{},
+			Duration: &metav1.Duration{
+				Duration: 10 * 365 * 24 * time.Hour, //10 yrs
+			},
 		},
 	}
 	err = rCA.Generate()

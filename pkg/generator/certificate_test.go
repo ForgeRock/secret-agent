@@ -58,22 +58,6 @@ func TestKeyPair(t *testing.T) {
 	}
 
 	// k8s keys
-	pubK8Key, privK8Key := fmt.Sprintf("%s.pem", key.Name), fmt.Sprintf("%s-private.pem", key.Name)
-
-	// data
-	data := make(map[string][]byte, 2)
-	pub := []byte("afasfsafasf")
-	priv := []byte("asfsafsafaslkmlklklj")
-	data[pubK8Key], data[privK8Key] = pub, priv
-	testKeyMgr.LoadFromData(data)
-	if !bytes.Equal(testKeyMgr.Cert.PrivateKeyPEM, priv) {
-		t.Errorf("Expected to find match bytes, found %s", string(testKeyMgr.Cert.PrivateKeyPEM))
-	}
-	if !bytes.Equal(testKeyMgr.Cert.CertPEM, pub) {
-		t.Errorf("Expected to find match bytes, found %s", string(testKeyMgr.Cert.CertPEM))
-	}
-
-	// ref names
 	refNames, refKeys := testKeyMgr.References()
 	if len(refNames) != 2 || len(refKeys) != 2 {
 		t.Errorf("Expected to find exactly two reference names and two keys")
@@ -88,6 +72,21 @@ func TestKeyPair(t *testing.T) {
 	if refKeys[0] != "ca.pem" {
 		t.Errorf("Expected to find reName of ca.pem, found %s", refKeys[0])
 	}
+
+	// data
+	data := make(map[string][]byte, 2)
+	pub := []byte("afasfsafasf")
+	priv := []byte("asfsafsafaslkmlklklj")
+	pubK8Key, privK8Key := fmt.Sprintf("%s.pem", key.Name), fmt.Sprintf("%s-private.pem", key.Name)
+	data[pubK8Key], data[privK8Key] = pub, priv
+	testKeyMgr.LoadFromData(data)
+	if !bytes.Equal(testKeyMgr.Cert.PrivateKeyPEM, priv) {
+		t.Errorf("Expected to find match bytes, found %s", string(testKeyMgr.Cert.PrivateKeyPEM))
+	}
+	if !bytes.Equal(testKeyMgr.Cert.CertPEM, pub) {
+		t.Errorf("Expected to find match bytes, found %s", string(testKeyMgr.Cert.CertPEM))
+	}
+
 	// // loading references
 	// rootCA := NewRootCA()
 	// rootCA.Generate()
@@ -157,6 +156,24 @@ func TestKeyPair(t *testing.T) {
 	}
 	if testKeyMgrExpired.Cert.Cert.NotBefore != expectedBefore {
 		t.Fatalf("Expected 0000-Jan-01 as the start date but found %s", testKeyMgrExpired.Cert.Cert.NotBefore.Format("0000-Jan-01"))
+	}
+
+	// test nil pointer protection on duration
+	keyNil := &v1alpha1.KeyConfig{
+		Name: "myname",
+		Type: v1alpha1.KeyConfigTypeKeyPair,
+		Spec: &v1alpha1.KeySpec{
+			Algorithm: v1alpha1.AlgorithmTypeSHA256WithRSA,
+			DistinguishedName: &v1alpha1.DistinguishedName{
+				CommonName: "bar",
+			},
+			SelfSigned: true,
+		},
+	}
+	testGenKeyMgrNil, err := NewCertKeyPair(keyNil)
+	err = testGenKeyMgrNil.Generate()
+	if err != nil {
+		t.Fatalf("expected no error when duration is not set %s", err)
 	}
 
 }

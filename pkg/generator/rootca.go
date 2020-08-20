@@ -163,6 +163,10 @@ func (rCA *RootCA) Generate() error {
 	if err != nil {
 		return errors.WithStack(err)
 	}
+	// protect against an unset field
+	if &rCA.ValidDuration == nil {
+		rCA.ValidDuration = 100 * 365 * 24 * time.Hour //100 yrs
+	}
 	certTemplate := &x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
