@@ -225,13 +225,13 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 
 				}
 				// must set signedWith
-				if key.Spec.SignedWithPath == "" {
+				if key.Spec.SignedWithPath == "" && !key.Spec.SelfSigned {
 					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.SignedWithPath, name,
 						"signedWith", "signedWithValueEmpty", "")
 					return
 				}
 				// signedWith path must be valid
-				if !pathExistsInSecretAgentConfiguration(key.Spec.SignedWithPath, config.Secrets) {
+				if !pathExistsInSecretAgentConfiguration(key.Spec.SignedWithPath, config.Secrets) && !key.Spec.SelfSigned {
 					sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.SignedWithPath, name,
 						"signedWith", "signedWithInvalidPath", "")
 					return
