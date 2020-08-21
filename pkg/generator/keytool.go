@@ -116,6 +116,9 @@ func (kt *KeyTool) loadAliasManager(alias *v1alpha1.KeytoolAliasConfig) {
 	case v1alpha1.KeytoolCmdImportkeystore:
 		importKeyStoreAlias := NewKeyToolImportKeystore(alias)
 		kt.aliasMgrs = append(kt.aliasMgrs, importKeyStoreAlias)
+	case v1alpha1.KeytoolCmdImportcert:
+		importCertAlias := NewKeyToolImportCert(alias)
+		kt.aliasMgrs = append(kt.aliasMgrs, importCertAlias)
 	}
 	return
 }

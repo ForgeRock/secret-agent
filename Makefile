@@ -40,7 +40,7 @@ manager: generate fmt vet
 
 # debug
 debug: generate fmt vet manifests
-	dlv debug ./main.go
+	dlv debug -- ./main.go --debug
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
 	go run ./main.go

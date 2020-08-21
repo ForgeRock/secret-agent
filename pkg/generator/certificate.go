@@ -144,17 +144,6 @@ func (kp *CertKeyPair) Generate() error {
 
 	notAfter := currentTime.Add(kp.V1Spec.Duration.Duration)
 
-	// forcing an expired/unusable cert
-	// use case for expired: expired certs can be used for encryption but not intended to be part of PKI.
-	// In the event the cert gets used as part of PKI setup, the clients should reject the cert.
-	// They are used for sharing encrypted data between instances of applications.
-	//
-	// if the current time is after the end of the certificates valid date then make the certificate valid duration to be unusable.
-	if currentTime.After(notAfter) {
-		notBefore, _ = time.Parse("0000-Jan-01", "0000-Jan-01")
-		notAfter, _ = time.Parse("0000-Jan-01", "0000-Jan-02")
-	}
-
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
@@ -162,13 +151,26 @@ func (kp *CertKeyPair) Generate() error {
 	}
 	certTemplate := &x509.Certificate{
 		SerialNumber:          serialNumber,
-		NotBefore:             notBefore,
-		NotAfter:              notAfter,
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		IsCA:                  false,
 	}
+	// forcing an expired/unusable cert
+	// use case for expired: expired certs can be used for encryption but not intended to be part of PKI.
+	// In the event the cert gets used as part of PKI setup, the clients should reject the cert.
+	// They are used for sharing encrypted data between instances of applications.
+	//
+	// if the current time is after the end of the certificates valid date then make the certificate valid duration to be unusable.
+	if currentTime.After(notAfter) {
+		notBefore, _ = time.Parse("2006-Jan-02", "1970-Jan-01")
+		notAfter, _ = time.Parse("2006-Jan-02", "1970-Jan-02")
+	} else {
+		certTemplate.KeyUsage = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
+		certTemplate.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+
+	}
+	certTemplate.NotBefore = notBefore
+	certTemplate.NotAfter = notAfter
+
 	pkixName := dnToPkixName(kp.V1Spec.DistinguishedName)
 	if pkixName != nil {
 		certTemplate.Subject = *pkixName

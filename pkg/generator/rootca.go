@@ -33,9 +33,16 @@ type RootCA struct {
 // NewRootCA create new RootCA struct
 func NewRootCA(keyConfig *v1alpha1.KeyConfig) (*RootCA, error) {
 	cert := &Certificate{}
+	var validDuration time.Duration
+	if keyConfig.Spec.Duration == nil {
+		validDuration = 10 * 365 * 24 * time.Hour //20 yrs
+
+	} else {
+		validDuration = keyConfig.Spec.Duration.Duration
+	}
 	rCA := &RootCA{Cert: cert,
 		Name:              keyConfig.Name,
-		ValidDuration:     keyConfig.Spec.Duration.Duration,
+		ValidDuration:     validDuration,
 		DistinguishedName: keyConfig.Spec.DistinguishedName,
 		publicKeyName:     fmt.Sprintf("%s.pem", keyConfig.Name),
 		privateKeyName:    fmt.Sprintf("%s-private.pem", keyConfig.Name),

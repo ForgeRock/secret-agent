@@ -149,13 +149,13 @@ func TestKeyPair(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, got: %+v", err)
 	}
-	expectedBefore, _ := time.Parse("0000-Jan-01", "0000-Jan-01")
-	expectedAfter, _ := time.Parse("0000-Jan-01", "0000-Jan-02")
+	expectedBefore, _ := time.Parse("2006-Jan-02", "1970-Jan-01")
+	expectedAfter, _ := time.Parse("2006-Jan-02", "1970-Jan-02")
 	if testKeyMgrExpired.Cert.Cert.NotAfter != expectedAfter {
-		t.Fatalf("Expected 0000-Jan-02 as the end date but found %s", testKeyMgrExpired.Cert.Cert.NotBefore.Format("0000-Jan-01"))
+		t.Fatalf("Expected 1970-Jan-02 as the end date but found %s", testKeyMgrExpired.Cert.Cert.NotBefore.String())
 	}
 	if testKeyMgrExpired.Cert.Cert.NotBefore != expectedBefore {
-		t.Fatalf("Expected 0000-Jan-01 as the start date but found %s", testKeyMgrExpired.Cert.Cert.NotBefore.Format("0000-Jan-01"))
+		t.Fatalf("Expected 1970-Jan-01 as the start date but found %s", testKeyMgrExpired.Cert.Cert.NotBefore.String())
 	}
 
 	// test nil pointer protection on duration
