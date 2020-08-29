@@ -3,12 +3,14 @@ package generator
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
+	"github.com/pkg/errors"
 )
 
 // Literal randomly generated of specified length
@@ -16,6 +18,7 @@ type Literal struct {
 	Name        string
 	Value       []byte
 	ConfigValue []byte
+	IsBase64    bool
 }
 
 // References return names of secrets that should be looked up
@@ -67,6 +70,14 @@ func (literal *Literal) InSecret(secObject *corev1.Secret) bool {
 
 // Generate generates data
 func (literal *Literal) Generate() error {
+	var err error = nil
+	if literal.IsBase64 {
+		literal.Value, err = base64.StdEncoding.DecodeString(string(literal.ConfigValue))
+		if err != nil {
+			return errors.New("A value was not provided or coudln't be decoded")
+		}
+		return nil
+	}
 	literal.Value = literal.ConfigValue
 	return nil
 }
@@ -100,6 +111,7 @@ func NewLiteral(keyConfig *v1alpha1.KeyConfig) (*Literal, error) {
 	literal := &Literal{
 		Name:        keyConfig.Name,
 		ConfigValue: []byte(keyConfig.Spec.Value),
+		IsBase64:    keyConfig.Spec.IsBase64,
 	}
 	return literal, nil
 }

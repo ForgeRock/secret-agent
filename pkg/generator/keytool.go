@@ -90,8 +90,8 @@ func (kt *KeyTool) baseCommand(execCmd string) func(cmdName string, args []strin
 		case "-importkeystore":
 			baseArgs = []string{
 				"-deststoretype", string(kt.V1Spec.StoreType),
-				"-deststorepass", kt.keyPassValue,
-				"-destkeypass", kt.storePassValue,
+				"-deststorepass", kt.storePassValue,
+				"-destkeypass", kt.keyPassValue,
 				"-destkeystore", kt.storePath,
 			}
 		}

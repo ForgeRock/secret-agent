@@ -27,6 +27,7 @@ func TestImportKeyStore(t *testing.T) {
 					Name:       "testimportkeystore",
 					Cmd:        "importkeystore",
 					SourcePath: "testConfig/ca",
+					IsKeyPair:  true,
 				},
 			},
 		},

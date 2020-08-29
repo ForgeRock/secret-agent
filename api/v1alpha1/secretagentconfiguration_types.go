@@ -220,6 +220,7 @@ type KeySpec struct {
 	SelfSigned            bool               `json:"selfSigned,omitempty"`
 	Duration              *metav1.Duration   `json:"duration,omitempty"`
 	UseBinaryCharacters   bool               `json:"useBinaryCharacters,omitempty"`
+	IsBase64              bool               `json:"isBase64,omitempty"`
 
 	// +kubebuilder:validation:Minimun=16
 	Length *int `json:"length,omitempty"`
@@ -236,6 +237,7 @@ type KeytoolAliasConfig struct {
 	Cmd        KeytoolCmd `json:"cmd"`
 	Args       []string   `json:"args,omitempty"`
 	SourcePath string     `json:"sourcePath,omitempty"`
+	IsKeyPair  bool       `json:"isKeyPair,omitempty"`
 }
 
 func (ks *KeySpec) isEmpty() bool {
