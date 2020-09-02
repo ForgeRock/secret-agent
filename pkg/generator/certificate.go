@@ -239,10 +239,10 @@ func (kp *CertKeyPair) LoadFromData(data map[string][]byte) {
 
 // IsEmpty checks if CertKeyPair has any useable
 func (kp *CertKeyPair) IsEmpty() bool {
-	if kp.Cert.CertPEM == nil {
+	if kp.Cert.CertPEM == nil || kp.Cert.PrivateKeyPEM == nil {
 		return true
 	}
-	if kp.Cert.PrivateKeyPEM == nil {
+	if len(kp.Cert.CertPEM) == 0 || len(kp.Cert.PrivateKeyPEM) == 0 {
 		return true
 	}
 	return false

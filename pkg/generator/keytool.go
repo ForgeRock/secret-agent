@@ -170,7 +170,7 @@ func (kt *KeyTool) LoadReferenceData(data map[string][]byte) error {
 
 // LoadSecretFromManager load keystore from secrete manager
 func (kt *KeyTool) LoadSecretFromManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
-	return nil
+	return errors.New("LoadSecretFromManager not implemented for KeyTool")
 }
 
 // EnsureSecretManager adds keystore to secret manager

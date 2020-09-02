@@ -164,15 +164,26 @@ const (
 	KeytoolCmdImportkeystore KeytoolCmd = "importkeystore"
 )
 
+// SecretManagerCredentialKeyName Specifies name of the secret key to be referenced
+type SecretManagerCredentialKeyName string
+
+// SecretManagerCredentialKeyName Type Strings
+const (
+	SecretsManagerGoogleApplicationCredentials SecretManagerCredentialKeyName = "GOOGLE_CREDENTIALS_JSON"
+	SecretsManagerAwsAccessKeyID               SecretManagerCredentialKeyName = "AWS_ACCESS_KEY_ID"
+	SecretsManagerAwsSecretAccessKey           SecretManagerCredentialKeyName = "AWS_SECRET_ACCESS_KEY"
+)
+
 // AppConfig is the configuration for the forgeops-secrets application
 type AppConfig struct {
 	// +kubebuilder:validation:Required
 	CreateKubernetesObjects bool `json:"createKubernetesObjects"`
 	// +kubebuilder:validation:Required
-	SecretsManager SecretsManager `json:"secretsManager"`
-	GCPProjectID   string         `json:"gcpProjectID,omitempty"`
-	AWSRegion      string         `json:"awsRegion,omitempty"`
-	AzureVaultName string         `json:"azureVaultName,omitempty"`
+	SecretsManager        SecretsManager `json:"secretsManager"`
+	CredentialsSecretName string         `json:"credentialsSecretName,omitempty"`
+	GCPProjectID          string         `json:"gcpProjectID,omitempty"`
+	AWSRegion             string         `json:"awsRegion,omitempty"`
+	AzureVaultName        string         `json:"azureVaultName,omitempty"`
 
 	// Optional number of times the operator will attempt to generate secrets. Defaults to 3
 	MaxRetries *int `json:"maxRetries,omitempty"`

@@ -20,6 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -78,6 +81,45 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	watchOwnedObjects = false
 	defer func() { watchOwnedObjects = true }()
 	log.V(1).Info("** Reconcile loop start **")
+
+	if instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone {
+		var dir string
+
+		// load credentials secret
+		secObject, err := k8ssecrets.LoadSecret(reconciler.Client,
+			instance.Spec.AppConfig.CredentialsSecretName, instance.Namespace)
+		if err != nil {
+			log.Error(err, "error loading cloud credentials secret from the Kubernetes API",
+				"secret_name", instance.Spec.AppConfig.CredentialsSecretName,
+				"namespace", instance.Namespace)
+			return ctrl.Result{}, err
+		}
+		// Create temporary dir for gcp credentials if needed
+		if instance.Spec.AppConfig.SecretsManager == v1alpha1.SecretsManagerGCP {
+			dir, err := ioutil.TempDir("", "cloud_credentials-*")
+			if err != nil {
+				log.Error(err, "couldn't create a temporary credentials dir")
+				return ctrl.Result{}, err
+			}
+			// clean up after ourselves
+			defer os.RemoveAll(dir)
+		}
+
+		// TODO Need to implement azure secret manager
+		if instance.Spec.AppConfig.SecretsManager == v1alpha1.SecretsManagerAzure {
+			return ctrl.Result{}, errors.New("Azure secret manager not implemented")
+		}
+
+		// load cloud credentials to envs and/or files
+		if err := manageCloudCredentials(instance.Spec.AppConfig.SecretsManager, secObject, dir); err != nil {
+			log.Error(err, "error loading cloud credentials from secret provided",
+				"secret_name", instance.Spec.AppConfig.CredentialsSecretName,
+				"namespace", instance.Namespace)
+			return ctrl.Result{}, err
+		}
+
+	}
+
 	for _, secretReq := range instance.Spec.Secrets {
 		// load from secret k8s
 		secObject, err := k8ssecrets.LoadSecret(reconciler.Client, secretReq.Name, instance.Namespace)
@@ -109,7 +151,19 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					"secret_name", secretReq.Name,
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
-				keyInterface.LoadSecretFromManager(ctx, &instance.Spec.AppConfig, instance.Namespace, secretReq.Name)
+				if err := keyInterface.LoadSecretFromManager(ctx, &instance.Spec.AppConfig, instance.Namespace, secretReq.Name); err != nil {
+					// TODO We should fail/retry. Temporary hack until keytool + trustore secretManager is implemented
+					// log.Error(err, "could not load secret from manager",
+					// 	"secret_name", secretReq.Name,
+					// 	"data_key", key.Name,
+					// 	"secret_type", string(key.Type))
+					// rescheduleRetry, errorFound = true, true
+					// return ctrl.Result{Requeue: rescheduleRetry}, err
+
+					// TODO: remove. Force load from local if error. Expected in keytool + truststore
+					keyInterface.LoadFromData(secObject.Data)
+
+				}
 			} else {
 				// load from kubernetes
 				log.V(1).Info("loading secret from kubernetes",
@@ -188,8 +242,15 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 						"secret_name", secretReq.Name,
 						"data_key", key.Name,
 						"secret_type", string(key.Type))
-					keyInterface.EnsureSecretManager(ctx, &instance.Spec.AppConfig,
-						instance.Namespace, secretReq.Name)
+					if err := keyInterface.EnsureSecretManager(ctx, &instance.Spec.AppConfig,
+						instance.Namespace, secretReq.Name); err != nil {
+						log.Error(err, "could not store secret in manager",
+							"secret_name", secretReq.Name,
+							"data_key", key.Name,
+							"secret_type", string(key.Type))
+						rescheduleRetry, errorFound = true, true
+						return ctrl.Result{Requeue: rescheduleRetry}, err
+					}
 				}
 			}
 			log.V(0).Info("applying to kubernetes",
@@ -227,6 +288,9 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	}
 	if rescheduleRetry {
 		log.V(1).Info("Reconcile loop failed. Retry rescheduled")
+	} else {
+		log.Info("Reconcile loop complete",
+			"secretAgentConfiguration", instance.Name)
 	}
 	return ctrl.Result{Requeue: rescheduleRetry}, nil
 }
@@ -293,6 +357,70 @@ func routeKeyInterface(secretName string, key *v1alpha1.KeyConfig) (generator.Ke
 		// We continue through all keys in a secret skipping unsupported types
 		return nil, errors.New("Key type not implemented")
 	}
+}
+
+// manageCloudCredentials handles the credential used to access the secret manager
+// credentials are placed in temp files or environmental variables according to the SM specs.
+func manageCloudCredentials(secManager v1alpha1.SecretsManager, secObject *corev1.Secret, dirPath string) error {
+
+	writeFile := func(name string, contents []byte) (string, error) {
+		fPath := path.Join(dirPath, name)
+
+		// Open a new file for writing only
+		file, err := os.OpenFile(
+			fPath,
+			os.O_WRONLY|os.O_TRUNC|os.O_CREATE,
+			0666,
+		)
+		if err != nil {
+			return "", err
+		}
+		defer file.Close()
+
+		// Write bytes to file
+		_, err = file.Write(contents)
+		if err != nil {
+			return "", err
+		}
+		return fPath, nil
+	}
+	switch secManager {
+	case v1alpha1.SecretsManagerGCP:
+		keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerGoogleApplicationCredentials)]
+		if !ok {
+			return fmt.Errorf(fmt.Sprintf("%s must be provided in a credentials secret",
+				v1alpha1.SecretsManagerGoogleApplicationCredentials))
+		}
+		fp, err := writeFile("gcp_credentials.json", keyValue)
+		if err != nil {
+			return err
+		}
+		if err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", fp); err != nil {
+			return err
+		}
+	case v1alpha1.SecretsManagerAWS:
+		var ok bool
+		var keyValue []byte
+		keyValue, ok = secObject.Data[string(v1alpha1.SecretsManagerAwsAccessKeyID)]
+		if !ok {
+			return fmt.Errorf(fmt.Sprintf("%s must be provided in a credentials secret",
+				v1alpha1.SecretsManagerAwsAccessKeyID))
+		}
+		if err := os.Setenv("AWS_ACCESS_KEY_ID", string(keyValue)); err != nil {
+			return err
+		}
+		keyValue, ok = secObject.Data[string(v1alpha1.SecretsManagerAwsSecretAccessKey)]
+		if !ok {
+			return fmt.Errorf(fmt.Sprintf("%s must be provided in a credentials secret",
+				v1alpha1.SecretsManagerAwsSecretAccessKey))
+		}
+		if err := os.Setenv("AWS_SECRET_ACCESS_KEY", string(keyValue)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+
 }
 
 var (

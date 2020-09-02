@@ -8,6 +8,10 @@ import (
 	secretmanager "cloud.google.com/go/secretmanager/apiv1beta1"
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/keyvault/keyvault"
 	azauth "github.com/Azure/azure-sdk-for-go/services/keyvault/auth"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/session"
+	awssecretsmanager "github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/pkg/errors"
 	secretspb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1beta1"
 	"google.golang.org/grpc/codes"
@@ -30,10 +34,13 @@ func EnsureSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName st
 			return err
 		}
 	case v1alpha1.SecretsManagerAWS:
-		//Err := ensureAWSSecrets(config.AppConfig.AWSRegion, nodes)
-		//If err != nil {
-		//	return err
-		//}
+		err := ensureAWSSecretsByID(ctx, config.AWSRegion, secretID, value)
+		if err != nil {
+			return err
+		}
+
+	case v1alpha1.SecretsManagerAzure:
+		fmt.Print("Azure secret manager not implemented")
 	}
 
 	return nil
@@ -41,22 +48,23 @@ func EnsureSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName st
 
 // LoadSecret Loads secrets from the configured secret manager
 func LoadSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName string) ([]byte, error) {
-	secretName = idSafe(secretName)
+	secretID := idSafe(secretName)
 	var value []byte
 	var err error
 	switch config.SecretsManager {
 	case v1alpha1.SecretsManagerGCP:
-		value, err = loadGCPSecretByID(ctx, config.GCPProjectID, secretName)
+		value, err = loadGCPSecretByID(ctx, config.GCPProjectID, secretID)
 		if err != nil {
 			return []byte{}, err
 		}
 	case v1alpha1.SecretsManagerAWS:
-		// TODO
-		//
-		fmt.Print("AWS secret manager not implemented")
+		value, err = loadAWSSecretByID(config.AWSRegion, secretID)
+		if err != nil {
+			return []byte{}, err
+		}
 
 	case v1alpha1.SecretsManagerAzure:
-		fmt.Print("AWS secret manager not implemented")
+		fmt.Print("Azure secret manager not implemented")
 	}
 	return value, err
 
@@ -86,8 +94,7 @@ func loadGCPSecretByID(ctx context.Context, projectID string, secretID string) (
 }
 
 // ensureGCPSecret ensures a single secret is stored in Google Secret Manager
-func ensureGCPSecretByID(ctx context.Context, projectID, secretName string, value []byte) error {
-	secretID := idSafe(secretName)
+func ensureGCPSecretByID(ctx context.Context, projectID, secretID string, value []byte) error {
 	client, err := secretmanager.NewClient(ctx)
 	if err != nil {
 		return err
@@ -142,6 +149,73 @@ func ensureGCPSecretByID(ctx context.Context, projectID, secretName string, valu
 
 	return nil
 }
+
+// AWS FUNCS
+
+// loadAWSSecretByID loads a single secret out of AWS SecretsManager, if it exists
+func loadAWSSecretByID(awsRegion string, secretID string) ([]byte, error) {
+	service := awssecretsmanager.New(session.New(&aws.Config{Region: aws.String(awsRegion)}))
+	request := &awssecretsmanager.GetSecretValueInput{SecretId: aws.String(secretID)}
+	result, err := service.GetSecretValue(request)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			if aerr.Code() == awssecretsmanager.ErrCodeResourceNotFoundException {
+				// doesn't exist
+				return []byte{}, nil
+			}
+		}
+		return []byte{}, errors.WithStack(err)
+	}
+
+	return result.SecretBinary, nil
+}
+
+// ensureAWSSecretsByID ensures a single secret is stored in AWS Secret Manager
+func ensureAWSSecretsByID(ctx context.Context, awsRegion, secretID string, value []byte) error {
+	service := awssecretsmanager.New(session.New(&aws.Config{Region: aws.String(awsRegion)}))
+
+	// check if exists
+	preExists := true
+	request := &awssecretsmanager.GetSecretValueInput{SecretId: aws.String(secretID)}
+	_, err := service.GetSecretValue(request)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			if aerr.Code() != awssecretsmanager.ErrCodeResourceNotFoundException {
+				return errors.WithStack(err)
+			}
+			// doesn't exist, create
+			preExists = false
+			input := &awssecretsmanager.CreateSecretInput{
+				Name: aws.String(secretID),
+			}
+			_, err = service.CreateSecret(input)
+			if err != nil {
+				return errors.WithStack(err)
+			}
+		} else {
+			return errors.WithStack(err)
+		}
+	}
+	// only add new version if secret was created this round, because
+	//   otherwise the in memory version was read from SM and is already correct
+	if preExists {
+		return nil
+	}
+
+	// add secret version
+	input := &awssecretsmanager.PutSecretValueInput{
+		SecretId:     aws.String(secretID),
+		SecretBinary: value,
+	}
+	_, err = service.PutSecretValue(input)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+// AZURE FUNCS
 
 var azureVaultURLFmt string = "https://%s.vault.azure.net/"
 
