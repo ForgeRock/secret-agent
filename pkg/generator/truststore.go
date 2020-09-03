@@ -4,15 +4,16 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/binary"
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"software.sslmate.com/src/go-pkcs12"
-
-	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 
 func parseRootChain(bundle []byte) []*x509.Certificate {
@@ -77,13 +78,64 @@ func (ts *TrustStore) LoadReferenceData(data map[string][]byte) error {
 	return nil
 }
 
-// LoadSecretFromManager load from secrete manager
+// LoadSecretFromManager populates truststore data from secret manager
 func (ts *TrustStore) LoadSecretFromManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
-	return errors.New("LoadSecretFromManager not implemented for TrustStore")
+	var err error
+	// Maximum secret size is 65k. Need to split the binary data into chunks
+	var maxChunks, chunkID uint64
+	var truststoreFmt string
+
+	truststoreFmt = fmt.Sprintf("%s_%s_%s_numChunks", namespace, secretName, ts.Name)
+	chunkIDByte, err := secretsmanager.LoadSecret(context, config, truststoreFmt)
+	if err != nil {
+		return err
+	}
+	if len(chunkIDByte) == 0 {
+		return nil
+	}
+	maxChunks = uint64(binary.LittleEndian.Uint64(chunkIDByte))
+	for chunkID = 0; chunkID <= maxChunks; chunkID++ {
+		truststoreFmt = fmt.Sprintf("%s_%s_%s_%d", namespace, secretName, ts.Name, chunkID)
+		chunk, err := secretsmanager.LoadSecret(context, config, truststoreFmt)
+		if err != nil {
+			return err
+		}
+		ts.Value = append(ts.Value, chunk...)
+
+	}
+	return nil
+
 }
 
-// EnsureSecretManager adds  to secret manager
+// EnsureSecretManager stores truststore data in secret manager
 func (ts *TrustStore) EnsureSecretManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+	// Maximum secret size is 65k. Need to split the binary data into chunks
+	var chunkSize int = 65536
+	var chunkID uint64 = 0
+	var chunkIDByte []byte
+	var chunk []byte
+	var truststoreFmt string
+	// copy the slice to a new one
+	var data []byte = append([]byte(nil), ts.Value...)
+	for chunkSize < len(data) {
+		data, chunk = data[chunkSize:], data[0:chunkSize:chunkSize]
+		truststoreFmt = fmt.Sprintf("%s_%s_%s_%d", namespace, secretName, ts.Name, chunkID)
+		if err := secretsmanager.EnsureSecret(context, config, truststoreFmt, chunk); err != nil {
+			return err
+		}
+		chunkID++
+	}
+	truststoreFmt = fmt.Sprintf("%s_%s_%s_%d", namespace, secretName, ts.Name, chunkID)
+	if err := secretsmanager.EnsureSecret(context, config, truststoreFmt, data); err != nil {
+		return err
+	}
+	// Store the number of chunks. This will be useful when we need to load data from the secret manager
+	chunkIDByte = make([]byte, 8)
+	binary.LittleEndian.PutUint64(chunkIDByte, uint64(chunkID))
+	truststoreFmt = fmt.Sprintf("%s_%s_%s_numChunks", namespace, secretName, ts.Name)
+	if err := secretsmanager.EnsureSecret(context, config, truststoreFmt, chunkIDByte); err != nil {
+		return err
+	}
 	return nil
 }
 
