@@ -145,24 +145,20 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 				continue secretKeys
 			}
 			// load from secret manager
-			useSecMgr := instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone
+			useSecMgr := instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone &&
+				key.Type != v1alpha1.KeyConfigTypeTrustStore
 			if useSecMgr {
 				log.V(1).Info("loading secret from secret-manager",
 					"secret_name", secretReq.Name,
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
 				if err := keyInterface.LoadSecretFromManager(ctx, &instance.Spec.AppConfig, instance.Namespace, secretReq.Name); err != nil {
-					// TODO We should fail/retry. Temporary hack until keytool + trustore secretManager is implemented
-					// log.Error(err, "could not load secret from manager",
-					// 	"secret_name", secretReq.Name,
-					// 	"data_key", key.Name,
-					// 	"secret_type", string(key.Type))
-					// rescheduleRetry, errorFound = true, true
-					// return ctrl.Result{Requeue: rescheduleRetry}, err
-
-					// TODO: remove. Force load from local if error. Expected in keytool + truststore
-					keyInterface.LoadFromData(secObject.Data)
-
+					log.Error(err, "could not load secret from manager",
+						"secret_name", secretReq.Name,
+						"data_key", key.Name,
+						"secret_type", string(key.Type))
+					rescheduleRetry, errorFound = true, true
+					return ctrl.Result{Requeue: rescheduleRetry}, err
 				}
 			} else {
 				// load from kubernetes

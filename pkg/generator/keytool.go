@@ -11,6 +11,7 @@ import (
 	"path"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -168,14 +169,51 @@ func (kt *KeyTool) LoadReferenceData(data map[string][]byte) error {
 	return nil
 }
 
-// LoadSecretFromManager load keystore from secrete manager
-func (kt *KeyTool) LoadSecretFromManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
-	return errors.New("LoadSecretFromManager not implemented for KeyTool")
+// LoadSecretFromManager  populates keytool data from secret manager
+func (kt *KeyTool) LoadSecretFromManager(ctx context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+	var err error
+	keyToolFmt := fmt.Sprintf("%s_%s_%s", namespace, secretName, kt.Name)
+	storePassFmt := fmt.Sprintf("%s_%s_%s_storepass", namespace, secretName, kt.Name)
+	keyPasslFmt := fmt.Sprintf("%s_%s_%s_keypass", namespace, secretName, kt.Name)
+	kt.storeBytes, err = secretsmanager.LoadSecret(ctx, config, keyToolFmt)
+	if err != nil {
+		return err
+	}
+	storePassValueBytes, err := secretsmanager.LoadSecret(ctx, config, storePassFmt)
+	kt.storePassValue = string(storePassValueBytes)
+	if err != nil {
+		return err
+	}
+	keyPassValueBytes, err := secretsmanager.LoadSecret(ctx, config, keyPasslFmt)
+	kt.keyPassValue = string(keyPassValueBytes)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-// EnsureSecretManager adds keystore to secret manager
-func (kt *KeyTool) EnsureSecretManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+// EnsureSecretManager adds keytool to secret manager
+func (kt *KeyTool) EnsureSecretManager(ctx context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+
+	var err error
+	keyToolFmt := fmt.Sprintf("%s_%s_%s", namespace, secretName, kt.Name)
+	storePassFmt := fmt.Sprintf("%s_%s_%s_storepass", namespace, secretName, kt.Name)
+	keyPasslFmt := fmt.Sprintf("%s_%s_%s_keypass", namespace, secretName, kt.Name)
+
+	err = secretsmanager.EnsureSecret(ctx, config, keyToolFmt, kt.storeBytes)
+	if err != nil {
+		return err
+	}
+	err = secretsmanager.EnsureSecret(ctx, config, storePassFmt, []byte(kt.storePassValue))
+	if err != nil {
+		return err
+	}
+	err = secretsmanager.EnsureSecret(ctx, config, keyPasslFmt, []byte(kt.keyPassValue))
+	if err != nil {
+		return err
+	}
 	return nil
+
 }
 
 // Generate keystore and all of its aliases

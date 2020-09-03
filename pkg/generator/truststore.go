@@ -79,7 +79,7 @@ func (ts *TrustStore) LoadReferenceData(data map[string][]byte) error {
 
 // LoadSecretFromManager load from secrete manager
 func (ts *TrustStore) LoadSecretFromManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
-	return errors.New("LoadSecretFromManager not implemented for TrustStore")
+	return nil
 }
 
 // EnsureSecretManager adds  to secret manager
