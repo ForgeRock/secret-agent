@@ -395,23 +395,15 @@ func manageCloudCredentials(secManager v1alpha1.SecretsManager, secObject *corev
 			return err
 		}
 	case v1alpha1.SecretsManagerAWS:
-		var ok bool
-		var keyValue []byte
-		keyValue, ok = secObject.Data[string(v1alpha1.SecretsManagerAwsAccessKeyID)]
-		if !ok {
-			return fmt.Errorf(fmt.Sprintf("%s must be provided in a credentials secret",
-				v1alpha1.SecretsManagerAwsAccessKeyID))
+		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAwsAccessKeyID)]; ok {
+			if err := os.Setenv("AWS_ACCESS_KEY_ID", string(keyValue)); err != nil {
+				return err
+			}
 		}
-		if err := os.Setenv("AWS_ACCESS_KEY_ID", string(keyValue)); err != nil {
-			return err
-		}
-		keyValue, ok = secObject.Data[string(v1alpha1.SecretsManagerAwsSecretAccessKey)]
-		if !ok {
-			return fmt.Errorf(fmt.Sprintf("%s must be provided in a credentials secret",
-				v1alpha1.SecretsManagerAwsSecretAccessKey))
-		}
-		if err := os.Setenv("AWS_SECRET_ACCESS_KEY", string(keyValue)); err != nil {
-			return err
+		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAwsSecretAccessKey)]; ok {
+			if err := os.Setenv("AWS_SECRET_ACCESS_KEY", string(keyValue)); err != nil {
+				return err
+			}
 		}
 	}
 

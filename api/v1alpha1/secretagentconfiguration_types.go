@@ -180,6 +180,7 @@ type AppConfig struct {
 	CreateKubernetesObjects bool `json:"createKubernetesObjects"`
 	// +kubebuilder:validation:Required
 	SecretsManager        SecretsManager `json:"secretsManager"`
+	SecretsManagerPrefix  string         `json:"secretsManagerPrefix,omitempty"`
 	CredentialsSecretName string         `json:"credentialsSecretName,omitempty"`
 	GCPProjectID          string         `json:"gcpProjectID,omitempty"`
 	AWSRegion             string         `json:"awsRegion,omitempty"`

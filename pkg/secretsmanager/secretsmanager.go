@@ -8,6 +8,7 @@ import (
 	secretmanager "cloud.google.com/go/secretmanager/apiv1beta1"
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/keyvault/keyvault"
 	azauth "github.com/Azure/azure-sdk-for-go/services/keyvault/auth"
+	"github.com/Azure/go-autorest/autorest"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -27,6 +28,9 @@ func idSafe(value string) string {
 // EnsureSecret ensures a secret is stored in secret manager
 func EnsureSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName string, value []byte) error {
 	secretID := idSafe(secretName)
+	if config.SecretsManagerPrefix != "" {
+		secretID = fmt.Sprintf("%s-%s", config.SecretsManagerPrefix, secretID)
+	}
 	switch config.SecretsManager {
 	case v1alpha1.SecretsManagerGCP:
 		err := ensureGCPSecretByID(ctx, config.GCPProjectID, secretID, value)
@@ -49,6 +53,9 @@ func EnsureSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName st
 // LoadSecret Loads secrets from the configured secret manager
 func LoadSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName string) ([]byte, error) {
 	secretID := idSafe(secretName)
+	if config.SecretsManagerPrefix != "" {
+		secretID = fmt.Sprintf("%s-%s", config.SecretsManagerPrefix, secretID)
+	}
 	var value []byte
 	var err error
 	switch config.SecretsManager {
@@ -228,4 +235,20 @@ func newAzureClient() (*keyvault.BaseClient, error) {
 	client := keyvault.New()
 	client.Authorizer = authorizer
 	return &client, nil
+}
+
+// loadAzureSecretByID load a secret from Azure Key Vault
+func loadAzureSecretByID(ctx context.Context, client *keyvault.BaseClient, vaultName, secretID string) ([]byte, error) {
+	response, err := client.GetSecret(ctx, fmt.Sprintf(azureVaultURLFmt, vaultName), secretID, "")
+	if err != nil {
+		if e, ok := err.(autorest.DetailedError); ok && e.StatusCode.(int) == 404 {
+			return []byte{}, nil
+		}
+		return []byte{}, err
+	}
+	// safely dereference
+	if response.Value == nil {
+		return []byte{}, errors.WithStack(fmt.Errorf("no secret found for %s", secretID))
+	}
+	return []byte(*response.Value), nil
 }
