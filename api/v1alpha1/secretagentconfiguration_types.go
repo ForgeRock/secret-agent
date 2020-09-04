@@ -184,6 +184,8 @@ type AppConfig struct {
 	GCPProjectID          string         `json:"gcpProjectID,omitempty"`
 	AWSRegion             string         `json:"awsRegion,omitempty"`
 	AzureVaultName        string         `json:"azureVaultName,omitempty"`
+	// +kubebuilder:validation:Optional
+	SecretManagerKeyPrefix string `json:"secretManagerKeyPrefix"`
 
 	// Optional number of times the operator will attempt to generate secrets. Defaults to 3
 	MaxRetries *int `json:"maxRetries,omitempty"`
