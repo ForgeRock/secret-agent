@@ -2,6 +2,9 @@
 
 Generate secrets for the Forgerock Platform
 
+![Secret agent logo a go gopher with sunglasses and hawaiian style shirt](/assets/secretagent.png)
+
+
 ## Features
 
 The secret-agent generates the secrets required by the ForgeRock Platform. These secretes can be stored in-cluster as Kubernetes secrets. It can also store the secrets in a Cloud Secret Manager. Currently providers supported:
