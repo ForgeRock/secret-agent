@@ -2,16 +2,28 @@ package generator
 
 import (
 	"testing"
+	"time"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"software.sslmate.com/src/go-pkcs12"
 )
 
 func TestTrustStore(t *testing.T) {
-	rootCA, err := makeTestNewRootCA(t)
+	rootCAConfig := &v1alpha1.KeyConfig{
+		Type: v1alpha1.KeyConfigTypeCA,
+		Name: "ca",
+		Spec: &v1alpha1.KeySpec{
+			Duration: &metav1.Duration{Duration: 100 * 365 * 24 * time.Hour}, //100 yrs
+			DistinguishedName: &v1alpha1.DistinguishedName{
+				CommonName: "foo",
+			},
+		},
+	}
+	rootCA, err := NewRootCA(rootCAConfig)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	rootCA.Generate()
 	testSecret := &corev1.Secret{}
@@ -32,7 +44,7 @@ func TestTrustStore(t *testing.T) {
 	}
 	tsMgr.References()
 	tsMgr.LoadReferenceData(map[string][]byte{
-		"testConfig/ca.pem": testSecret.Data[rootCA.publicKeyName],
+		"testConfig/ca.pem": testSecret.Data[rootCA.Name+".pem"],
 	})
 	tsMgr.Generate()
 	parsed, err := pkcs12.DecodeTrustStore(tsMgr.Value, "changeit")

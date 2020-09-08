@@ -122,29 +122,40 @@ func getClient() (client.Client, error) {
 // generateCertificates generates the root CA and leaf certificate to be used by the webhook
 func generateCertificates(sans []string) (rootCA, leafCert *generator.Certificate, err error) {
 
-	rCA := generator.RootCA{
-		ValidDuration: 100 * 365 * 24 * time.Hour, //100 yrs
-		Cert:          &generator.Certificate{},
-		DistinguishedName: &v1alpha1.DistinguishedName{
-			CommonName: "secret-agent",
+	rootCAConfig := &v1alpha1.KeyConfig{
+		Type: v1alpha1.KeyConfigTypeCA,
+		Name: "ca",
+		Spec: &v1alpha1.KeySpec{
+			Duration: &metav1.Duration{Duration: 100 * 365 * 24 * time.Hour}, //100 yrs
+			DistinguishedName: &v1alpha1.DistinguishedName{
+				CommonName: "secret-agent",
+			},
 		},
 	}
-	certKeyPair := generator.CertKeyPair{
-		RootCA: &rCA,
-		Cert:   &generator.Certificate{},
-		V1Spec: &v1alpha1.KeySpec{
-			Sans:              sans,
-			Algorithm:         v1alpha1.AlgorithmTypeECDSAWithSHA256,
+	rCA, err := generator.NewRootCA(rootCAConfig)
+	if err != nil {
+		return
+	}
+	rCA.Generate()
+	certKeyPairConfig := &v1alpha1.KeyConfig{
+		Type: v1alpha1.KeyConfigTypeKeyPair,
+		Name: "webbunlder",
+		Spec: &v1alpha1.KeySpec{
+			Sans:      sans,
+			Algorithm: v1alpha1.AlgorithmTypeECDSAWithSHA256,
+			// not really important in this case
+			SignedWithPath:    "webbundler/ca",
 			DistinguishedName: &v1alpha1.DistinguishedName{},
 			Duration: &metav1.Duration{
 				Duration: 10 * 365 * 24 * time.Hour, //10 yrs
 			},
 		},
 	}
-	err = rCA.Generate()
+	certKeyPair, err := generator.NewCertKeyPair(certKeyPairConfig)
 	if err != nil {
 		return
 	}
+	certKeyPair.RootCA = rCA
 	err = certKeyPair.Generate()
 	if err != nil {
 		return

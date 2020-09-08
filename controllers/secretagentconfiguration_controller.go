@@ -189,7 +189,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					rescheduleRetry, errorFound = true, true
 				}
 				if (&corev1.Secret{}) == secObject {
-					log.Error(err, "secret ref not found, skipping key",
+					log.Info("secret ref not found, skipping key and will retry",
 						"secret_name", secretReq.Name,
 						"secret_ref", ref)
 					rescheduleRetry, errorFound = true, true

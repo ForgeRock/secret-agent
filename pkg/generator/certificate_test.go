@@ -14,12 +14,19 @@ import (
 
 func TestKeyPair(t *testing.T) {
 	// loading references
-	rootCA := RootCA{
+	rootCAConfig := &v1alpha1.KeyConfig{
+		Type: v1alpha1.KeyConfigTypeCA,
 		Name: "ca",
-		Cert: &Certificate{},
-		DistinguishedName: &v1alpha1.DistinguishedName{
-			CommonName: "foo",
+		Spec: &v1alpha1.KeySpec{
+			Duration: &metav1.Duration{Duration: 100 * 365 * 24 * time.Hour}, //100 yrs
+			DistinguishedName: &v1alpha1.DistinguishedName{
+				CommonName: "foo",
+			},
 		},
+	}
+	rootCA, err := NewRootCA(rootCAConfig)
+	if err != nil {
+		t.Fatal(err)
 	}
 	rootCA.Generate()
 	rootCAData := make(map[string][]byte, 1)
@@ -87,14 +94,6 @@ func TestKeyPair(t *testing.T) {
 		t.Errorf("Expected to find match bytes, found %s", string(testKeyMgr.Cert.CertPEM))
 	}
 
-	// // loading references
-	// rootCA := NewRootCA()
-	// rootCA.Generate()
-	// rootCAData := make([]map[string][]byte, 1)
-	// rootCAData[0] = make(map[string][]byte, 2)
-	// rootCAData[0]["ca.pem"] = rootCA.Cert.CertPEM
-	// rootCAData[0]["ca-private.pem"] = rootCA.Cert.PrivateKeyPEM
-	// err = testKeyMgr.LoadReferenceData(rootCAData)
 	testKeyMgr.Cert.PrivateKeyPEM = []byte("foo bar")
 	testKeyMgr.Cert.CertPEM = []byte("foo bar")
 	if isEmpty := testKeyMgr.IsEmpty(); isEmpty {

@@ -3,6 +3,7 @@ package generator
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -11,6 +12,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"time"
@@ -36,16 +38,115 @@ type Certificate struct {
 	PrivateKeyPEM []byte
 }
 
+func configureExpire(certTemplate *x509.Certificate, d *metav1.Duration) {
+	// meta duration has time.Duration
+	var duration time.Duration
+	currentTime := time.Now()
+	// default for CA is 100
+	if d == nil && certTemplate.IsCA {
+		duration = 100 * 365 * 24 * time.Hour // 100 years
+	} else if d == nil {
+		duration = 10 * 365 * 24 * time.Hour // 10 years
+	} else if d != nil {
+		duration = d.Duration
+	}
+
+	notBefore := time.Now().Add(time.Minute * -5)
+	notAfter := currentTime.Add(duration)
+	// forcing an expired/unusable cert
+	// use case for expired: expired certs can be used for encryption but not intended to be part of PKI.
+	// In the event the cert gets used as part of PKI setup, the clients should reject the cert.
+	// They are used for sharing encrypted data between instances of applications.
+	// _note:_ see configureUsage
+	// if the current time is after the end of the certificates valid date then make the certificate valid duration to be unusable.
+	if currentTime.After(notAfter) {
+		notBefore, _ = time.Parse("2006-Jan-02", "1970-Jan-01")
+		notAfter, _ = time.Parse("2006-Jan-02", "1970-Jan-02")
+	}
+	certTemplate.NotAfter = notAfter
+	certTemplate.NotBefore = notBefore
+
+}
+
+func configureUsage(certTemplate *x509.Certificate) {
+	if certTemplate.IsCA {
+		certTemplate.ExtKeyUsage = []x509.ExtKeyUsage{
+			x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth,
+		}
+		certTemplate.KeyUsage = x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign
+		return
+	}
+	// forcing an expired/unusable cert
+	// use case for expired: expired certs can be used for encryption but not intended to be part of PKI.
+	// In the event the cert gets used as part of PKI setup, the clients should reject the cert.
+	// They are used for sharing encrypted data between instances of applications.
+	// _note:_ see configureExpire
+	// configure cert for only signatures
+	if certTemplate.NotAfter.Before(time.Now()) {
+		return
+
+	}
+	// default configuration of usage
+	certTemplate.KeyUsage = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
+	certTemplate.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+
+}
+
+// ToPkixName convert DistinguishedName to pkix.Name
+func dnToPkixName(dn *v1alpha1.DistinguishedName) *pkix.Name {
+	if dn == nil {
+		return nil
+	}
+	return &pkix.Name{Country: dn.Country,
+		Organization:       dn.Organization,
+		OrganizationalUnit: dn.OrganizationalUnit,
+		Locality:           dn.Locality,
+		Province:           dn.Province,
+		StreetAddress:      dn.StreetAddress,
+		PostalCode:         dn.PostalCode,
+		SerialNumber:       dn.SerialNumber,
+		CommonName:         dn.CommonName,
+	}
+}
+
+func keyPairFromPemBytes(publicKeyPem []byte, privateKeyPem []byte) (*x509.Certificate, interface{}, error) {
+	// convert back from PEM
+	block, _ := pem.Decode(publicKeyPem)
+	if block == nil {
+		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
+	}
+	parsedCert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
+	}
+
+	block, _ = pem.Decode(privateKeyPem)
+	if block == nil {
+		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
+	}
+	ecPrivateKey, ecErr := x509.ParseECPrivateKey(block.Bytes)
+	rsaPrivateKey, rsaErr := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if ecErr != nil && rsaErr != nil {
+		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
+	}
+	if rsaErr != nil {
+		return parsedCert, ecPrivateKey, nil
+	} else {
+		return parsedCert, rsaPrivateKey, nil
+	}
+
+}
+
 // CertKeyPair Private/Public certificates which optionally can be signed by a RootCA
 type CertKeyPair struct {
 	Name        string
-	RootCA      *RootCA
+	RootCA      *CertKeyPair
 	Cert        *Certificate
 	V1Spec      *v1alpha1.KeySpec
-	SelfSigned  bool
 	refName     string
 	refDataKeys []string
 	refValue    []byte
+	isCA        bool
 }
 
 // References return names of secrets that should be looked up
@@ -132,49 +233,32 @@ func (kp *CertKeyPair) Generate() error {
 		marshaledPrivateKey := x509.MarshalPKCS1PrivateKey(kp.Cert.PrivateKeyRSA)
 		kp.Cert.PrivateKeyPEM = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: marshaledPrivateKey})
 	}
-	// setup expire
-	// prepare cert template
-	currentTime := time.Now()
-	notBefore := time.Now().Add(time.Minute * -5)
-	if kp.V1Spec.Duration == nil {
-		kp.V1Spec.Duration = &metav1.Duration{
-			Duration: 10 * 365 * 24 * time.Hour, //10 yrs
-		}
-	}
-
-	notAfter := currentTime.Add(kp.V1Spec.Duration.Duration)
 
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
 		return errors.WithStack(err)
 	}
+
 	certTemplate := &x509.Certificate{
 		SerialNumber:          serialNumber,
 		BasicConstraintsValid: true,
-		IsCA:                  false,
+		IsCA:                  kp.isCA,
 	}
-	// forcing an expired/unusable cert
-	// use case for expired: expired certs can be used for encryption but not intended to be part of PKI.
-	// In the event the cert gets used as part of PKI setup, the clients should reject the cert.
-	// They are used for sharing encrypted data between instances of applications.
-	//
-	// if the current time is after the end of the certificates valid date then make the certificate valid duration to be unusable.
-	if currentTime.After(notAfter) {
-		notBefore, _ = time.Parse("2006-Jan-02", "1970-Jan-01")
-		notAfter, _ = time.Parse("2006-Jan-02", "1970-Jan-02")
-	} else {
-		certTemplate.KeyUsage = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
-		certTemplate.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
 
-	}
-	certTemplate.NotBefore = notBefore
-	certTemplate.NotAfter = notAfter
+	// valid dates
+	configureExpire(certTemplate, kp.V1Spec.Duration)
 
+	// key usage and extended usage
+	configureUsage(certTemplate)
+
+	// add subject
 	pkixName := dnToPkixName(kp.V1Spec.DistinguishedName)
 	if pkixName != nil {
 		certTemplate.Subject = *pkixName
 	}
+
+	// add sans
 	for _, hostname := range kp.V1Spec.Sans {
 		if ip := net.ParseIP(hostname); ip != nil {
 			certTemplate.IPAddresses = append(certTemplate.IPAddresses, ip)
@@ -183,7 +267,7 @@ func (kp *CertKeyPair) Generate() error {
 		}
 	}
 
-	// CertPEM
+	// public key
 	var publicKey interface{}
 	switch kp.V1Spec.Algorithm {
 	case v1alpha1.AlgorithmTypeECDSAWithSHA256:
@@ -191,24 +275,31 @@ func (kp *CertKeyPair) Generate() error {
 	case v1alpha1.AlgorithmTypeSHA256WithRSA:
 		publicKey = &kp.Cert.PrivateKeyRSA.PublicKey
 	}
-	// self sign or root signed
-	var signer *x509.Certificate
-	var signerPrivate interface{}
+
+	// handle signing
+	var parent *x509.Certificate
+	var signer crypto.Signer
 	if kp.V1Spec.SelfSigned {
-		signer = certTemplate
+		parent = certTemplate
 		// self signed certs can use either alg for signing
 		switch kp.V1Spec.Algorithm {
 		case v1alpha1.AlgorithmTypeECDSAWithSHA256:
-			signerPrivate = kp.Cert.PrivateKeyEC
+			signer = kp.Cert.PrivateKeyEC
 		case v1alpha1.AlgorithmTypeSHA256WithRSA:
-			signerPrivate = kp.Cert.PrivateKeyRSA
+			signer = kp.Cert.PrivateKeyRSA
 		}
-	} else {
+	} else if !kp.isCA {
 		// our RooCA is always ECDSA
-		signer = kp.RootCA.Cert.Cert
-		signerPrivate = kp.RootCA.Cert.PrivateKeyEC
+		parent = kp.RootCA.Cert.Cert
+		signer = kp.RootCA.Cert.PrivateKeyEC
+	} else if kp.isCA {
+		// CA
+		parent = certTemplate
+		signer = kp.Cert.PrivateKeyEC
 	}
-	certBytes, err := x509.CreateCertificate(rand.Reader, certTemplate, signer, publicKey, signerPrivate)
+
+	// handle encoding
+	certBytes, err := x509.CreateCertificate(rand.Reader, certTemplate, parent, publicKey, signer)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -233,7 +324,26 @@ func (kp *CertKeyPair) LoadFromData(data map[string][]byte) {
 	if kp.Cert == nil {
 		kp.Cert = &Certificate{}
 	}
-	kp.Cert.CertPEM, kp.Cert.PrivateKeyPEM = data[pubKey], data[privKey]
+	var ok bool
+	if kp.Cert.CertPEM, ok = data[pubKey]; !ok {
+		return
+	}
+	if kp.Cert.PrivateKeyPEM, ok = data[privKey]; !ok {
+		return
+	}
+	var privateKey interface{}
+	var err error
+	kp.Cert.Cert, privateKey, err = keyPairFromPemBytes(kp.Cert.CertPEM, kp.Cert.PrivateKeyPEM)
+	if err != nil {
+		log.Printf("error decoding %s", err)
+	}
+
+	switch priv := privateKey.(type) {
+	case *ecdsa.PrivateKey:
+		kp.Cert.PrivateKeyEC = priv
+	case *rsa.PrivateKey:
+		kp.Cert.PrivateKeyRSA = priv
+	}
 	return
 }
 
@@ -262,8 +372,8 @@ func (kp *CertKeyPair) ToKubernetes(secObject *corev1.Secret) {
 
 // LoadReferenceData loads references from data
 func (kp *CertKeyPair) LoadReferenceData(data map[string][]byte) error {
-	// this is a self signed cert
-	if kp.RootCA == nil {
+	// ca's and self singed don't use references
+	if kp.V1Spec.SelfSigned || kp.isCA {
 		return nil
 	}
 	if len(data) == 0 {
@@ -288,14 +398,18 @@ func NewCertKeyPair(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
 	}
 	secretRef, dataKey := handleRefPath(keyConfig.Spec.SignedWithPath)
 	selfSigned := &keyConfig.Spec.SelfSigned != nil && keyConfig.Spec.SelfSigned == true
+	// setup for signing
 	if !selfSigned {
-		rootCA := &RootCA{
-			Name:           secretRef,
-			Cert:           &Certificate{},
-			privateKeyName: fmt.Sprintf("%s-private.pem", dataKey),
-			publicKeyName:  fmt.Sprintf("%s.pem", dataKey),
+		rCAKeyConfig := &v1alpha1.KeyConfig{
+			Name: dataKey,
+			Type: v1alpha1.KeyConfigTypeCA,
+			Spec: &v1alpha1.KeySpec{},
 		}
-		keyPair.RootCA = rootCA
+		rCA, err := NewRootCA(rCAKeyConfig)
+		if err != nil {
+			return &CertKeyPair{}, err
+		}
+		keyPair.RootCA = rCA
 		keyPair.refName = secretRef
 		keyPair.refDataKeys = []string{fmt.Sprintf("%s.pem", dataKey), fmt.Sprintf("%s-private.pem", dataKey)}
 	} else if !selfSigned && secretRef == "" {
@@ -305,43 +419,14 @@ func NewCertKeyPair(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
 	return keyPair, nil
 }
 
-// ToPkixName convert DistinguishedName to pkix.Name
-func dnToPkixName(dn *v1alpha1.DistinguishedName) *pkix.Name {
-	if dn == nil {
-		return nil
+// NewRootCA create a cert that is a root signing CA
+func NewRootCA(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
+	rCA := &CertKeyPair{
+		Name: keyConfig.Name,
+		isCA: true,
+		Cert: &Certificate{},
 	}
-	return &pkix.Name{Country: dn.Country,
-		Organization:       dn.Organization,
-		OrganizationalUnit: dn.OrganizationalUnit,
-		Locality:           dn.Locality,
-		Province:           dn.Province,
-		StreetAddress:      dn.StreetAddress,
-		PostalCode:         dn.PostalCode,
-		SerialNumber:       dn.SerialNumber,
-		CommonName:         dn.CommonName,
-	}
-}
-
-func keyPairFromPemBytes(publicKeyPem []byte, privateKeyPem []byte) (*x509.Certificate, *ecdsa.PrivateKey, error) {
-	// convert back from PEM
-	block, _ := pem.Decode(publicKeyPem)
-	if block == nil {
-		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
-	}
-	parsedCert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
-	}
-
-	// root private key
-	block, _ = pem.Decode(privateKeyPem)
-	if block == nil {
-		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
-	}
-	parsedPrivateKey, err := x509.ParseECPrivateKey(block.Bytes)
-	if err != nil {
-		return &x509.Certificate{}, &ecdsa.PrivateKey{}, errCertDecode
-	}
-	return parsedCert, parsedPrivateKey, nil
-
+	rCA.V1Spec = keyConfig.Spec
+	rCA.V1Spec.Algorithm = v1alpha1.AlgorithmTypeECDSAWithSHA256
+	return rCA, nil
 }

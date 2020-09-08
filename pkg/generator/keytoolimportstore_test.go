@@ -5,16 +5,32 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestImportKeyStore(t *testing.T) {
-	rootCA, err := makeTestNewRootCA(t)
-	if err != nil {
-		t.Error(err)
+	rootCAConfig := &v1alpha1.KeyConfig{
+		Type: v1alpha1.KeyConfigTypeCA,
+		Name: "ca",
+		Spec: &v1alpha1.KeySpec{
+			Duration: &metav1.Duration{Duration: 100 * 365 * 24 * time.Hour}, //100 yrs
+			DistinguishedName: &v1alpha1.DistinguishedName{
+				CommonName: "foo",
+			},
+		},
 	}
-	rootCA.Generate()
+	rootCA, err := NewRootCA(rootCAConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = rootCA.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	importSpec := &v1alpha1.KeyConfig{
 		Name: "testConfig",
 		Type: "keytool",
