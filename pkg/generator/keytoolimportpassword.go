@@ -41,7 +41,7 @@ func (kp *KeyToolImportPassword) LoadReferenceData(data map[string][]byte) error
 }
 
 // Generate creates keytool password alias entry
-func (kp *KeyToolImportPassword) Generate(baseCmd cmdRunner) error {
+func (kp *KeyToolImportPassword) Generate(baseDir string, baseCmd cmdRunner) error {
 	// echo ${IMP_PASS} | keytool -importpass -alias ${ALIAS} ${KS_PROPS} 2> /dev/null
 	// KS_PROPS="-keystore ${KEYSTORE} -storetype ${STORE_TYPE} -storepass ${STORE_PASS} -keypass ${KEY_PASS}"
 	cmd := "-importpass"

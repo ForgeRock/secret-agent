@@ -28,7 +28,7 @@ func (kp *KeyToolGenSecKey) LoadReferenceData(data map[string][]byte) error {
 }
 
 // Generate creates keytool password alias entry
-func (kp *KeyToolGenSecKey) Generate(baseCmd cmdRunner) error {
+func (kp *KeyToolGenSecKey) Generate(baseDir string, baseCmd cmdRunner) error {
 	// keytool -genseckey -alias selfservicesigntest -keyalg HmacSHA256 -keysize 256
 	// KS_PROPS="-keystore ${KEYSTORE} -storetype ${STORE_TYPE} -storepass ${STORE_PASS} -keypass ${KEY_PASS}"
 	cmd := "-genseckey"

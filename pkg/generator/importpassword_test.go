@@ -57,6 +57,9 @@ func TestImportPassword(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := os.Stat(keyToolMgr.storeDir); os.IsNotExist(err) {
+		os.Mkdir(keyToolMgr.storeDir, 0700)
+	}
 	baseArgs := []string{
 		"-storetype", string(keyToolMgr.V1Spec.StoreType),
 		"-storepass", keyToolMgr.storePassValue,
@@ -71,7 +74,7 @@ func TestImportPassword(t *testing.T) {
 		t.Error("expected keyToolMgr to cleanup store but didn't")
 	}
 	ioutil.WriteFile(keyToolMgr.storePath, keyToolMgr.storeBytes, 0600)
-	defer os.RemoveAll(keyToolMgr.storePath)
+	defer os.RemoveAll(keyToolMgr.storeDir)
 	cmd := baseCmd("-list", args)
 	results, err := cmd.CombinedOutput()
 	if err != nil {

@@ -28,7 +28,7 @@ func (kp *KeyToolGenKeyPair) LoadReferenceData(data map[string][]byte) error {
 }
 
 // Generate creates keytool password alias entry
-func (kp *KeyToolGenKeyPair) Generate(baseCmd cmdRunner) error {
+func (kp *KeyToolGenKeyPair) Generate(baseDir string, baseCmd cmdRunner) error {
 	//++ keytool -genkeypair -alias rsajwtsigningkey -dname CN=rsajwtsigningkey,O=ForgeRock,L=Bristol,ST=Bristol,C=UK -keyalg RSA -keysize 2048 -sigalg SHA256WITHRSA --validity 3650
 	// KS_PROPS="-keystore ${KEYSTORE} -storetype ${STORE_TYPE} -storepass ${STORE_PASS} -keypass ${KEY_PASS}"
 	cmd := "-genkeypair"

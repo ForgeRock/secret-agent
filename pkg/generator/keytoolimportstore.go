@@ -138,10 +138,10 @@ func (k *KeyToolImportKeystore) importKeyPair(baseCmd cmdRunner) ([]byte, error)
 }
 
 // Generate creates keytool password alias entry
-func (k *KeyToolImportKeystore) Generate(baseCmd cmdRunner) error {
+func (k *KeyToolImportKeystore) Generate(baseDir string, baseCmd cmdRunner) error {
 	var err error = nil
 	var output []byte
-	k.tempDir, err = ioutil.TempDir("", "keystore-*")
+	k.tempDir, err = ioutil.TempDir(baseDir, "keystore-*")
 	defer os.RemoveAll(k.tempDir)
 	if k.v1aliasConfig.IsKeyPair {
 		output, err = k.importKeyPair(baseCmd)

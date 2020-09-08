@@ -47,19 +47,20 @@ func execCommand(execCmd string, baseArgs []string) func(cmdName string, args []
 type AliasMgr interface {
 	References() ([]string, []string)
 	LoadReferenceData(data map[string][]byte) error
-	Generate(baseCmd cmdRunner) error
+	Generate(baseDir string, baseCmd cmdRunner) error
 }
 
 // NewKeyTool creates new keytool instance
 func NewKeyTool(key *v1alpha1.KeyConfig) (*KeyTool, error) {
+	var err error
 	tool := &KeyTool{}
 	tool.Name = key.Name
 	tool.V1Spec = key.Spec
-	dir, err := ioutil.TempDir("", "store-*")
+	tool.storeDir, err = ioutil.TempDir("", "store-*")
 	if err != nil {
 		return &KeyTool{}, errors.WithMessage(err, "couldn't create a temporary keystore file")
 	}
-	tool.storePath = path.Join(dir, fmt.Sprintf("keytool.%s", tool.V1Spec.StoreType))
+	tool.storePath = path.Join(tool.storeDir, fmt.Sprintf("keytool.%s", tool.V1Spec.StoreType))
 	for _, alias := range key.Spec.KeytoolAliases {
 		tool.loadAliasManager(alias)
 	}
@@ -70,6 +71,7 @@ func NewKeyTool(key *v1alpha1.KeyConfig) (*KeyTool, error) {
 type KeyTool struct {
 	Name           string
 	V1Spec         *v1alpha1.KeySpec
+	storeDir       string
 	storePath      string
 	storeBytes     []byte
 	aliasMgrs      []AliasMgr
@@ -219,10 +221,10 @@ func (kt *KeyTool) EnsureSecretManager(ctx context.Context, config *v1alpha1.App
 // Generate keystore and all of its aliases
 func (kt *KeyTool) Generate() error {
 	// clean up after ourselves, we store as bytes in memory
-	defer os.RemoveAll(kt.storePath)
+	defer os.RemoveAll(kt.storeDir)
 	cmd := kt.baseCommand(*keytoolPath)
 	for _, mgr := range kt.aliasMgrs {
-		if err := mgr.Generate(cmd); err != nil {
+		if err := mgr.Generate(kt.storeDir, cmd); err != nil {
 			return err
 		}
 	}

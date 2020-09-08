@@ -46,9 +46,9 @@ func (k *KeyToolImportCert) LoadReferenceData(data map[string][]byte) error {
 }
 
 // Generate creates keytool certificate with its CA alias entry
-func (k *KeyToolImportCert) Generate(baseCmd cmdRunner) error {
+func (k *KeyToolImportCert) Generate(baseDir string, baseCmd cmdRunner) error {
 	var err error = nil
-	k.tempDir, err = ioutil.TempDir("", "keystore-*")
+	k.tempDir, err = ioutil.TempDir(baseDir, "keystore-*")
 	defer os.RemoveAll(k.tempDir)
 	// write to file
 	publicPath := filepath.Join(k.tempDir, "temp.crt")
