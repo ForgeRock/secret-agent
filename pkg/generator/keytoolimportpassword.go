@@ -33,7 +33,7 @@ func (kp *KeyToolImportPassword) References() ([]string, []string) {
 // LoadReferenceData loads data from references
 func (kp *KeyToolImportPassword) LoadReferenceData(data map[string][]byte) error {
 	key := fmt.Sprintf("%s/%s", kp.refName, kp.refDataKey)
-	ok := true
+	var ok bool
 	if kp.refData, ok = data[key]; !ok {
 		return errors.Wrap(errNoRefFound, fmt.Sprintf("no data for %s", key))
 	}

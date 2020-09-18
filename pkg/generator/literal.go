@@ -70,7 +70,7 @@ func (literal *Literal) InSecret(secObject *corev1.Secret) bool {
 
 // Generate generates data
 func (literal *Literal) Generate() error {
-	var err error = nil
+	var err error
 	if literal.IsBase64 {
 		literal.Value, err = base64.StdEncoding.DecodeString(string(literal.ConfigValue))
 		if err != nil {
@@ -106,7 +106,7 @@ func (literal *Literal) ToKubernetes(secret *corev1.Secret) {
 	secret.Data[literal.Name] = literal.Value
 }
 
-// NewLiteral creates new Literal type for reconcilation
+// NewLiteral creates new Literal type for reconciliation
 func NewLiteral(keyConfig *v1alpha1.KeyConfig) (*Literal, error) {
 	literal := &Literal{
 		Name:        keyConfig.Name,

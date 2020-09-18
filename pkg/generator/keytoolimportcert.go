@@ -37,7 +37,7 @@ func (k *KeyToolImportCert) References() ([]string, []string) {
 
 // LoadReferenceData loads data from references
 func (k *KeyToolImportCert) LoadReferenceData(data map[string][]byte) error {
-	ok := true
+	var ok bool
 	pubName := fmt.Sprintf("%s/%s", k.refName, k.refDataKey)
 	if k.refPublicData, ok = data[pubName]; !ok {
 		return errors.Wrap(errNoRefFound, fmt.Sprintf("no data for %s", pubName))
@@ -47,8 +47,11 @@ func (k *KeyToolImportCert) LoadReferenceData(data map[string][]byte) error {
 
 // Generate creates keytool certificate with its CA alias entry
 func (k *KeyToolImportCert) Generate(baseDir string, baseCmd cmdRunner) error {
-	var err error = nil
+	var err error
 	k.tempDir, err = ioutil.TempDir(baseDir, "keystore-*")
+	if err != nil {
+		return err
+	}
 	defer os.RemoveAll(k.tempDir)
 	// write to file
 	publicPath := filepath.Join(k.tempDir, "temp.crt")

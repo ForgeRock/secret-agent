@@ -49,7 +49,7 @@ func (k *KeyToolImportKeystore) References() ([]string, []string) {
 
 // LoadReferenceData loads data from references
 func (k *KeyToolImportKeystore) LoadReferenceData(data map[string][]byte) error {
-	ok := true
+	var ok bool
 	if k.v1aliasConfig.IsKeyPair {
 		pubName := fmt.Sprintf("%s/%s", k.refName, k.refDataKeys[0])
 		privName := fmt.Sprintf("%s/%s", k.refName, k.refDataKeys[1])
@@ -139,9 +139,12 @@ func (k *KeyToolImportKeystore) importKeyPair(baseCmd cmdRunner) ([]byte, error)
 
 // Generate creates keytool password alias entry
 func (k *KeyToolImportKeystore) Generate(baseDir string, baseCmd cmdRunner) error {
-	var err error = nil
+	var err error
 	var output []byte
 	k.tempDir, err = ioutil.TempDir(baseDir, "keystore-*")
+	if err != nil {
+		return err
+	}
 	defer os.RemoveAll(k.tempDir)
 	if k.v1aliasConfig.IsKeyPair {
 		output, err = k.importKeyPair(baseCmd)

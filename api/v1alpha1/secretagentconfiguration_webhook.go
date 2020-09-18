@@ -56,10 +56,6 @@ func (r *SecretAgentConfiguration) Default() {
 	}
 
 	for secretIndex, secret := range r.Spec.Secrets {
-		if secret.GenerateIfNecessary == nil {
-			r.Spec.Secrets[secretIndex].GenerateIfNecessary = new(bool)
-			*r.Spec.Secrets[secretIndex].GenerateIfNecessary = true
-		}
 		for keysIndex, key := range secret.Keys {
 			// If we're processing passwords and received no Spec, create a new spec.
 			// We will be defaulting the Length

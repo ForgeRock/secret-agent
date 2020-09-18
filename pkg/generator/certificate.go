@@ -131,10 +131,8 @@ func keyPairFromPemBytes(publicKeyPem []byte, privateKeyPem []byte) (*x509.Certi
 	}
 	if rsaErr != nil {
 		return parsedCert, ecPrivateKey, nil
-	} else {
-		return parsedCert, rsaPrivateKey, nil
 	}
-
+	return parsedCert, rsaPrivateKey, nil
 }
 
 // CertKeyPair Private/Public certificates which optionally can be signed by a RootCA
@@ -390,7 +388,7 @@ func (kp *CertKeyPair) LoadReferenceData(data map[string][]byte) error {
 	return nil
 }
 
-// NewCertKeyPair creates new CertKeyPair type for reconcilation
+// NewCertKeyPair creates new CertKeyPair type for reconciliation
 func NewCertKeyPair(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
 	keyPair := &CertKeyPair{
 		Cert: &Certificate{},

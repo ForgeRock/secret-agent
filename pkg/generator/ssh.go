@@ -134,7 +134,7 @@ func (ssh *SSH) ToKubernetes(secret *corev1.Secret) {
 	secret.Data[fmt.Sprintf("%s.pub", ssh.Name)] = ssh.PublicKeyPEM
 }
 
-// NewSSH creates new SSH type for reconcilation
+// NewSSH creates new SSH type for reconciliation
 func NewSSH(keyConfig *v1alpha1.KeyConfig) (*SSH, error) {
 	ssh := &SSH{
 		Name: keyConfig.Name,

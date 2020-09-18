@@ -198,12 +198,6 @@ type SecretConfig struct {
 	// +kubebuilder:validation:Required
 	Name      string `json:"name"`
 	Namespace string `json:"-"`
-
-	// This flag tells the controller to generate the secret only if the controller can't find it in k8s or the secret manager.
-	// This is useful if the user wants to enforce the use of the provided secret and avoid ever generating new ones.
-	// Defaults to true.
-	GenerateIfNecessary *bool `json:"generateIfNecessary,omitempty"`
-
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	Keys []*KeyConfig `json:"keys" validate:"dive,unique=Name"`

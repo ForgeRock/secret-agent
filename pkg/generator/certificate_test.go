@@ -170,6 +170,9 @@ func TestKeyPair(t *testing.T) {
 		},
 	}
 	testGenKeyMgrNil, err := NewCertKeyPair(keyNil)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
 	err = testGenKeyMgrNil.Generate()
 	if err != nil {
 		t.Fatalf("expected no error when duration is not set %s", err)

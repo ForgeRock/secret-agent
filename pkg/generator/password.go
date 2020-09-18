@@ -122,7 +122,7 @@ func (pwd *Password) ToKubernetes(secret *corev1.Secret) {
 	secret.Data[pwd.Name] = pwd.Value
 }
 
-// NewPassword creates new Password type for reconcilation
+// NewPassword creates new Password type for reconciliation
 func NewPassword(keyConfig *v1alpha1.KeyConfig) (*Password, error) {
 	password := &Password{
 		Name:       keyConfig.Name,
