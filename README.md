@@ -65,9 +65,9 @@ The `secret-agent` expects credentials to be discoverable via standard [AWS mech
 
 Refer to [AWS documentation](https://docs.aws.amazon.com/secretsmanager/latest/userguide/auth-and-access_overview.html) for instructions on how to obtain credentials and grant necessary permissions to access the AWS Secrets Manager. The `secret-agent` needs to access read/write secrets. This can be achieved by allowing access to the `arn:aws:iam::aws:policy/SecretsManagerReadWrite` AWS managed policy.
 
-Even though the recommended way to obtain credentials is to use the EC2 Instance Metadata service, it is possible to provide custom credentials via a Kubernetes secret. The secret reference is provided in the SAC in `spec.appConfig.credentialsSecretName`. The Kubernetes secret must be present in the same namespace as the operator.
+Even though the recommended way to obtain credentials is to use the EC2 Instance Metadata service, it is possible to provide custom credentials via a Kubernetes secret. The secret reference is provided in the SAC in `spec.appConfig.credentialsSecretName`. The referenced Kubernetes secret must be present in the same namespace as the SAC.
 
-Once these credentials are made available to the operator, the next step is to configure the AWS Secret Manager in the SecretAgentConfiguration.
+Once these credentials are posted to a Kubernetes secret, the next step is to configure the AWS Secret Manager using the `SecretAgentConfiguration`.
 
 For example, the following configuration targets AWS Secret Manager in `us-east-1`:
 
@@ -76,6 +76,7 @@ apiVersion: secret-agent.secrets.forgerock.io/v1alpha1
 kind: SecretAgentConfiguration
 metadata:
   name: standard-forgerock-example
+  namespace: test-sa
 spec:
   appConfig:
     createKubernetesObjects: true
@@ -84,7 +85,21 @@ spec:
     awsRegion: us-east-1
 ```
 
-**The maximum secret size supported by AWS is 65Kb** For more information, see [AWS documentation](https://docs.aws.amazon.com/secretsmanager/latest/userguide/reference_limits.html).
+*optional for AWS*: The `cloud-credentials` secret referenced in `spec.appConfig.credentialsSecretName` would look like this:
+
+```yaml
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: cloud-credentials
+  namespace: test-sa
+data:
+  AWS_ACCESS_KEY_ID: QU....[base64 encoded key].....GY=
+  AWS_SECRET_ACCESS_KEY: cRB.....[base64 encoded access key].......BB==
+```
+
+**Note: The maximum secret size supported by AWS is 65Kb** For more information, see [AWS documentation](https://docs.aws.amazon.com/secretsmanager/latest/userguide/reference_limits.html).
 
 #### Set up Cloud Backup With GCP Secret Manager
 
@@ -92,7 +107,9 @@ The `secret-agent` expects credentials to be discoverable via standard [GCP mech
 
 Please refer to the [GCP Documentation](https://cloud.google.com/secret-manager/docs/reference/libraries?hl=nl#cloud-console) for instructions on how to create a service account with the necessary permissions to access the GCP Secrets Manager. The `secret-agent` needs access to read/write secrets. This can be achieved by assigning the `Secret Manager Admin` role to the service account provided.
 
-Once these credentials are made available to the operator using `GOOGLE_APPLICATION_CREDENTIALS`, the next step is to configure the GCP Secret Manager in the `SecretAgentConfiguration`.
+The credentials are provided to the operator using a kubernetes secret under the `GOOGLE_CREDENTIALS_JSON` data key. The name of this secret is provided in `spec.appConfig.credentialsSecretName`. The referenced Kubernetes secret must be present in the same namespace as the SAC.
+
+Once these credentials are posted to a Kubernetes secret, the next step is to configure the GCP Secret Manager using the `SecretAgentConfiguration`.
 
 For example, the following configuration targets GCP Secret Manager for the `example-project-id` project:
 
@@ -101,11 +118,26 @@ apiVersion: secret-agent.secrets.forgerock.io/v1alpha1
 kind: SecretAgentConfiguration
 metadata:
   name: standard-forgerock-example
+  namespace: test-sa
 spec:
   appConfig:
     createKubernetesObjects: true
+    credentialsSecretName: cloud-credentials
     secretsManager: GCP
     gcpProjectID: example-project-id
+```
+
+The `cloud-credentials` secret referenced in `spec.appConfig.credentialsSecretName` would look like this:
+
+```yaml
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: cloud-credentials
+  namespace: test-sa
+data:
+  GOOGLE_CREDENTIALS_JSON: ewog.....[base64 encoded service account json].....o=
 ```
 
 ### Importing your own secrets
