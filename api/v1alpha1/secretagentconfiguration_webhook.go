@@ -192,6 +192,9 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 						"distinguishedName", "distinguishedNameValueEmpty", "")
 					return
 				}
+				if key.Spec.Algorithm == "" {
+					key.Spec.Algorithm = AlgorithmTypeECDSAWithSHA256
+				}
 			case KeyConfigTypeLiteral:
 				// must have Value
 				if key.Spec.Value == "" {

@@ -66,10 +66,6 @@ RUN addgroup --gid 11111 secret-agent && \
 
 WORKDIR /opt/gen
 COPY --from=builder --chown=secret-agent:root /workspace/manager /
-RUN mkdir -p /opt/gen/secrets/generic/truststore && \
-    cp $JAVA_HOME/lib/security/cacerts /opt/gen/secrets/generic/truststore && \
-    chmod 764 /opt/gen/secrets/generic/truststore/cacerts && \
-    chown -R secret-agent:root /opt/gen
 
 USER secret-agent
 

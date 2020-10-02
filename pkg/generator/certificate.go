@@ -275,29 +275,26 @@ func (kp *CertKeyPair) Generate() error {
 	}
 
 	// handle signing
-	var parent *x509.Certificate
 	var signer crypto.Signer
-	if kp.V1Spec.SelfSigned {
-		parent = certTemplate
-		// self signed certs can use either alg for signing
-		switch kp.V1Spec.Algorithm {
-		case v1alpha1.AlgorithmTypeECDSAWithSHA256:
-			signer = kp.Cert.PrivateKeyEC
-		case v1alpha1.AlgorithmTypeSHA256WithRSA:
-			signer = kp.Cert.PrivateKeyRSA
-		}
-	} else if !kp.isCA {
-		// our RooCA is always ECDSA
-		parent = kp.RootCA.Cert.Cert
-		signer = kp.RootCA.Cert.PrivateKeyEC
-	} else if kp.isCA {
-		// CA
-		parent = certTemplate
-		signer = kp.Cert.PrivateKeyEC
+	var parentCert *Certificate
+
+	if !kp.isCA && !kp.V1Spec.SelfSigned {
+		parentCert = kp.RootCA.Cert
+	} else {
+		// this is a CA or Self signed
+		parentCert = kp.Cert
+		parentCert.Cert = certTemplate
 	}
 
+	// self signed certs can use either alg for signing
+	if parentCert.PrivateKeyEC != nil {
+		signer = parentCert.PrivateKeyEC
+	} else if parentCert.PrivateKeyRSA != nil {
+		signer = parentCert.PrivateKeyRSA
+	}
+	// our RooCA is always ECDSA
 	// handle encoding
-	certBytes, err := x509.CreateCertificate(rand.Reader, certTemplate, parent, publicKey, signer)
+	certBytes, err := x509.CreateCertificate(rand.Reader, certTemplate, parentCert.Cert, publicKey, signer)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -339,8 +336,10 @@ func (kp *CertKeyPair) LoadFromData(data map[string][]byte) {
 	switch priv := privateKey.(type) {
 	case *ecdsa.PrivateKey:
 		kp.Cert.PrivateKeyEC = priv
+		kp.V1Spec.Algorithm = v1alpha1.AlgorithmTypeECDSAWithSHA256
 	case *rsa.PrivateKey:
 		kp.Cert.PrivateKeyRSA = priv
+		kp.V1Spec.Algorithm = v1alpha1.AlgorithmTypeSHA256WithRSA
 	}
 	return
 }
@@ -425,6 +424,8 @@ func NewRootCA(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
 		Cert: &Certificate{},
 	}
 	rCA.V1Spec = keyConfig.Spec
-	rCA.V1Spec.Algorithm = v1alpha1.AlgorithmTypeECDSAWithSHA256
+	if rCA.V1Spec.Algorithm == "" {
+		rCA.V1Spec.Algorithm = v1alpha1.AlgorithmTypeECDSAWithSHA256
+	}
 	return rCA, nil
 }

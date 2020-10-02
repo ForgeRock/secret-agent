@@ -58,6 +58,12 @@ deploy: manifests
 	cd config/manager && kustomize edit set image controller=${IMG}
 	kustomize build config/default | kubectl apply -f -
 
+# Renders deployment but does not apply
+release:
+	cd config/manager && kustomize edit set image controller=${IMG}
+	kustomize build config/default 
+	GOPROXY=https://proxy.golang.org GO111MODULE=on go get github.com/ForgeRock/secret-agent@v$VERSION
+
 # Delete controller from the configured Kubernetes cluster in ~/.kube/config
 clean: manifests
 	kustomize build config/default | kubectl delete -f -
