@@ -128,6 +128,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	}
 
 	for _, secretReq := range instance.Spec.Secrets {
+		var k8sApplyRequired bool = false
 		// load from secret k8s
 		secObject, err := k8ssecrets.LoadSecret(reconciler.Client, secretReq.Name, instance.Namespace)
 		if err != nil {
@@ -175,7 +176,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					"secret_type", string(key.Type))
 				keyInterface.LoadFromData(secObject.Data)
 			}
-			// If the keyInterface is contained in the current k8s secret, continue with the next secret
+			// If the keyInterface is already in the current k8s secret, continue with the next key
 			if keyInterface.InSecret(secObject) {
 				log.V(1).Info("skipping secret key already found in k8s",
 					"secret_name", secretReq.Name,
@@ -186,20 +187,26 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			keyRefSecrets := make(map[string][]byte)
 			refs, refDataKeys := keyInterface.References()
 			for index, ref := range refs {
-
-				secRefObject, err := k8ssecrets.LoadSecret(reconciler.Client, ref, instance.Namespace)
-
-				if err != nil {
-					log.Error(err, "error looking up secret ref",
-						"secret_name", secretReq.Name,
-						"secret_ref", ref)
-					rescheduleRetry, errorFound = true, true
+				var secRefObject *corev1.Secret
+				// if ref the current secret, use the values already loaded in memory, else load them from k8s
+				if ref == secObject.Name {
+					secRefObject = secObject
+				} else {
+					secRefObject, err = k8ssecrets.LoadSecret(reconciler.Client, ref, instance.Namespace)
+					if err != nil {
+						log.Error(err, "error looking up secret ref",
+							"secret_name", secretReq.Name,
+							"secret_ref", ref)
+						rescheduleRetry, errorFound = true, true
+					}
 				}
-				if (&corev1.Secret{}) == secObject {
-					log.Info("secret ref not found, skipping key and will retry",
+
+				// if the ref is not present in k8s yet, skip this secret for now. schedule a reconcile rerun
+				if len(secRefObject.Data) == 0 {
+					log.V(0).Info("secret ref not found, skipping key and will retry",
 						"secret_name", secretReq.Name,
 						"secret_ref", ref)
-					rescheduleRetry, errorFound = true, true
+					rescheduleRetry, errorFound = true, false
 					break secretKeys
 				}
 				dataKey := fmt.Sprintf("%s/%s", ref, refDataKeys[index])
@@ -256,11 +263,15 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					}
 				}
 			}
-			log.V(0).Info("applying to kubernetes",
-				"secret_name", secretReq.Name,
-				"data_key", key.Name,
-				"secret_type", string(key.Type))
 			keyInterface.ToKubernetes(secObject)
+			// if we reach this point, we need to update the k8s secret with new keys
+			k8sApplyRequired = true
+		} // end of keys loop
+		// write secret once after processing all its keys if required.
+		if k8sApplyRequired {
+			log.V(0).Info("applying to kubernetes",
+				"secret_name", secretReq.Name)
+
 			secObject.Labels = labelsForSecretAgent(instance.Name)
 			// Set SecretAgentConfiguration instance as the owner and controller of the k8ssecret
 			if err := ctrl.SetControllerReference(&instance, secObject, reconciler.Scheme); err != nil {
@@ -275,15 +286,18 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 				rescheduleRetry, errorFound = true, true
 			}
 			updatedK8sSecrets = true
-			// Give enough time for the api to update the secret to avoid race conditions
+			// Give enough time for the k8s api to update the secret to avoid race conditions
 			time.Sleep(100 * time.Millisecond)
 		}
+
 		log.V(1).Info("completed reconcile for secret",
 			"secret_namespace", instance.Namespace,
 			"secret_name", secretReq.Name)
-	}
-	// Only update the instance's status if there was a k8s operation
-	if updatedK8sSecrets {
+
+	} // end of secrets loop
+	// Only update the instance's status if there was a k8s operation.
+	// No k8s operation happen in the last reconcile loop. Update to "completed" if no updates and no errors occurred
+	if updatedK8sSecrets || rescheduleRetry || errorFound {
 		if err := reconciler.updateStatus(ctx, &instance, rescheduleRetry, errorFound); err != nil {
 			log.Error(err, "Failed to update status", "instance.name", instance.Name)
 			return ctrl.Result{}, err
