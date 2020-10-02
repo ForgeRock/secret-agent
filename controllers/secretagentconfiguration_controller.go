@@ -119,6 +119,13 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		}
 
 	}
+	// set the SAC status to inProgress only the first time around.
+	if instance.Status.State == "" {
+		if err := reconciler.updateStatus(ctx, &instance, true, false); err != nil {
+			log.Error(err, "Failed to update status", "instance.name", instance.Name)
+			return ctrl.Result{}, err
+		}
+	}
 
 	for _, secretReq := range instance.Spec.Secrets {
 		// load from secret k8s
@@ -315,7 +322,11 @@ func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.C
 	instance.Status.TotalManagedObjects = totalManagedObjects
 
 	if errorFound {
-		instance.Status.State = v1alpha1.SecretAgentConfigurationError
+		if inProgress {
+			instance.Status.State = v1alpha1.SecretAgentConfigurationErrorRetry
+		} else {
+			instance.Status.State = v1alpha1.SecretAgentConfigurationError
+		}
 	} else if inProgress {
 		instance.Status.State = v1alpha1.SecretAgentConfigurationInProgress
 	} else {

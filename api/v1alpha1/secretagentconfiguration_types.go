@@ -50,6 +50,7 @@ type SecretAgentConfigurationStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=secretagentconfigurations,scope=Namespaced
 // +kubebuilder:resource:shortName=sac
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.state",description="SAC State"
 // +kubebuilder:printcolumn:name="TotalNumObjects",type="integer",JSONPath=".status.totalManagedObjects",description="Total no. of objects managed"
 // +kubebuilder:printcolumn:name="K8sSecrets",type="string",priority=1,JSONPath=".status.managedK8sSecrets",description="All K8s managed secrets"
 
@@ -79,6 +80,7 @@ const (
 	SecretAgentConfigurationCompleted  SecretAgentConfState = "Completed"
 	SecretAgentConfigurationInProgress SecretAgentConfState = "InProgress"
 	SecretAgentConfigurationError      SecretAgentConfState = "ErrorFound"
+	SecretAgentConfigurationErrorRetry SecretAgentConfState = "ErrorFoundRetry"
 )
 
 // DistinguishedName certificate subject data
