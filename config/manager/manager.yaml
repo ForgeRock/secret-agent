@@ -34,7 +34,8 @@ spec:
         - --webhook-service-name=$(SERVICE_NAME)
         - --webhook-secret-name=webhook-server-cert
         - --validating-webhook-name=$(VALIDATING_WEBHOOK_CONFIGURATION_NAME)
-        - --mutating-webhook-name=$(MUTATING_WEBHOOK_CONFIGURATION_NAME) 
+        - --mutating-webhook-name=$(MUTATING_WEBHOOK_CONFIGURATION_NAME)
+        - --cloud-secrets-namespace=$(SERVICE_NAMESPACE)
         image: controller:latest
         name: manager
         ports:

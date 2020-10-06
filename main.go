@@ -50,6 +50,7 @@ func main() {
 	var certDir string
 	var debug bool
 	var lvl uberzap.AtomicLevel
+	var cloudSecretsNamespace string
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
@@ -58,6 +59,9 @@ func main() {
 	flag.StringVar(&certDir, "cert-dir", "/tmp/k8s-webhook-server/serving-certs",
 		"Directory where to store/read the webhook certs. Defaults to /tmp/k8s-webhook-server/serving-certs")
 	flag.BoolVar(&debug, "debug", false, "Set to true to enable debug")
+	flag.StringVar(&cloudSecretsNamespace, "cloud-secrets-namespace", "",
+		"Namespace where the cloud credentials secrets are located. Defaults to the SAC namespace")
+
 	flag.Parse()
 	if debug {
 		lvl = uberzap.NewAtomicLevelAt(uberzap.DebugLevel)
@@ -80,9 +84,10 @@ func main() {
 	}
 
 	if err = (&controllers.SecretAgentConfigurationReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SecretAgentConfiguration"),
-		Scheme: mgr.GetScheme(),
+		Client:                mgr.GetClient(),
+		Log:                   ctrl.Log.WithName("controllers").WithName("SecretAgentConfiguration"),
+		Scheme:                mgr.GetScheme(),
+		CloudSecretsNamespace: cloudSecretsNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SecretAgentConfiguration")
 		os.Exit(1)

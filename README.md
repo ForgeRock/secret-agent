@@ -65,7 +65,7 @@ The `secret-agent` expects credentials to be discoverable via standard [AWS mech
 
 Refer to [AWS documentation](https://docs.aws.amazon.com/secretsmanager/latest/userguide/auth-and-access_overview.html) for instructions on how to obtain credentials and grant necessary permissions to access the AWS Secrets Manager. The `secret-agent` needs to access read/write secrets. This can be achieved by allowing access to the `arn:aws:iam::aws:policy/SecretsManagerReadWrite` AWS managed policy.
 
-Even though the recommended way to obtain credentials is to use the EC2 Instance Metadata service, it is possible to provide custom credentials via a Kubernetes secret. The secret reference is provided in the SAC in `spec.appConfig.credentialsSecretName`. The referenced Kubernetes secret must be present in the same namespace as the SAC.
+Even though the recommended way to obtain credentials is to use the EC2 Instance Metadata service, it is possible to provide custom credentials via a Kubernetes secret. The secret reference is provided in the SAC in `spec.appConfig.credentialsSecretName`. In the default `secret-agent` deployment, the operator will look for a secret with the provided name in the operator's own namespace. The user can specify a different namespace by setting the argument `--cloud-secrets-namespace=[NS_NAME]`. If this argument is omitted, the operator's default behavior is to fetch the credentials from the same namespace as the SAC.
 
 Once these credentials are posted to a Kubernetes secret, the next step is to configure the AWS Secret Manager using the `SecretAgentConfiguration`.
 
@@ -107,7 +107,7 @@ The `secret-agent` expects credentials to be discoverable via standard [GCP mech
 
 Please refer to the [GCP Documentation](https://cloud.google.com/secret-manager/docs/reference/libraries?hl=nl#cloud-console) for instructions on how to create a service account with the necessary permissions to access the GCP Secrets Manager. The `secret-agent` needs access to read/write secrets. This can be achieved by assigning the `Secret Manager Admin` role to the service account provided.
 
-The credentials are provided to the operator using a kubernetes secret under the `GOOGLE_CREDENTIALS_JSON` data key. The name of this secret is provided in `spec.appConfig.credentialsSecretName`. The referenced Kubernetes secret must be present in the same namespace as the SAC.
+The credentials are provided to the operator using a kubernetes secret under the `GOOGLE_CREDENTIALS_JSON` data key. The name of this secret is provided in `spec.appConfig.credentialsSecretName`. In the default `secret-agent` deployment, the operator will look for a secret with the provided name in the operator's own namespace. The user can specify a different namespace by setting the argument `--cloud-secrets-namespace=[NS_NAME]`. If this argument is omitted, the operator's default behavior is to fetch the credentials from the same namespace as the SAC.
 
 Once these credentials are posted to a Kubernetes secret, the next step is to configure the GCP Secret Manager using the `SecretAgentConfiguration`.
 

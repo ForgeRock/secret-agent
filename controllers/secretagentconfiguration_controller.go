@@ -45,8 +45,9 @@ import (
 // SecretAgentConfigurationReconciler reconciles a SecretAgentConfiguration object
 type SecretAgentConfigurationReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log                   logr.Logger
+	Scheme                *runtime.Scheme
+	CloudSecretsNamespace string
 }
 
 var (
@@ -84,14 +85,21 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 
 	if instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone {
 		var dir string
+		var cloudCredNS string
+
+		if len(reconciler.CloudSecretsNamespace) > 0 {
+			cloudCredNS = reconciler.CloudSecretsNamespace
+		} else {
+			cloudCredNS = instance.Namespace
+		}
 
 		// load credentials secret
 		secObject, err := k8ssecrets.LoadSecret(reconciler.Client,
-			instance.Spec.AppConfig.CredentialsSecretName, instance.Namespace)
+			instance.Spec.AppConfig.CredentialsSecretName, cloudCredNS)
 		if err != nil {
 			log.Error(err, "error loading cloud credentials secret from the Kubernetes API",
 				"secret_name", instance.Spec.AppConfig.CredentialsSecretName,
-				"namespace", instance.Namespace)
+				"namespace", cloudCredNS)
 			return ctrl.Result{}, err
 		}
 		// Create temporary dir for gcp credentials if needed
@@ -114,7 +122,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		if err := manageCloudCredentials(instance.Spec.AppConfig.SecretsManager, secObject, dir); err != nil {
 			log.Error(err, "error loading cloud credentials from secret provided",
 				"secret_name", instance.Spec.AppConfig.CredentialsSecretName,
-				"namespace", instance.Namespace)
+				"namespace", cloudCredNS)
 			return ctrl.Result{}, err
 		}
 
