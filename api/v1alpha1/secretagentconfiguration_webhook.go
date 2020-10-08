@@ -63,7 +63,7 @@ func (r *SecretAgentConfiguration) Default() {
 				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec = new(KeySpec)
 			}
 
-			if key.Type == KeyConfigTypePassword {
+			if key.Type == KeyConfigTypePassword && key.Spec.Length == nil {
 				r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Length = new(int)
 				*r.Spec.Secrets[secretIndex].Keys[keysIndex].Spec.Length = 32
 			}
