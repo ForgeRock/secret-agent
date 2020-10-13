@@ -48,7 +48,7 @@ The `secret-agent` supports the following cloud providers:
 
 * Google Secret Manager
 * AWS Secrets Manager
-* ~~Azure Key Vault~~ (In progress: See #60)
+* Azure Key Vault
 
 It is possible to run the `secret-agent` without setting up a cloud provider. This is useful when debugging or testing applications. To disable cloud provider support, set `spec.appConfig.secretsManager` to “none”.
 
@@ -138,6 +138,44 @@ metadata:
   namespace: test-sa
 data:
   GOOGLE_CREDENTIALS_JSON: ewog.....[base64 encoded service account json].....o=
+```
+
+#### Set up Cloud Backup With Azure Key Vault
+
+_note:_ Azure's API response time on Key Vault is long and will delay the creation of secrets. It might be beneficial to deploy a SAC before long before deploying an application if use Azure Key Vault
+
+The `secret-agent` uses credentials which are available using two different methods Azure Managed Identities or explicity credentials. Both are configured in the secret that's referenced in the SAC spec `spec.appConfig.credentialsSecretName`. Example Azure Configuration for a SAC:
+
+```yaml
+apiVersion: secret-agent.secrets.forgerock.io/v1alpha1
+kind: SecretAgentConfiguration
+metadata:
+  name: standard-forgerock-example
+  namespace: test-sa
+spec:
+  appConfig:
+    createKubernetesObjects: true
+    credentialsSecretName: cloud-credentials
+    secretsManager: Azure
+    azureVaultName: secret-agent-vault 
+```
+
+If the `credentialsSecretName` secret has a data key `AZURE_MANAGED_ID` set to `"true"` the operator's Azure client authentication will [be loaded by Azure](https://docs.microsoft.com/en-us/azure/aks/use-managed-identity). The credentials may explicitly be set in the `credentialsSecretName` secret as well. It's recommended to use Azure Managed Identity. The service principle associated with the keys will need the role `Key Vault Secrets Officer` when using an RBAC policy based Key Vault.
+
+Example credentials secret:
+
+```yaml
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: cloud-credentials
+data:
+  # AZURE_TENANT_ID: # OPTIONAL: Update if using Azure Key Vault
+  # AZURE_CLIENT_ID: # OPTIONAL: Update if using Azure Key Vault
+  # AZURE_CLIENT_SECRET: # OPTIONAL: Update if using Azure Key Vault
+  # -- or --
+  AZURE_MANAGED_ID: "true" # OPTIONAL: set to true if Azure using Azure Managed Ids
 ```
 
 ### Importing your own secrets

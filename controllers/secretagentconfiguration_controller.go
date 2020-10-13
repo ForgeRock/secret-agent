@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -113,11 +114,6 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			defer os.RemoveAll(dir)
 		}
 
-		// TODO Need to implement azure secret manager
-		if instance.Spec.AppConfig.SecretsManager == v1alpha1.SecretsManagerAzure {
-			return ctrl.Result{}, errors.New("Azure secret manager not implemented")
-		}
-
 		// load cloud credentials to envs and/or files
 		if err := manageCloudCredentials(instance.Spec.AppConfig.SecretsManager, secObject, dir); err != nil {
 			log.Error(err, "error loading cloud credentials from secret provided",
@@ -168,6 +164,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					"secret_name", secretReq.Name,
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
+
 				if err := keyInterface.LoadSecretFromManager(ctx, &instance.Spec.AppConfig, instance.Namespace, secretReq.Name); err != nil {
 					log.Error(err, "could not load secret from manager",
 						"secret_name", secretReq.Name,
@@ -176,6 +173,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					rescheduleRetry, errorFound = true, true
 					return ctrl.Result{Requeue: rescheduleRetry}, err
 				}
+
 			} else {
 				// load from kubernetes
 				log.V(1).Info("loading secret from kubernetes",
@@ -438,8 +436,35 @@ func manageCloudCredentials(secManager v1alpha1.SecretsManager, secObject *corev
 				return err
 			}
 		}
-	}
+	case v1alpha1.SecretsManagerAzure:
+		// Azure managed identity - no direct credentials needed
+		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAzureManagedID)]; ok {
+			enabled, err := strconv.ParseBool(string(keyValue))
+			if err != nil {
+				return err
+			}
+			if enabled {
+				return nil
+			}
+		}
+		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAzureTenantID)]; ok {
+			if err := os.Setenv("AZURE_TENANT_ID", string(keyValue)); err != nil {
+				return err
+			}
 
+		}
+		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAzureClientID)]; ok {
+			if err := os.Setenv("AZURE_CLIENT_ID", string(keyValue)); err != nil {
+				return err
+			}
+
+		}
+		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAzureClientSecret)]; ok {
+			if err := os.Setenv("AZURE_CLIENT_SECRET", string(keyValue)); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 
 }

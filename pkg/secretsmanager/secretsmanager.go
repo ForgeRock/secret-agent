@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1beta1"
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/keyvault/keyvault"
@@ -44,7 +45,14 @@ func EnsureSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName st
 		}
 
 	case v1alpha1.SecretsManagerAzure:
-		fmt.Print("Azure secret manager not implemented")
+		client, err := newAzureClient()
+		if err != nil {
+			return err
+		}
+		err = ensureAzureSecretByID(ctx, client, config.AzureVaultName, secretID, value)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -71,7 +79,17 @@ func LoadSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName stri
 		}
 
 	case v1alpha1.SecretsManagerAzure:
-		fmt.Print("Azure secret manager not implemented")
+		client, err := newAzureClient()
+		secretCtx, cancel := context.WithTimeout(ctx, 40*time.Second)
+		defer cancel()
+		if err != nil {
+			return []byte{}, err
+		}
+		value, err = loadAzureSecretByID(secretCtx, client, config.AzureVaultName, secretID)
+		if err != nil {
+			return []byte{}, err
+		}
+
 	}
 	return value, err
 
@@ -232,9 +250,23 @@ func newAzureClient() (*keyvault.BaseClient, error) {
 	if err != nil {
 		return &keyvault.BaseClient{}, err
 	}
+	// authorizer
 	client := keyvault.New()
 	client.Authorizer = authorizer
 	return &client, nil
+}
+
+// ensureAzureSecretByID write bytes to azure keyvault
+func ensureAzureSecretByID(ctx context.Context, client *keyvault.BaseClient, vaultName, secretID string, value []byte) error {
+	var secParams keyvault.SecretSetParameters
+	stringValue := string(value)
+	secParams.Value = &stringValue
+	_, err := client.SetSecret(ctx, fmt.Sprintf(azureVaultURLFmt, vaultName), secretID, secParams)
+	if err != nil {
+		return errors.WithStack(fmt.Errorf("unable to write %s to azure vault", secretID))
+	}
+	return nil
+
 }
 
 // loadAzureSecretByID load a secret from Azure Key Vault

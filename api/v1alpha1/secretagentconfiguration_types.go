@@ -106,7 +106,7 @@ const (
 )
 
 // SecretsManager Specifies which cloud secret manager will be used
-// +kubebuilder:validation:Enum=none;GCP;AWS
+// +kubebuilder:validation:Enum=none;GCP;AWS;Azure
 type SecretsManager string
 
 // SecretsManager Strings
@@ -174,6 +174,10 @@ const (
 	SecretsManagerGoogleApplicationCredentials SecretManagerCredentialKeyName = "GOOGLE_CREDENTIALS_JSON"
 	SecretsManagerAwsAccessKeyID               SecretManagerCredentialKeyName = "AWS_ACCESS_KEY_ID"
 	SecretsManagerAwsSecretAccessKey           SecretManagerCredentialKeyName = "AWS_SECRET_ACCESS_KEY"
+	SecretsManagerAzureManagedID               SecretManagerCredentialKeyName = "AZURE_MANAGED_ID"
+	SecretsManagerAzureTenantID                SecretManagerCredentialKeyName = "AZURE_TENANT_ID"
+	SecretsManagerAzureClientID                SecretManagerCredentialKeyName = "AZURE_CLIENT_ID"
+	SecretsManagerAzureClientSecret            SecretManagerCredentialKeyName = "AZURE_CLIENT_SECRET"
 )
 
 // AppConfig is the configuration for the forgeops-secrets application
