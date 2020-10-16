@@ -131,12 +131,6 @@ func (r *SecretAgentConfiguration) ValidateSecretConfiguration() error {
 func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 	config := sl.Current().Interface().(SecretAgentConfigurationSpec)
 
-	// AppConfig
-	if config.AppConfig.SecretsManager == SecretsManagerAzure {
-		if config.AppConfig.CredentialsSecretName == "" {
-			sl.ReportError(config.AppConfig.CredentialsSecretName, "credentialSecretName", "CredentialSecretName", "needCredentialSecretName", "")
-		}
-	}
 	switch config.AppConfig.SecretsManager {
 	case SecretsManagerGCP:
 		if config.AppConfig.GCPProjectID == "" {

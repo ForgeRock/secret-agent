@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"strconv"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -438,16 +437,6 @@ func manageCloudCredentials(secManager v1alpha1.SecretsManager, secObject *corev
 			}
 		}
 	case v1alpha1.SecretsManagerAzure:
-		// Azure managed identity - no direct credentials needed
-		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAzureManagedID)]; ok {
-			enabled, err := strconv.ParseBool(string(keyValue))
-			if err != nil {
-				return err
-			}
-			if enabled {
-				return nil
-			}
-		}
 		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAzureTenantID)]; ok {
 			if err := os.Setenv("AZURE_TENANT_ID", string(keyValue)); err != nil {
 				return err

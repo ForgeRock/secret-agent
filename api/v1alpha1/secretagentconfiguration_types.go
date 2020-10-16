@@ -174,7 +174,6 @@ const (
 	SecretsManagerGoogleApplicationCredentials SecretManagerCredentialKeyName = "GOOGLE_CREDENTIALS_JSON"
 	SecretsManagerAwsAccessKeyID               SecretManagerCredentialKeyName = "AWS_ACCESS_KEY_ID"
 	SecretsManagerAwsSecretAccessKey           SecretManagerCredentialKeyName = "AWS_SECRET_ACCESS_KEY"
-	SecretsManagerAzureManagedID               SecretManagerCredentialKeyName = "AZURE_MANAGED_ID"
 	SecretsManagerAzureTenantID                SecretManagerCredentialKeyName = "AZURE_TENANT_ID"
 	SecretsManagerAzureClientID                SecretManagerCredentialKeyName = "AZURE_CLIENT_ID"
 	SecretsManagerAzureClientSecret            SecretManagerCredentialKeyName = "AZURE_CLIENT_SECRET"

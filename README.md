@@ -168,7 +168,7 @@ spec:
 
 _note:_ Azure's API response time on Key Vault is long and will delay the creation of secrets. It might be beneficial to deploy a SAC before long before deploying an application if use Azure Key Vault
 
-The `secret-agent` uses credentials which are available using two different methods: Azure Managed Identities or explicit credentials. Both are configured in the secret that's referenced in the SAC spec `spec.appConfig.credentialsSecretName`. Example Azure Configuration for a SAC:
+The `secret-agent` uses credentials which are available using two different methods: Azure Managed Identities (recommended for Azure deployemnts) or explicit credentials. Explicit credentials are configured in a secret referenced in the SAC spec `spec.appConfig.credentialsSecretName`. Example Azure Configuration for a SAC:
 
 ```yaml
 apiVersion: secret-agent.secrets.forgerock.io/v1alpha1
@@ -179,12 +179,14 @@ metadata:
 spec:
   appConfig:
     createKubernetesObjects: true
-    credentialsSecretName: cloud-credentials
+    credentialsSecretName: cloud-credentials [** optional**]
     secretsManager: Azure
-    azureVaultName: secret-agent-vault 
+    azureVaultName: secret-agent-vault
 ```
 
-If the `credentialsSecretName` secret has a data key `AZURE_MANAGED_ID` set to `"true"` the operator's Azure client authentication will [be loaded by Azure](https://docs.microsoft.com/en-us/azure/aks/use-managed-identity). The credentials may explicitly be set in the `credentialsSecretName` secret as well. It's recommended to use Azure Managed Identity. The service principle associated with the keys will need the role `Key Vault Secrets Officer` when using an RBAC policy based Key Vault.
+If no secret is provided in `credentialsSecretName`, the operator's Azure client will attempt to authenticate using managed identities. For more information, see Azure's [documentation](https://docs.microsoft.com/en-us/azure/aks/use-managed-identity). This is the recommended configuration for deployments in Azure's AKS.
+
+Otherwise, the credentials may be explicitly set in the `credentialsSecretName` secret. The service principle associated with the keys will need the role `Key Vault Secrets Officer` when using an RBAC policy based Key Vault.
 
 Example credentials secret:
 
@@ -198,8 +200,6 @@ data:
   # AZURE_TENANT_ID: # OPTIONAL: Update if using Azure Key Vault
   # AZURE_CLIENT_ID: # OPTIONAL: Update if using Azure Key Vault
   # AZURE_CLIENT_SECRET: # OPTIONAL: Update if using Azure Key Vault
-  # -- or --
-  AZURE_MANAGED_ID: "true" # OPTIONAL: set to true if Azure using Azure Managed Ids
 ```
 
 ### Importing your own secrets
