@@ -103,13 +103,50 @@ data:
 
 #### Set up Cloud Backup With GCP Secret Manager
 
-The `secret-agent` expects credentials to be discoverable via standard [GCP mechanisms](https://cloud.google.com/docs/authentication). These credentials can be provided in a number of ways, including user accounts and service accounts.
+The `secret-agent` expects credentials to be discoverable via standard [GCP mechanisms](https://cloud.google.com/docs/authentication). These credentials can be provided in a number of ways, including:
+
+* [Workload identity](#workload-identity) (recommended for GKE deployments)
+* [Credentials file](#credentials-file) with user accounts or service accounts.
 
 Please refer to the [GCP Documentation](https://cloud.google.com/secret-manager/docs/reference/libraries?hl=nl#cloud-console) for instructions on how to create a service account with the necessary permissions to access the GCP Secrets Manager. The `secret-agent` needs access to read/write secrets. This can be achieved by assigning the `Secret Manager Admin` role to the service account provided.
 
+##### Workload identity
+
+Workload Identity is the recommended way to access Google Cloud services from applications running within GKE. For more information on how to enable workload identity see [GCP Documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity#gcloud_1).
+
+In general, once the Google service account has been created with the proper role attached and workload identity has been enabled for your GKE cluster and nodes, you can run the following commands to enable workload identity for the `secret-agent`:
+
+```bash
+PROJECTID=myproject #GCP project ID
+GSA-NAME=mygcpserviceaccount #GCP service account name
+# Create the GCP IAM policy binding
+gcloud iam service-accounts add-iam-policy-binding --role roles/iam.workloadIdentityUser --member "serviceAccount:${PROJECTID}.svc.id.goog[secret-agent-system/secret-agent-manager-service-account]" ${GSA-NAME}@${PROJECTID}.iam.gserviceaccount.com
+# Annotate the Kubernetes service account
+kubectl -n secret-agent-system annotate serviceaccounts secret-agent-manager-service-account iam.gke.io/gcp-service-account=${GSA-NAME}@${PROJECTID}.iam.gserviceaccount.com
+```
+
+**Note: in order to use workload identity, no `spec.appConfig.credentialsSecretName` should be provided**. If credentials are provided, `secret-agent` will use the provided credentials instead.
+
+##### Credentials file
+
 The credentials are provided to the operator using a kubernetes secret under the `GOOGLE_CREDENTIALS_JSON` data key. The name of this secret is provided in `spec.appConfig.credentialsSecretName`. In the default `secret-agent` deployment, the operator will look for a secret with the provided name in the operator's own namespace. The user can specify a different namespace by setting the argument `--cloud-secrets-namespace=[NS_NAME]`. If this argument is omitted, the operator's default behavior is to fetch the credentials from the same namespace as the SAC.
 
-Once these credentials are posted to a Kubernetes secret, the next step is to configure the GCP Secret Manager using the `SecretAgentConfiguration`.
+The `cloud-credentials` secret referenced in `spec.appConfig.credentialsSecretName` would look like this:
+
+```yaml
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: cloud-credentials
+  namespace: test-sa
+data:
+  GOOGLE_CREDENTIALS_JSON: .....[base64 encoded service account json].....
+```
+
+##### Configure the GCP Secret Manager
+
+Once the necessary credentials are provided to `secret-agent` using [workload identity](#workload-identity)  or a [credentials file](#credentials-file), the next step is to configure the GCP Secret Manager using the `SecretAgentConfiguration`.
 
 For example, the following configuration targets GCP Secret Manager for the `example-project-id` project:
 
@@ -122,29 +159,16 @@ metadata:
 spec:
   appConfig:
     createKubernetesObjects: true
-    credentialsSecretName: cloud-credentials
+    credentialsSecretName: cloud-credentials [** skip if using workload identity **]
     secretsManager: GCP
     gcpProjectID: example-project-id
-```
-
-The `cloud-credentials` secret referenced in `spec.appConfig.credentialsSecretName` would look like this:
-
-```yaml
-apiVersion: v1
-kind: Secret
-type: Opaque
-metadata:
-  name: cloud-credentials
-  namespace: test-sa
-data:
-  GOOGLE_CREDENTIALS_JSON: ewog.....[base64 encoded service account json].....o=
 ```
 
 #### Set up Cloud Backup With Azure Key Vault
 
 _note:_ Azure's API response time on Key Vault is long and will delay the creation of secrets. It might be beneficial to deploy a SAC before long before deploying an application if use Azure Key Vault
 
-The `secret-agent` uses credentials which are available using two different methods Azure Managed Identities or explicity credentials. Both are configured in the secret that's referenced in the SAC spec `spec.appConfig.credentialsSecretName`. Example Azure Configuration for a SAC:
+The `secret-agent` uses credentials which are available using two different methods: Azure Managed Identities or explicit credentials. Both are configured in the secret that's referenced in the SAC spec `spec.appConfig.credentialsSecretName`. Example Azure Configuration for a SAC:
 
 ```yaml
 apiVersion: secret-agent.secrets.forgerock.io/v1alpha1

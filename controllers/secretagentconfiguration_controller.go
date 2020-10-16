@@ -84,7 +84,8 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	defer func() { watchOwnedObjects = true }()
 	log.V(1).Info("** Reconcile loop start **")
 
-	if instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone {
+	if instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone &&
+		instance.Spec.AppConfig.CredentialsSecretName != "" {
 		var dir string
 		var cloudCredNS string
 
