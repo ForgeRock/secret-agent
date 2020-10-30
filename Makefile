@@ -71,6 +71,8 @@ clean: manifests
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	# Remove "caBuncle: Cg==" from the webhook config. controller-gen generates the manifests with a placeholder
+	awk '!/caBundle:/' config/webhook/manifests.yaml > t && mv t config/webhook/manifests.yaml
 
 # Run go fmt against code
 fmt:
