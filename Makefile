@@ -1,6 +1,7 @@
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+VERSION=$(shell echo $(IMG) | awk -F ':' '{print $$2}')
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
@@ -60,9 +61,11 @@ deploy: manifests
 
 # Renders deployment but does not apply
 release:
+	git tag -s $(VERSION) -m "Release $(VERSION)"
+	git push origin $(VERSION)
 	cd config/manager && kustomize edit set image controller=${IMG}
-	kustomize build config/default 
-	GOPROXY=https://proxy.golang.org GO111MODULE=on go get github.com/ForgeRock/secret-agent@v$VERSION
+	mkdir -p dist/	kustomize build config/default > dist/secret_agent.yaml
+	curl https://proxy.golang.org/github.com/forgerock/secret-agent/@v/$(VERSION).info
 
 # Delete controller from the configured Kubernetes cluster in ~/.kube/config
 clean: manifests
