@@ -65,7 +65,7 @@ The `secret-agent` expects credentials to be discoverable via standard [AWS mech
 
 Refer to [AWS documentation](https://docs.aws.amazon.com/secretsmanager/latest/userguide/auth-and-access_overview.html) for instructions on how to obtain credentials and grant necessary permissions to access the AWS Secrets Manager. The `secret-agent` needs to access read/write secrets. This can be achieved by allowing access to the `arn:aws:iam::aws:policy/SecretsManagerReadWrite` AWS managed policy.
 
-Even though the recommended way to obtain credentials is to use the EC2 Instance Metadata service, it is possible to provide custom credentials via a Kubernetes secret. The secret reference is provided in the SAC in `spec.appConfig.credentialsSecretName`. In the default `secret-agent` deployment, the operator will look for a secret with the provided name in the operator's own namespace. The user can specify a different namespace by setting the argument `--cloud-secrets-namespace=[NS_NAME]`. If this argument is omitted, the operator's default behavior is to fetch the credentials from the same namespace as the SAC.
+Even though the recommended way to obtain credentials is to use the EC2 Instance Metadata service, it is possible to provide custom credentials via a Kubernetes secret. The secret reference is provided in the SAC in `spec.appConfig.credentialsSecretName`. In the default `secret-agent` deployment, the user is expected to publish the cloud credentials' secret in the same namespace as the operator. This target namespace can be changed by changing the runtime argument `--cloud-secrets-namespace=[NS_NAME]` located in the operator's [manifest](/config/manager/manager.yaml). If this argument is omitted completely, the namespace will default to the namespace of each SAC.
 
 Once these credentials are posted to a Kubernetes secret, the next step is to configure the AWS Secret Manager using the `SecretAgentConfiguration`.
 
@@ -118,11 +118,11 @@ In general, once the Google service account has been created with the proper rol
 
 ```bash
 PROJECTID=myproject #GCP project ID
-GSA-NAME=mygcpserviceaccount #GCP service account name
+GSA_NAME=mygcpserviceaccount #GCP service account name
 # Create the GCP IAM policy binding
-gcloud iam service-accounts add-iam-policy-binding --role roles/iam.workloadIdentityUser --member "serviceAccount:${PROJECTID}.svc.id.goog[secret-agent-system/secret-agent-manager-service-account]" ${GSA-NAME}@${PROJECTID}.iam.gserviceaccount.com
+gcloud iam service-accounts add-iam-policy-binding --role roles/iam.workloadIdentityUser --member "serviceAccount:${PROJECTID}.svc.id.goog[secret-agent-system/secret-agent-manager-service-account]" ${GSA_NAME}@${PROJECTID}.iam.gserviceaccount.com
 # Annotate the Kubernetes service account
-kubectl -n secret-agent-system annotate serviceaccounts secret-agent-manager-service-account iam.gke.io/gcp-service-account=${GSA-NAME}@${PROJECTID}.iam.gserviceaccount.com
+kubectl -n secret-agent-system annotate serviceaccounts secret-agent-manager-service-account iam.gke.io/gcp-service-account=${GSA_NAME}@${PROJECTID}.iam.gserviceaccount.com
 ```
 
 **Note: in order to use workload identity, no `spec.appConfig.credentialsSecretName` should be provided**. If credentials are provided, `secret-agent` will use the provided credentials instead.
