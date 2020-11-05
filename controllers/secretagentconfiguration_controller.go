@@ -130,7 +130,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			return ctrl.Result{}, err
 		}
 	}
-
+specSecretsLoop:
 	for _, secretReq := range instance.Spec.Secrets {
 		var k8sApplyRequired bool = false
 		// load from secret k8s
@@ -142,7 +142,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			return ctrl.Result{}, err
 		}
 		log.V(1).Info("reconciling secret", "secret_name", secretReq.Name)
-	secretKeys:
+	secretKeysLoop:
 		for _, key := range secretReq.Keys {
 			log.V(1).Info("reconciling secret key", "secret_name", secretReq.Name,
 				"data_key", key.Name, "secret_type", string(key.Type))
@@ -154,7 +154,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
 				errorFound = true
-				continue secretKeys
+				continue secretKeysLoop
 			}
 			// load from secret manager
 			useSecMgr := instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone &&
@@ -204,6 +204,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 							"secret_name", secretReq.Name,
 							"secret_ref", ref)
 						rescheduleRetry, errorFound = true, true
+						continue specSecretsLoop
 					}
 				}
 
@@ -213,7 +214,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 						"secret_name", secretReq.Name,
 						"secret_ref", ref)
 					rescheduleRetry, errorFound = true, false
-					break secretKeys
+					break secretKeysLoop
 				}
 				dataKey := fmt.Sprintf("%s/%s", ref, refDataKeys[index])
 				if val, ok := secRefObject.Data[refDataKeys[index]]; ok {
@@ -226,7 +227,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 						"secret_ref", ref,
 						"secret_dataKey", dataKey)
 					rescheduleRetry, errorFound = true, true
-					break secretKeys
+					break secretKeysLoop
 				}
 			}
 			if err := keyInterface.LoadReferenceData(keyRefSecrets); err != nil {
@@ -235,7 +236,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
 				rescheduleRetry, errorFound = true, true
-				break secretKeys
+				break secretKeysLoop
 			}
 
 			// Generate and apply to secret manager
@@ -251,7 +252,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 						"data_key", key.Name,
 						"secret_type", string(key.Type))
 					errorFound = true
-					break secretKeys
+					break secretKeysLoop
 				}
 				if useSecMgr {
 					log.V(0).Info("storing secret to secret-manager",
