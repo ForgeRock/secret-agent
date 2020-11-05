@@ -105,7 +105,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		}
 		// Create temporary dir for gcp credentials if needed
 		if instance.Spec.AppConfig.SecretsManager == v1alpha1.SecretsManagerGCP {
-			dir, err := ioutil.TempDir("", "cloud_credentials-*")
+			dir, err = ioutil.TempDir("", "cloud_credentials-*")
 			if err != nil {
 				log.Error(err, "couldn't create a temporary credentials dir")
 				return ctrl.Result{}, err
