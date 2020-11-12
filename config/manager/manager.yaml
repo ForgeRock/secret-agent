@@ -42,11 +42,4 @@ spec:
         - name: webhook-server
           containerPort: 9443
           protocol: TCP
-        resources:
-          limits:
-            cpu: 1000m
-            memory: 100Mi
-          requests:
-            cpu: 100m
-            memory: 100Mi
       terminationGracePeriodSeconds: 10
