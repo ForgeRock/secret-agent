@@ -133,6 +133,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 specSecretsLoop:
 	for _, secretReq := range instance.Spec.Secrets {
 		var k8sApplyRequired bool = false
+		var redoKeys bool = false
 		// load from secret k8s
 		secObject, err := k8ssecrets.LoadSecret(reconciler.Client, secretReq.Name, instance.Namespace)
 		if err != nil {
@@ -154,7 +155,7 @@ specSecretsLoop:
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
 				errorFound = true
-				continue secretKeysLoop
+				continue specSecretsLoop
 			}
 			// load from secret manager
 			useSecMgr := instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone &&
@@ -193,10 +194,12 @@ specSecretsLoop:
 			keyRefSecrets := make(map[string][]byte)
 			refs, refDataKeys := keyInterface.References()
 			for index, ref := range refs {
+				var selfReference bool = false
 				var secRefObject *corev1.Secret
 				// if ref the current secret, use the values already loaded in memory, else load them from k8s
 				if ref == secObject.Name {
 					secRefObject = secObject
+					selfReference = true
 				} else {
 					secRefObject, err = k8ssecrets.LoadSecret(reconciler.Client, ref, instance.Namespace)
 					if err != nil {
@@ -214,7 +217,11 @@ specSecretsLoop:
 						"secret_name", secretReq.Name,
 						"secret_ref", ref)
 					rescheduleRetry, errorFound = true, false
-					break secretKeysLoop
+					if selfReference {
+						redoKeys = true
+						continue secretKeysLoop
+					}
+					continue specSecretsLoop
 				}
 				dataKey := fmt.Sprintf("%s/%s", ref, refDataKeys[index])
 				if val, ok := secRefObject.Data[refDataKeys[index]]; ok {
@@ -227,7 +234,11 @@ specSecretsLoop:
 						"secret_ref", ref,
 						"secret_dataKey", dataKey)
 					rescheduleRetry, errorFound = true, true
-					break secretKeysLoop
+					if selfReference {
+						redoKeys = true
+						continue secretKeysLoop
+					}
+					continue specSecretsLoop
 				}
 			}
 			if err := keyInterface.LoadReferenceData(keyRefSecrets); err != nil {
@@ -236,7 +247,7 @@ specSecretsLoop:
 					"data_key", key.Name,
 					"secret_type", string(key.Type))
 				rescheduleRetry, errorFound = true, true
-				break secretKeysLoop
+				continue specSecretsLoop
 			}
 
 			// Generate and apply to secret manager
@@ -252,7 +263,7 @@ specSecretsLoop:
 						"data_key", key.Name,
 						"secret_type", string(key.Type))
 					errorFound = true
-					break secretKeysLoop
+					continue specSecretsLoop
 				}
 				if useSecMgr {
 					log.V(0).Info("storing secret to secret-manager",
@@ -274,6 +285,14 @@ specSecretsLoop:
 			// if we reach this point, we need to update the k8s secret with new keys
 			k8sApplyRequired = true
 		} // end of keys loop
+		// if redoKeys is true, rerun the keys loop
+		if redoKeys {
+			log.V(1).Info("retrying all keys from secret",
+				"secret_name", secretReq.Name)
+			redoKeys = false
+			// HOTFIX: This is bad practice. We shoudln't use `goto`. The reconcile loop must be refactored asap.
+			goto secretKeysLoop
+		}
 		// write secret once after processing all its keys if required.
 		if k8sApplyRequired {
 			log.V(0).Info("applying to kubernetes",
