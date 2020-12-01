@@ -39,7 +39,6 @@ import (
 	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
 	corev1 "k8s.io/api/core/v1"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // SecretAgentConfigurationReconciler reconciles a SecretAgentConfiguration object
@@ -49,10 +48,6 @@ type SecretAgentConfigurationReconciler struct {
 	Scheme                *runtime.Scheme
 	CloudSecretsNamespace string
 }
-
-var (
-	watchOwnedObjects bool = true
-)
 
 // +kubebuilder:rbac:groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations/status,verbs=get;update;patch
@@ -78,10 +73,30 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		log.Error(err, "unable to fetch SecretAgentConfiguration")
 		return ctrl.Result{}, err
 	}
-	// Stop watching for secret changes while the reconcile loop is running
-	watchOwnedObjects = false
-	defer func() { watchOwnedObjects = true }()
 	log.V(1).Info("** Reconcile loop start **")
+	saFinalizerName := "secret-agent.secrets.forgerock.io/" + instance.Namespace + "." + instance.Name
+
+	// check DeletionTimestamp to determine if the SAC is under deletion
+	if instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The SAC is not being deleted. Let's add the finalizer and update the SAC.
+		// This is equivalent to registering our finalizer.
+		if !containsString(instance.GetFinalizers(), saFinalizerName) {
+			instance.SetFinalizers(append(instance.GetFinalizers(), saFinalizerName))
+			if err := reconciler.Update(ctx, &instance); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		// The finalizer is not zero. The SAC is being deleted. Check if finalizer is present
+		if containsString(instance.GetFinalizers(), saFinalizerName) {
+			log.Info("Clearing finalizers", "namespace", instance.Namespace)
+			if err := reconciler.clearFinalizers(ctx, saFinalizerName, &instance); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+		// Stop reconciliation as the SAC is being deleted
+		return ctrl.Result{}, nil
+	}
 
 	if instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone &&
 		instance.Spec.AppConfig.CredentialsSecretName != "" {
@@ -303,6 +318,7 @@ specSecretsLoop:
 			if err := ctrl.SetControllerReference(&instance, secObject, reconciler.Scheme); err != nil {
 				return ctrl.Result{}, err
 			}
+			secObject.SetFinalizers(append(secObject.GetFinalizers(), saFinalizerName))
 			op, err := k8ssecrets.ApplySecrets(reconciler.Client, secObject)
 			if err != nil {
 				log.Error(err, "couldnt apply secret",
@@ -340,6 +356,53 @@ specSecretsLoop:
 
 func labelsForSecretAgent(name string) map[string]string {
 	return map[string]string{"managed-by-secret-agent": "true", "secret-agent-configuration-name": name}
+}
+
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+func removeString(slice []string, s string) (result []string) {
+	for _, item := range slice {
+		if item == s {
+			continue
+		}
+		result = append(result, item)
+	}
+	return
+}
+
+// clearFinalizers ensures the SAC is deleted first by clearing its finalizer before the secret children
+func (reconciler *SecretAgentConfigurationReconciler) clearFinalizers(ctx context.Context, saFinalizerName string, instance *v1alpha1.SecretAgentConfiguration) error {
+
+	secretList := &corev1.SecretList{}
+	listOpts := []client.ListOption{
+		client.InNamespace(instance.Namespace),
+		client.MatchingLabels(labelsForSecretAgent(instance.Name)),
+	}
+	// remove our finalizer from the list and update it.
+	instance.SetFinalizers(removeString(instance.GetFinalizers(), saFinalizerName))
+	if err := reconciler.Update(ctx, instance); err != nil {
+		return err
+	}
+	// Give enough time for the k8s api to update
+	time.Sleep(200 * time.Millisecond)
+	if err := reconciler.List(ctx, secretList, listOpts...); err != nil {
+		return err
+	}
+	for _, secret := range secretList.Items {
+		secret.SetFinalizers(removeString(secret.GetFinalizers(), saFinalizerName))
+		if err := reconciler.Update(ctx, &secret); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.Context, instance *v1alpha1.SecretAgentConfiguration, inProgress, errorFound bool) error {
@@ -486,27 +549,6 @@ var (
 
 // SetupWithManager is used to register the reconciler to the manager
 func (reconciler *SecretAgentConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
-
-	if err := mgr.GetFieldIndexer().IndexField(&corev1.Secret{}, jobOwnerKey, func(rawObj runtime.Object) []string {
-		// grab the secret object, extract the owner...
-		secret := rawObj.(*corev1.Secret)
-		owner := metav1.GetControllerOf(secret)
-		if !watchOwnedObjects {
-			return nil
-		}
-		if owner == nil {
-			return nil
-		}
-		// ...make sure it's a SecretAgentConfiguration...
-		if owner.APIVersion != apiGVStr || owner.Kind != "SecretAgentConfiguration" {
-			return nil
-		}
-
-		// ...and if so, return it
-		return []string{owner.Name}
-	}); err != nil {
-		return err
-	}
 
 	rateLimiter := workqueue.NewMaxOfRateLimiter(
 		workqueue.NewItemExponentialFailureRateLimiter(200*time.Millisecond, 10*time.Hour),
