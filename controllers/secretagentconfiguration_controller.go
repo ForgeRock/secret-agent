@@ -39,7 +39,6 @@ import (
 	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
 	corev1 "k8s.io/api/core/v1"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // SecretAgentConfigurationReconciler reconciles a SecretAgentConfiguration object
@@ -49,10 +48,6 @@ type SecretAgentConfigurationReconciler struct {
 	Scheme                *runtime.Scheme
 	CloudSecretsNamespace string
 }
-
-var (
-	watchOwnedObjects bool = true
-)
 
 // +kubebuilder:rbac:groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations/status,verbs=get;update;patch
@@ -78,9 +73,6 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		log.Error(err, "unable to fetch SecretAgentConfiguration")
 		return ctrl.Result{}, err
 	}
-	// Stop watching for secret changes while the reconcile loop is running
-	watchOwnedObjects = false
-	defer func() { watchOwnedObjects = true }()
 	log.V(1).Info("** Reconcile loop start **")
 
 	if instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone &&
@@ -486,27 +478,6 @@ var (
 
 // SetupWithManager is used to register the reconciler to the manager
 func (reconciler *SecretAgentConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
-
-	if err := mgr.GetFieldIndexer().IndexField(&corev1.Secret{}, jobOwnerKey, func(rawObj runtime.Object) []string {
-		// grab the secret object, extract the owner...
-		secret := rawObj.(*corev1.Secret)
-		owner := metav1.GetControllerOf(secret)
-		if !watchOwnedObjects {
-			return nil
-		}
-		if owner == nil {
-			return nil
-		}
-		// ...make sure it's a SecretAgentConfiguration...
-		if owner.APIVersion != apiGVStr || owner.Kind != "SecretAgentConfiguration" {
-			return nil
-		}
-
-		// ...and if so, return it
-		return []string{owner.Name}
-	}); err != nil {
-		return err
-	}
 
 	rateLimiter := workqueue.NewMaxOfRateLimiter(
 		workqueue.NewItemExponentialFailureRateLimiter(200*time.Millisecond, 10*time.Hour),
