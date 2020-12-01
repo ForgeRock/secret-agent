@@ -26,6 +26,22 @@ func idSafe(value string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(value, ".", "-"), "/", "-"), "_", "-")
 }
 
+type SecretManager interface {
+	EnsureSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName string, value []byte) error
+	LoadSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName string) ([]byte, error)
+}
+
+type secretManager struct {
+	gcpClient   *secretmanager.Client
+	awsClient   *awssecretsmanager.SecretsManager
+	azureClient *keyvault.BaseClient
+	config      *v1alpha1.AppConfig
+}
+
+// func NewSecretManager() SecretManager {
+// 	return &secretManager{}
+// }
+
 // EnsureSecret ensures a secret is stored in secret manager
 func EnsureSecret(ctx context.Context, config *v1alpha1.AppConfig, secretName string, value []byte) error {
 	secretID := idSafe(secretName)

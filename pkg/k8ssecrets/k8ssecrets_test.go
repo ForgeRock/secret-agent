@@ -5,7 +5,8 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+	k8serror "k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -38,8 +39,8 @@ func TestLoadSecret(t *testing.T) {
 	client := fake.NewFakeClientWithScheme(scheme, k8sSecret2)
 	// Secret is not present in the client, expect an error
 	found, err := LoadSecret(client, k8sSecret1.ObjectMeta.Name, k8sSecret1.ObjectMeta.Namespace)
-	if err != nil {
-		t.Fatalf("Expected no error, got: %+v", err)
+	if !k8serror.IsNotFound(err) {
+		t.Fatalf("Expected not found error, got: %+v", err)
 	}
 	if len(found.Data) != 0 {
 		t.Fatalf("Expected an empty secret: %+v", found)
@@ -88,7 +89,7 @@ func TestApplySecrets(t *testing.T) {
 	for _, writtenSecret := range k8sSecrets {
 		k8sSecret := &corev1.Secret{}
 		if err := client.Get(context.TODO(), types.NamespacedName{Name: writtenSecret.Name, Namespace: writtenSecret.Namespace}, k8sSecret); err != nil {
-			if k8sErrors.IsNotFound(err) {
+			if k8serrors.IsNotFound(err) {
 				t.Fatalf("Expected no error, got IsNotFound: %+v", err)
 			}
 			t.Fatalf("Expected no error, got: %+v", err)

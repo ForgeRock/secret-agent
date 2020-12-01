@@ -39,10 +39,7 @@ func TestImportPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pwdMgr, err := NewPassword(kc)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pwdMgr := NewPassword(kc)
 	err = pwdMgr.Generate()
 	if err != nil {
 		t.Fatal(err)

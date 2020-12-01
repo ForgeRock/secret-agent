@@ -123,11 +123,11 @@ func (pwd *Password) ToKubernetes(secret *corev1.Secret) {
 }
 
 // NewPassword creates new Password type for reconciliation
-func NewPassword(keyConfig *v1alpha1.KeyConfig) (*Password, error) {
+func NewPassword(keyConfig *v1alpha1.KeyConfig) *Password {
 	password := &Password{
 		Name:       keyConfig.Name,
 		Length:     *keyConfig.Spec.Length,
 		BinaryMode: keyConfig.Spec.UseBinaryCharacters,
 	}
-	return password, nil
+	return password
 }

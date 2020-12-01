@@ -21,10 +21,7 @@ func TestTrustStore(t *testing.T) {
 			},
 		},
 	}
-	rootCA, err := NewRootCA(rootCAConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rootCA := NewRootCA(rootCAConfig)
 	rootCA.Generate()
 	testSecret := &corev1.Secret{}
 	rootCA.ToKubernetes(testSecret)
@@ -35,12 +32,9 @@ func TestTrustStore(t *testing.T) {
 			TruststoreImportPaths: []string{"testConfig/ca"},
 		},
 	}
-	tsMgr, err := NewTrustStore(key)
-	if err != nil {
-		t.Fatal(err)
-	}
+	tsMgr := NewTrustStore(key)
 	if empty := tsMgr.IsEmpty(); !empty {
-		t.Fatalf("expected no error found: %s", err)
+		t.Fatalf("expected trust store to not be empty")
 	}
 	tsMgr.References()
 	tsMgr.LoadReferenceData(map[string][]byte{

@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -56,11 +55,16 @@ type SecretAgentConfigurationReconciler struct {
 
 // Reconcile reconcile loop for CRD controller
 func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	var updatedK8sSecrets bool = false
-	var rescheduleRetry bool = false
-	var errorFound bool = false
+	// status flags
+	rescheduleRetry := false
+	errorFound := false
+	updateK8sSecrets := false
+
 	ctx := context.Background()
-	log := reconciler.Log.WithValues("secretagentconfiguration", req.NamespacedName)
+	log := reconciler.Log.WithValues(
+		"secretagentconfiguration", req.Name,
+		"namespace", req.NamespacedName,
+	)
 
 	var instance v1alpha1.SecretAgentConfiguration
 	if err := reconciler.Get(ctx, req.NamespacedName, &instance); err != nil {
@@ -74,6 +78,11 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		return ctrl.Result{}, err
 	}
 	log.V(1).Info("** Reconcile loop start **")
+
+	// TODO remove this and move setup of secret manager to a container
+	// add conatiner to GenKeyConfig
+
+	//	secretMgr := secretmanager.NewSecretManager(rclient, instance.AppConfig)
 
 	if instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone &&
 		instance.Spec.AppConfig.CredentialsSecretName != "" {
@@ -92,7 +101,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		if err != nil {
 			log.Error(err, "error loading cloud credentials secret from the Kubernetes API",
 				"secret_name", instance.Spec.AppConfig.CredentialsSecretName,
-				"namespace", cloudCredNS)
+				"cloud_secret_namespace", cloudCredNS)
 			return ctrl.Result{}, err
 		}
 		// Create temporary dir for gcp credentials if needed
@@ -110,7 +119,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		if err := manageCloudCredentials(instance.Spec.AppConfig.SecretsManager, secObject, dir); err != nil {
 			log.Error(err, "error loading cloud credentials from secret provided",
 				"secret_name", instance.Spec.AppConfig.CredentialsSecretName,
-				"namespace", cloudCredNS)
+				"cloud_secret_namespace", cloudCredNS)
 			return ctrl.Result{}, err
 		}
 
@@ -122,210 +131,75 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			return ctrl.Result{}, err
 		}
 	}
-specSecretsLoop:
 	for _, secretReq := range instance.Spec.Secrets {
-		var k8sApplyRequired bool = false
-		var redoKeys bool = false
-		// load from secret k8s
+		// load from secret k8s or creates a new one
 		secObject, err := k8ssecrets.LoadSecret(reconciler.Client, secretReq.Name, instance.Namespace)
-		if err != nil {
-			log.Error(err, "error loading existing secrets from the Kubernetes API",
-				"secret_name", secretReq.Name,
-				"namespace", instance.Namespace)
+		// we expect secrets to be not found
+		log := log.WithValues("secret_name", secretReq.Name)
+		if err != nil && !k8serror.IsNotFound(err) {
+			log.Error(err, "error loading existing secrets from the Kubernetes API")
+			// continue and set retry, err
+			rescheduleRetry, errorFound = true, true
 			return ctrl.Result{}, err
 		}
+		// secret will either be empty or will will have data. If it has data skip.
+		if len(secObject.Data) != 0 {
+			// TODO this should have a check on ownership and throw a warrning if the object isn't owned by secret agent
+			log.V(1).Info("secret found to have data, skipping")
+			continue
+		}
 		log.V(1).Info("reconciling secret", "secret_name", secretReq.Name)
-	secretKeysLoop:
-		for _, key := range secretReq.Keys {
-			log.V(1).Info("reconciling secret key", "secret_name", secretReq.Name,
-				"data_key", key.Name, "secret_type", string(key.Type))
-
-			keyInterface, err := routeKeyInterface(secretReq.Name, key)
-			if err != nil {
-				log.V(0).Info("error routing secret key type",
-					"secret_name", secretReq.Name,
-					"data_key", key.Name,
-					"secret_type", string(key.Type))
-				errorFound = true
-				continue specSecretsLoop
-			}
-			// load from secret manager
-			useSecMgr := instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone &&
-				key.Type != v1alpha1.KeyConfigTypeTrustStore
-			if useSecMgr {
-				log.V(1).Info("loading secret from secret-manager",
-					"secret_name", secretReq.Name,
-					"data_key", key.Name,
-					"secret_type", string(key.Type))
-
-				if err := keyInterface.LoadSecretFromManager(ctx, &instance.Spec.AppConfig, instance.Namespace, secretReq.Name); err != nil {
-					log.Error(err, "could not load secret from manager",
-						"secret_name", secretReq.Name,
-						"data_key", key.Name,
-						"secret_type", string(key.Type))
-					rescheduleRetry, errorFound = true, true
-					return ctrl.Result{Requeue: rescheduleRetry}, err
-				}
-
-			} else {
-				// load from kubernetes
-				log.V(1).Info("loading secret from kubernetes",
-					"secret_name", secretReq.Name,
-					"data_key", key.Name,
-					"secret_type", string(key.Type))
-				keyInterface.LoadFromData(secObject.Data)
-			}
-			// If the keyInterface is already in the current k8s secret, continue with the next key
-			if keyInterface.InSecret(secObject) {
-				log.V(1).Info("skipping secret key already found in k8s",
-					"secret_name", secretReq.Name,
-					"data_key", key.Name)
-				continue
-			}
-			// Load key references and data
-			keyRefSecrets := make(map[string][]byte)
-			refs, refDataKeys := keyInterface.References()
-			for index, ref := range refs {
-				var selfReference bool = false
-				var secRefObject *corev1.Secret
-				// if ref the current secret, use the values already loaded in memory, else load them from k8s
-				if ref == secObject.Name {
-					secRefObject = secObject
-					selfReference = true
-				} else {
-					secRefObject, err = k8ssecrets.LoadSecret(reconciler.Client, ref, instance.Namespace)
-					if err != nil {
-						log.Error(err, "error looking up secret ref",
-							"secret_name", secretReq.Name,
-							"secret_ref", ref)
-						rescheduleRetry, errorFound = true, true
-						continue specSecretsLoop
-					}
-				}
-
-				// if the ref is not present in k8s yet, skip this secret for now. schedule a reconcile rerun
-				if len(secRefObject.Data) == 0 {
-					log.V(0).Info("secret ref not found, skipping key and will retry",
-						"secret_name", secretReq.Name,
-						"secret_ref", ref)
-					rescheduleRetry, errorFound = true, false
-					if selfReference {
-						redoKeys = true
-						continue secretKeysLoop
-					}
-					continue specSecretsLoop
-				}
-				dataKey := fmt.Sprintf("%s/%s", ref, refDataKeys[index])
-				if val, ok := secRefObject.Data[refDataKeys[index]]; ok {
-					keyRefSecrets[dataKey] = val
-
-				} else {
-
-					log.Error(err, "secret ref data not found, skipping key",
-						"secret_name", secretReq.Name,
-						"secret_ref", ref,
-						"secret_dataKey", dataKey)
-					rescheduleRetry, errorFound = true, true
-					if selfReference {
-						redoKeys = true
-						continue secretKeysLoop
-					}
-					continue specSecretsLoop
-				}
-			}
-			if err := keyInterface.LoadReferenceData(keyRefSecrets); err != nil {
-				log.Error(err, "error loading references skipping key",
-					"secret_name", secretReq.Name,
-					"data_key", key.Name,
-					"secret_type", string(key.Type))
-				rescheduleRetry, errorFound = true, true
-				continue specSecretsLoop
-			}
-
-			// Generate and apply to secret manager
-			if keyInterface.IsEmpty() {
-				log.V(0).Info("no secret data found, generating",
-					"secret_name", secretReq.Name,
-					"data_key", key.Name,
-					"secret_type", string(key.Type))
-				err := keyInterface.Generate()
-				if err != nil {
-					log.Error(err, "error generating secret",
-						"secret_name", secretReq.Name,
-						"data_key", key.Name,
-						"secret_type", string(key.Type))
-					errorFound = true
-					continue specSecretsLoop
-				}
-				if useSecMgr {
-					log.V(0).Info("storing secret to secret-manager",
-						"secret_name", secretReq.Name,
-						"data_key", key.Name,
-						"secret_type", string(key.Type))
-					if err := keyInterface.EnsureSecretManager(ctx, &instance.Spec.AppConfig,
-						instance.Namespace, secretReq.Name); err != nil {
-						log.Error(err, "could not store secret in manager",
-							"secret_name", secretReq.Name,
-							"data_key", key.Name,
-							"secret_type", string(key.Type))
-						rescheduleRetry, errorFound = true, true
-						return ctrl.Result{Requeue: rescheduleRetry}, err
-					}
-				}
-			}
-			keyInterface.ToKubernetes(secObject)
-			// if we reach this point, we need to update the k8s secret with new keys
-			k8sApplyRequired = true
-		} // end of keys loop
-		// if redoKeys is true, rerun the keys loop
-		if redoKeys {
-			log.V(1).Info("retrying all keys from secret",
-				"secret_name", secretReq.Name)
-			redoKeys = false
-			// HOTFIX: This is bad practice. We shoudln't use `goto`. The reconcile loop must be refactored asap.
-			goto secretKeysLoop
+		gen := generator.GenConfig{
+			// kubernetes secret that will have keys
+			SecObject: secObject,
+			// Keys that should be in secret
+			KeysToGen: secretReq.Keys,
+			Log:       log,
+			Namespace: instance.Namespace,
+			AppConfig: &instance.Spec.AppConfig,
+			Client:    reconciler.Client,
+			// TODO this is for secret manager refactor in the near future
+			// SecretManagerClient: secretMgr,
 		}
-		// write secret once after processing all its keys if required.
-		if k8sApplyRequired {
-			log.V(0).Info("applying to kubernetes",
-				"secret_name", secretReq.Name)
-
-			secObject.Labels = labelsForSecretAgent(instance.Name)
-			// Set SecretAgentConfiguration instance as the owner and controller of the k8ssecret
-			if err := ctrl.SetControllerReference(&instance, secObject, reconciler.Scheme); err != nil {
-				return ctrl.Result{}, err
-			}
-			op, err := k8ssecrets.ApplySecrets(reconciler.Client, secObject)
-			if err != nil {
-				log.Error(err, "couldnt apply secret",
-					"method", op,
-					"secret_namespace", instance.Namespace,
-					"secret_name", secretReq.Name)
-				rescheduleRetry, errorFound = true, true
-			}
-			updatedK8sSecrets = true
-			// Give enough time for the k8s api to update the secret to avoid race conditions
-			time.Sleep(100 * time.Millisecond)
+		// generate this secrets keys
+		err = gen.GenKeys(ctx)
+		if err != nil {
+			// report err and retry
+			rescheduleRetry = true
+			continue
 		}
+		log.V(0).Info("applying to kubernetes")
 
-		log.V(1).Info("completed reconcile for secret",
-			"secret_namespace", instance.Namespace,
-			"secret_name", secretReq.Name)
+		secObject.Labels = labelsForSecretAgent(instance.Name)
+		// Set SecretAgentConfiguration instance as the owner and controller of the k8ssecret
+		if err := ctrl.SetControllerReference(&instance, secObject, reconciler.Scheme); err != nil {
+			// log error
+			rescheduleRetry = true
+			continue
+		}
+		op, err := k8ssecrets.ApplySecrets(reconciler.Client, secObject)
+		if err != nil {
+			log.Error(err, "couldnt apply secret",
+				"method", op)
+			rescheduleRetry, errorFound = true, true
+			continue
 
-	} // end of secrets loop
+		}
+		updateK8sSecrets = true
+	}
+
 	// Only update the instance's status if there was a k8s operation.
 	// No k8s operation happen in the last reconcile loop. Update to "completed" if no updates and no errors occurred
-	if updatedK8sSecrets || rescheduleRetry || errorFound {
+	if updateK8sSecrets || rescheduleRetry || errorFound {
 		if err := reconciler.updateStatus(ctx, &instance, rescheduleRetry, errorFound); err != nil {
-			log.Error(err, "Failed to update status", "instance.name", instance.Name)
+			log.Error(err, "Failed to update status")
 			return ctrl.Result{}, err
 		}
 	}
 	if rescheduleRetry {
 		log.V(1).Info("Reconcile loop failed. Retry rescheduled")
 	} else {
-		log.Info("Reconcile loop complete",
-			"secretAgentConfiguration", instance.Name)
+		log.Info("Reconcile loop complete")
 	}
 	return ctrl.Result{Requeue: rescheduleRetry}, nil
 }
@@ -372,30 +246,6 @@ func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.C
 	// Give enough time for the api to update
 	time.Sleep(200 * time.Millisecond)
 	return nil
-}
-
-func routeKeyInterface(secretName string, key *v1alpha1.KeyConfig) (generator.KeyMgr, error) {
-	switch key.Type {
-	case v1alpha1.KeyConfigTypeCA:
-		return generator.NewRootCA(key)
-	case v1alpha1.KeyConfigTypeKeyPair:
-		return generator.NewCertKeyPair(key)
-	case v1alpha1.KeyConfigTypePassword:
-		return generator.NewPassword(key)
-	case v1alpha1.KeyConfigTypeLiteral:
-		return generator.NewLiteral(key)
-	case v1alpha1.KeyConfigTypeSSH:
-		return generator.NewSSH(key)
-	case v1alpha1.KeyConfigTypeKeytool:
-		return generator.NewKeyTool(key)
-	case v1alpha1.KeyConfigTypeTrustStore:
-		return generator.NewTrustStore(key)
-	default:
-		// TODO we should never hit this point once all types are implmeneted.
-		// We should actually error out
-		// We continue through all keys in a secret skipping unsupported types
-		return nil, errors.New("Key type not implemented")
-	}
 }
 
 // manageCloudCredentials handles the credential used to access the secret manager

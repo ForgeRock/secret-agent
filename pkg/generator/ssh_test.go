@@ -12,11 +12,8 @@ func TestGenerateSSH(t *testing.T) {
 		Type: "ssh",
 		Spec: &v1alpha1.KeySpec{},
 	}
-	ssh, err := NewSSH(kc)
-	if err != nil {
-		t.Errorf("Expected no error, got: %+v", err)
-	}
-	err = ssh.Generate()
+	ssh := NewSSH(kc)
+	err := ssh.Generate()
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
 	}

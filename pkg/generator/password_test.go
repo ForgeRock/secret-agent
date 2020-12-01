@@ -16,11 +16,8 @@ func TestGeneratePassword(t *testing.T) {
 	}
 	kc.Spec.Length = new(int)
 	*kc.Spec.Length = 32
-	password, err := NewPassword(kc)
-	if err != nil {
-		t.Errorf("Expected no error, got: %+v", err)
-	}
-	err = password.Generate()
+	password := NewPassword(kc)
+	err := password.Generate()
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
 	}

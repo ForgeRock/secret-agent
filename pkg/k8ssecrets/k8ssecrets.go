@@ -25,7 +25,7 @@ func LoadSecret(rclient client.Client, secretName, namespace string) (*corev1.Se
 			}
 			return &corev1.Secret{
 				ObjectMeta: meta,
-			}, nil
+			}, err
 		}
 		return k8sSecret, errors.WithStack(err)
 	}

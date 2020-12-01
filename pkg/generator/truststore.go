@@ -36,12 +36,12 @@ func parseRootChain(bundle []byte) []*x509.Certificate {
 }
 
 // NewTrustStore create an new trust store object
-func NewTrustStore(key *v1alpha1.KeyConfig) (*TrustStore, error) {
+func NewTrustStore(key *v1alpha1.KeyConfig) *TrustStore {
 	store := &TrustStore{
 		V1Spec: key.Spec,
 		Name:   key.Name,
 	}
-	return store, nil
+	return store
 }
 
 // TrustStore a KeyMgr for managing truststores

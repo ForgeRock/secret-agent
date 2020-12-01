@@ -132,10 +132,7 @@ func generateCertificates(sans []string) (rootCA, leafCert *generator.Certificat
 			},
 		},
 	}
-	rCA, err := generator.NewRootCA(rootCAConfig)
-	if err != nil {
-		return
-	}
+	rCA := generator.NewRootCA(rootCAConfig)
 	rCA.Generate()
 	certKeyPairConfig := &v1alpha1.KeyConfig{
 		Type: v1alpha1.KeyConfigTypeKeyPair,

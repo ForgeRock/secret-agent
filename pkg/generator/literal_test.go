@@ -14,11 +14,8 @@ func TestGenerateLiteral(t *testing.T) {
 			Value: "literal",
 		},
 	}
-	literal, err := NewLiteral(kc)
-	if err != nil {
-		t.Errorf("Expected no error, got: %+v", err)
-	}
-	err = literal.Generate()
+	literal := NewLiteral(kc)
+	err := literal.Generate()
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
 	}

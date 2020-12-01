@@ -90,10 +90,7 @@ func TestKeyPair(t *testing.T) {
 			},
 		},
 	}
-	rootCA, err := NewRootCA(rootCAConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rootCA := NewRootCA(rootCAConfig)
 	rootCA.Generate()
 	rootCAData := make(map[string][]byte, 1)
 	rootCAData["foo/ca.pem"] = rootCA.Cert.CertPEM

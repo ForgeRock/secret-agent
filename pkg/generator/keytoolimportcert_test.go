@@ -22,11 +22,8 @@ func TestImportCert(t *testing.T) {
 			},
 		},
 	}
-	rootCA, err := NewRootCA(rootCAConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = rootCA.Generate()
+	rootCA := NewRootCA(rootCAConfig)
+	err := rootCA.Generate()
 	if err != nil {
 		t.Fatal(err)
 	}

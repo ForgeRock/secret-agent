@@ -402,10 +402,7 @@ func NewCertKeyPair(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
 			Type: v1alpha1.KeyConfigTypeCA,
 			Spec: &v1alpha1.KeySpec{},
 		}
-		rCA, err := NewRootCA(rCAKeyConfig)
-		if err != nil {
-			return &CertKeyPair{}, err
-		}
+		rCA := NewRootCA(rCAKeyConfig)
 		keyPair.RootCA = rCA
 		keyPair.refName = secretRef
 		keyPair.refDataKeys = []string{fmt.Sprintf("%s.pem", dataKey), fmt.Sprintf("%s-private.pem", dataKey)}
@@ -417,7 +414,7 @@ func NewCertKeyPair(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
 }
 
 // NewRootCA create a cert that is a root signing CA
-func NewRootCA(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
+func NewRootCA(keyConfig *v1alpha1.KeyConfig) *CertKeyPair {
 	rCA := &CertKeyPair{
 		Name: keyConfig.Name,
 		isCA: true,
@@ -427,5 +424,5 @@ func NewRootCA(keyConfig *v1alpha1.KeyConfig) (*CertKeyPair, error) {
 	if rCA.V1Spec.Algorithm == "" {
 		rCA.V1Spec.Algorithm = v1alpha1.AlgorithmTypeECDSAWithSHA256
 	}
-	return rCA, nil
+	return rCA
 }

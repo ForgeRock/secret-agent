@@ -2,11 +2,17 @@ package generator
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
-	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	k8serror "k8s.io/apimachinery/pkg/api/errors"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
 )
 
 const (
@@ -30,6 +36,236 @@ type KeyMgr interface {
 	IsEmpty() bool
 	ToKubernetes(secObject *corev1.Secret)
 	InSecret(secObject *corev1.Secret) bool
+}
+
+// GenConfig a container for runtime secret object generation
+type GenConfig struct {
+	SecObject *corev1.Secret
+	Log       logr.Logger
+	Namespace string
+	AppConfig *v1alpha1.AppConfig
+	KeysToGen []*v1alpha1.KeyConfig
+	Client    client.Client
+}
+
+// KeyGenConfig container for runtime generation of keys
+type keyGenConfig struct {
+	keyMgr KeyMgr
+	key    *v1alpha1.KeyConfig
+	*GenConfig
+}
+
+// GenKeys load secrets from a secret manager or generate them and save to a secret manager
+// GenKeys generates keys until there's an error or a dependency that can't be set.
+func (g *GenConfig) GenKeys(ctx context.Context) error {
+	// setup a working copy of all keys for a secret
+	// keysToWork is all the keys that need to be generated
+	keysToWork := append(g.KeysToGen[:0:0], g.KeysToGen...)
+	// track the number of times we've tried to generate a key
+	// attempts can't exceed the number of keys we are supposed to generate
+	attempts := 0
+	numberOfKeys := len(g.KeysToGen)
+	for attempts < numberOfKeys {
+		// make queue from keysToWork
+		// queue is created on every attempt from keysToWork which contains only this keys that need to be generated
+		queue := append(keysToWork[:0:0], keysToWork...)
+		// set the bucket of work to 0, queue loop appends failure to this slice
+		keysToWork = nil
+		// process all keys in queue
+		// queue loop
+		for _, key := range queue {
+			log := g.Log.WithValues(
+				"data_key", key.Name,
+				"secret_type", string(key.Type))
+			log.V(1).Info("key processing started")
+			keyGenerator, err := newKeyGenerator(key, g)
+			if err != nil {
+				return err
+			}
+			empty, err := keyGenerator.secretManagerHasData(ctx)
+			if err != nil {
+				log.Error(err, "skipping key")
+				return err
+			}
+			// There's no secret data after checking, so get dependencies
+			if empty {
+				log.V(0).Info("secret needs to be generated")
+				log.V(1).Info("gathering dependencies")
+				completed, err := keyGenerator.configureDependencies(ctx)
+				if k8serror.IsNotFound(err) {
+					log.V(0).Info("has unmet dependencies will retry")
+					return err
+				} else if err != nil {
+					log.Error(err, "error during dependecy resolution will retry")
+					return err
+				}
+				// not completed loaded, we will try to run this key before returning
+				if !completed {
+					log.V(1).Info("trying to resolve dependency without a retry")
+					keysToWork = append(keysToWork, key)
+					continue
+				}
+				// add key to queue if the missing dependency is in the queue
+				//	enqueuer(reEnqueuForKey, key); err != nil {
+				// not found
+			}
+			// Ensure Secret Manager and Secret Object are in a generated state
+			if err := keyGenerator.syncKeys(ctx); err != nil {
+				// return with a retry
+				log.Error(err, "could't generate to secret manager, will retry")
+				return err
+			}
+			log.V(1).Info("key completed")
+		}
+		attempts++
+	}
+	if attempts > numberOfKeys {
+		return errors.Wrap(errNoRefFound, "maximum attempts to resolve a self reference has occured, are they all defined?")
+	}
+	g.Log.V(1).Info("completed all keys")
+	return nil
+}
+
+// newKeyGenerator initialize a keygenconfig and key manager
+// a key manager can throw an error on creation in some cases
+// the error will occur when it can't initialize a temporary directory e.g. keytool
+func newKeyGenerator(
+	key *v1alpha1.KeyConfig,
+	genConfig *GenConfig) (*keyGenConfig, error) {
+
+	var keyInterface KeyMgr
+	var err error
+	switch key.Type {
+	case v1alpha1.KeyConfigTypeCA:
+		keyInterface = NewRootCA(key)
+	case v1alpha1.KeyConfigTypeKeyPair:
+		keyInterface, err = NewCertKeyPair(key)
+		if err != nil {
+			return &keyGenConfig{}, err
+		}
+	case v1alpha1.KeyConfigTypePassword:
+		keyInterface = NewPassword(key)
+	case v1alpha1.KeyConfigTypeLiteral:
+		keyInterface = NewLiteral(key)
+	case v1alpha1.KeyConfigTypeSSH:
+		keyInterface = NewSSH(key)
+	case v1alpha1.KeyConfigTypeKeytool:
+		keyInterface, err = NewKeyTool(key)
+		if err != nil {
+			return &keyGenConfig{}, err
+		}
+	case v1alpha1.KeyConfigTypeTrustStore:
+		keyInterface = NewTrustStore(key)
+	default:
+		return &keyGenConfig{}, errors.New("couldn't find key generator type")
+	}
+	return &keyGenConfig{
+		keyInterface,
+		key,
+		genConfig,
+	}, nil
+}
+
+// syncKeys Secret Object is updated to have secret data
+// generates and writes data to secret manager  then to secret object
+// only generate and write to secret manager if the key has no data
+// a key will have data when it's loaded from a secret manager
+func (k *keyGenConfig) syncKeys(ctx context.Context) error {
+	log := k.Log.WithValues(
+		"data_key", k.key.Name,
+		"secret_type", string(k.key.Type))
+
+	if !k.keyMgr.IsEmpty() {
+		log.V(0).Info("already generated, preparing secret")
+		// we don't need to do anything, just update the secret object
+		k.keyMgr.ToKubernetes(k.SecObject)
+		return nil
+	}
+	log.V(0).Info("generating")
+	if err := k.keyMgr.Generate(); err != nil {
+		log.Error(err, "failed to generate key")
+		return err
+	}
+	if k.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone {
+		err := k.keyMgr.EnsureSecretManager(ctx, k.AppConfig, k.Namespace, k.SecObject.Name)
+		if err != nil {
+			log.Error(err, "couldn't write to secret manager")
+			return err
+		}
+		log.V(1).Info("added to secret manager")
+	}
+	log.V(0).Info("preparing secret")
+	k.keyMgr.ToKubernetes(k.SecObject)
+	return nil
+}
+
+// configureDependencies tries to find all dependencies (references) and load them.
+// true if all dependencies where found, false if not availble yet and error if not found
+func (k *keyGenConfig) configureDependencies(ctx context.Context) (bool, error) {
+	var err error = nil
+	keyRefSecrets := make(map[string][]byte)
+	log := k.Log.WithValues(
+		"data_key", k.key.Name,
+		"secret_type", string(k.key.Type))
+	refs, refDataKeys := k.keyMgr.References()
+	for index, ref := range refs {
+		dataKey := refDataKeys[index]
+		dataPath := fmt.Sprintf("%s/%s", ref, dataKey)
+		log = log.WithValues("secret_ref", dataPath)
+		selfReference := false
+		secRefObject := &corev1.Secret{}
+
+		// self referencing configuration
+		if ref == k.SecObject.Name {
+			secRefObject = k.SecObject
+			selfReference = true
+		} else {
+			secRefObject, err = k8ssecrets.LoadSecret(k.Client, ref, k.Namespace)
+			if k8serror.IsNotFound(err) {
+				log.V(0).Info("reference not found")
+				log.V(1).Info("skipping")
+				return false, err
+			} else if err != nil {
+				log.Error(err, "error calling kubernetes api")
+				return false, err
+			}
+		}
+		// add reference data to map
+		val, ok := secRefObject.Data[dataKey]
+		if !ok && selfReference {
+			// STOP a dependency does't exist but might exist after other keys are generated
+			log.V(1).Info(fmt.Sprintf("missing self reference: %s", dataKey))
+			return false, nil
+		} else if !ok {
+			// this is a secret that's missing a key
+			log.Error(err, "secret ref data not found")
+			return false, err
+		}
+		// added to map of reference data with a key value secretName/DataKey
+		keyRefSecrets[dataPath] = val
+	}
+	// load refs into keymgr only when _all_ refs have been found
+	if err := k.keyMgr.LoadReferenceData(keyRefSecrets); err != nil {
+		log.Error(err, "error loading references skipping")
+		return false, err
+	}
+	// all dependencies found and loaded
+	return true, nil
+}
+
+// cretManagerHasData load from secret manager and detetermine and empty
+func (k *keyGenConfig) secretManagerHasData(ctx context.Context) (bool, error) {
+	log := k.Log.WithValues(
+		"data_key", k.key.Name,
+		"secret_type", string(k.key.Type))
+	if k.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone {
+		log.V(1).Info("loading secret from secret-manager")
+		if err := k.keyMgr.LoadSecretFromManager(ctx, k.AppConfig, k.Namespace, k.SecObject.Name); err != nil {
+			log.Error(err, "could not load secret from manager")
+			return false, errors.Wrap(err, "failed api call to secret manager")
+		}
+	}
+	return k.keyMgr.IsEmpty(), nil
 }
 
 func handleRefPath(path string) (string, string) {

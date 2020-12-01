@@ -107,11 +107,11 @@ func (literal *Literal) ToKubernetes(secret *corev1.Secret) {
 }
 
 // NewLiteral creates new Literal type for reconciliation
-func NewLiteral(keyConfig *v1alpha1.KeyConfig) (*Literal, error) {
+func NewLiteral(keyConfig *v1alpha1.KeyConfig) *Literal {
 	literal := &Literal{
 		Name:        keyConfig.Name,
 		ConfigValue: []byte(keyConfig.Spec.Value),
 		IsBase64:    keyConfig.Spec.IsBase64,
 	}
-	return literal, nil
+	return literal
 }

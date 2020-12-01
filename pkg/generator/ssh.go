@@ -135,9 +135,9 @@ func (ssh *SSH) ToKubernetes(secret *corev1.Secret) {
 }
 
 // NewSSH creates new SSH type for reconciliation
-func NewSSH(keyConfig *v1alpha1.KeyConfig) (*SSH, error) {
+func NewSSH(keyConfig *v1alpha1.KeyConfig) *SSH {
 	ssh := &SSH{
 		Name: keyConfig.Name,
 	}
-	return ssh, nil
+	return ssh
 }
