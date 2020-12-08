@@ -65,6 +65,7 @@ release:
 	git push origin $(VERSION)
 	cd config/manager && kustomize edit set image controller=${IMG}
 	@mkdir -p dist/ && kustomize build config/default > dist/secret-agent.yaml
+	@kustomize build config/ha > dist/secret-agent-ha.yaml
 	curl https://proxy.golang.org/github.com/forgerock/secret-agent/@v/$(VERSION).info
 
 # Delete controller from the configured Kubernetes cluster in ~/.kube/config

@@ -1,0 +1,47 @@
+# Adds namespace to all resources.
+namespace: secret-agent-system
+namePrefix: secret-agent-
+
+# Labels to add to all resources and selectors.
+#commonLabels:
+#  someName: someValue
+
+bases:
+- ../crd
+- ../rbac
+- ../manager
+- ../webhook
+- pdb.yaml
+
+replicas:
+- name: controller-manager
+  count: 2
+
+vars:
+- name: SERVICE_NAMESPACE # namespace of the service
+  objref:
+    kind: Service
+    version: v1
+    name: webhook-service
+  fieldref:
+    fieldpath: metadata.namespace
+- name: SERVICE_NAME
+  objref:
+    kind: Service
+    version: v1
+    name: webhook-service
+
+- name: VALIDATING_WEBHOOK_CONFIGURATION_NAME
+  objref:
+    group: admissionregistration.k8s.io
+    version: v1beta1
+    kind: ValidatingWebhookConfiguration
+    name: validating-webhook-configuration
+
+- name: MUTATING_WEBHOOK_CONFIGURATION_NAME
+  objref:
+    group: admissionregistration.k8s.io
+    version: v1beta1
+    kind: MutatingWebhookConfiguration
+    name: mutating-webhook-configuration
+
