@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -208,21 +209,35 @@ func labelsForSecretAgent(name string) map[string]string {
 	return map[string]string{"managed-by-secret-agent": "true", "secret-agent-configuration-name": name}
 }
 
+// Update the SecretAgentConfiguration status with the object names
 func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.Context, instance *v1alpha1.SecretAgentConfiguration, inProgress, errorFound bool) error {
-	// Update the SecretAgentConfiguration status with the object names
-	secretList := &corev1.SecretList{}
+	var totalManagedObjects int
+	var secretNames []string
+	mismatchedNumSecrets := false
+	maxRetries := 5 //wait maximum of 1sec for the API to update
 	listOpts := []client.ListOption{
 		client.InNamespace(instance.Namespace),
 		client.MatchingLabels(labelsForSecretAgent(instance.Name)),
 	}
-	if err := reconciler.List(ctx, secretList, listOpts...); err != nil {
-		return err
+	// retry up to maxRetries. Wait 200ms after each iteration
+	for it := 0; it < maxRetries; it++ {
+		secretNames = nil
+		secretList := &corev1.SecretList{}
+		if err := reconciler.List(ctx, secretList, listOpts...); err != nil {
+			return err
+		}
+		for _, secret := range secretList.Items {
+			secretNames = append(secretNames, secret.Name)
+		}
+		totalManagedObjects = len(secretNames) // TODO Need to include cloud stored secrets in SAC status
+		if len(instance.Spec.Secrets) == len(secretList.Items) {
+			mismatchedNumSecrets = false
+			break
+		}
+		mismatchedNumSecrets = true
+		time.Sleep(200 * time.Millisecond)
 	}
-	var secretNames []string
-	for _, secret := range secretList.Items {
-		secretNames = append(secretNames, secret.Name)
-	}
-	totalManagedObjects := len(secretNames) // TODO Need to add AWS + GCP resources
+
 	// Always Update status.k8sSecrets
 	instance.Status.ManagedK8sSecrets = secretNames
 	instance.Status.TotalManagedObjects = totalManagedObjects
@@ -233,18 +248,21 @@ func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.C
 		} else {
 			instance.Status.State = v1alpha1.SecretAgentConfigurationError
 		}
+	} else if mismatchedNumSecrets && !inProgress {
+		instance.Status.State = v1alpha1.SecretAgentConfigurationError
 	} else if inProgress {
 		instance.Status.State = v1alpha1.SecretAgentConfigurationInProgress
 	} else {
 		instance.Status.State = v1alpha1.SecretAgentConfigurationCompleted
 	}
-
 	if err := reconciler.Status().Update(ctx, instance); err != nil {
 		return err
 	}
-	// Updating the instance will trigger a reconcile loop. This only happens at the end of the reconcile loop
-	// Give enough time for the api to update
-	time.Sleep(200 * time.Millisecond)
+	// if we're done generating secrets but the number of secrets in k8s doesn't match the SAC
+	if !inProgress && mismatchedNumSecrets {
+		return errors.New("The number of secrets in k8s does not match the expected number. Something went wrong")
+	}
+
 	return nil
 }
 
