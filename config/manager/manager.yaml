@@ -42,4 +42,16 @@ spec:
         - name: webhook-server
           containerPort: 9443
           protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
       terminationGracePeriodSeconds: 10

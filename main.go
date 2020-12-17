@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"net/http"
 	"os"
 
 	uberzap "go.uber.org/zap"
@@ -46,6 +47,7 @@ func init() {
 
 func main() {
 	var metricsAddr string
+	var healthzAddr string
 	var enableLeaderElection bool
 	var certDir string
 	var debug bool
@@ -53,6 +55,7 @@ func main() {
 	var cloudSecretsNamespace string
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&healthzAddr, "health-addr", ":8081", "The address the healthz/readyz endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -71,12 +74,13 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseDevMode(false), zap.Level(&lvl)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		Port:               9443,
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "f8e4a0d9.secrets.forgerock.io",
-		CertDir:            certDir,
+		Scheme:                 scheme,
+		MetricsBindAddress:     metricsAddr,
+		Port:                   9443,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "f8e4a0d9.secrets.forgerock.io",
+		CertDir:                certDir,
+		HealthProbeBindAddress: healthzAddr,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -106,6 +110,17 @@ func main() {
 			os.Exit(1)
 		}
 	}
+
+	noop := func(_ *http.Request) error { return nil }
+	if err = mgr.AddReadyzCheck("ready", noop); err != nil {
+		setupLog.Error(err, "unable to add ready check")
+		os.Exit(1)
+	}
+	if err = mgr.AddHealthzCheck("healthy", noop); err != nil {
+		setupLog.Error(err, "unable to add health check")
+		os.Exit(1)
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")
