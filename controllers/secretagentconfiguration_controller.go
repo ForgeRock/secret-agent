@@ -18,10 +18,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
-	"io/ioutil"
-	"os"
-	"path"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -36,6 +32,7 @@ import (
 
 	"github.com/ForgeRock/secret-agent/pkg/generator"
 	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
+	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
 	corev1 "k8s.io/api/core/v1"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
 )
@@ -67,7 +64,10 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	)
 
 	var instance v1alpha1.SecretAgentConfiguration
-	if err := reconciler.Get(ctx, req.NamespacedName, &instance); err != nil {
+	var sm secretsmanager.SecretManager
+
+	err := reconciler.Get(ctx, req.NamespacedName, &instance)
+	if err != nil {
 		if k8serror.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
@@ -79,51 +79,16 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	}
 	log.V(1).Info("** Reconcile loop start **")
 
-	// TODO remove this and move setup of secret manager to a container
-	// add conatiner to GenKeyConfig
+	cloudCredNS := reconciler.CloudSecretsNamespace
 
-	//	secretMgr := secretmanager.NewSecretManager(rclient, instance.AppConfig)
-
-	if instance.Spec.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone &&
-		instance.Spec.AppConfig.CredentialsSecretName != "" {
-		var dir string
-		var cloudCredNS string
-
-		if len(reconciler.CloudSecretsNamespace) > 0 {
-			cloudCredNS = reconciler.CloudSecretsNamespace
-		} else {
-			cloudCredNS = instance.Namespace
-		}
-
-		// load credentials secret
-		secObject, err := k8ssecrets.LoadSecret(reconciler.Client,
-			instance.Spec.AppConfig.CredentialsSecretName, cloudCredNS)
-		if err != nil {
-			log.Error(err, "error loading cloud credentials secret from the Kubernetes API",
-				"secret_name", instance.Spec.AppConfig.CredentialsSecretName,
-				"cloud_secret_namespace", cloudCredNS)
-			return ctrl.Result{}, err
-		}
-		// Create temporary dir for gcp credentials if needed
-		if instance.Spec.AppConfig.SecretsManager == v1alpha1.SecretsManagerGCP {
-			dir, err = ioutil.TempDir("", "cloud_credentials-*")
-			if err != nil {
-				log.Error(err, "couldn't create a temporary credentials dir")
-				return ctrl.Result{}, err
-			}
-			// clean up after ourselves
-			defer os.RemoveAll(dir)
-		}
-
-		// load cloud credentials to envs and/or files
-		if err := manageCloudCredentials(instance.Spec.AppConfig.SecretsManager, secObject, dir); err != nil {
-			log.Error(err, "error loading cloud credentials from secret provided",
-				"secret_name", instance.Spec.AppConfig.CredentialsSecretName,
-				"cloud_secret_namespace", cloudCredNS)
-			return ctrl.Result{}, err
-		}
-
+	// Create new Secret Manager object
+	if ctx, sm, err = secretsmanager.NewSecretManager(ctx, &instance, cloudCredNS, reconciler.Client); err != nil {
+		return ctrl.Result{}, err
 	}
+
+	// Close client
+	defer sm.CloseClient()
+
 	// set the SAC status to inProgress only the first time around.
 	if instance.Status.State == "" {
 		if err := reconciler.updateStatus(ctx, &instance, true, false); err != nil {
@@ -152,14 +117,13 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		gen := generator.GenConfig{
 			// kubernetes secret that will have keys
 			SecObject: secObject,
-			// Keys that should be in secret
-			KeysToGen: secretReq.Keys,
 			Log:       log,
 			Namespace: instance.Namespace,
 			AppConfig: &instance.Spec.AppConfig,
-			Client:    reconciler.Client,
-			// TODO this is for secret manager refactor in the near future
-			// SecretManagerClient: secretMgr,
+			// Keys that should be in secret
+			KeysToGen:     secretReq.Keys,
+			Client:        reconciler.Client,
+			SecretManager: sm,
 		}
 		// generate this secrets keys
 		err = gen.GenKeys(ctx)
@@ -246,79 +210,6 @@ func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.C
 	// Give enough time for the api to update
 	time.Sleep(200 * time.Millisecond)
 	return nil
-}
-
-// manageCloudCredentials handles the credential used to access the secret manager
-// credentials are placed in temp files or environmental variables according to the SM specs.
-func manageCloudCredentials(secManager v1alpha1.SecretsManager, secObject *corev1.Secret, dirPath string) error {
-
-	writeFile := func(name string, contents []byte) (string, error) {
-		fPath := path.Join(dirPath, name)
-
-		// Open a new file for writing only
-		file, err := os.OpenFile(
-			fPath,
-			os.O_WRONLY|os.O_TRUNC|os.O_CREATE,
-			0666,
-		)
-		if err != nil {
-			return "", err
-		}
-		defer file.Close()
-
-		// Write bytes to file
-		_, err = file.Write(contents)
-		if err != nil {
-			return "", err
-		}
-		return fPath, nil
-	}
-	switch secManager {
-	case v1alpha1.SecretsManagerGCP:
-		keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerGoogleApplicationCredentials)]
-		if !ok {
-			return fmt.Errorf(fmt.Sprintf("%s must be provided in a credentials secret",
-				v1alpha1.SecretsManagerGoogleApplicationCredentials))
-		}
-		fp, err := writeFile("gcp_credentials.json", keyValue)
-		if err != nil {
-			return err
-		}
-		if err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", fp); err != nil {
-			return err
-		}
-	case v1alpha1.SecretsManagerAWS:
-		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAwsAccessKeyID)]; ok {
-			if err := os.Setenv("AWS_ACCESS_KEY_ID", string(keyValue)); err != nil {
-				return err
-			}
-		}
-		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAwsSecretAccessKey)]; ok {
-			if err := os.Setenv("AWS_SECRET_ACCESS_KEY", string(keyValue)); err != nil {
-				return err
-			}
-		}
-	case v1alpha1.SecretsManagerAzure:
-		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAzureTenantID)]; ok {
-			if err := os.Setenv("AZURE_TENANT_ID", string(keyValue)); err != nil {
-				return err
-			}
-
-		}
-		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAzureClientID)]; ok {
-			if err := os.Setenv("AZURE_CLIENT_ID", string(keyValue)); err != nil {
-				return err
-			}
-
-		}
-		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAzureClientSecret)]; ok {
-			if err := os.Setenv("AZURE_CLIENT_SECRET", string(keyValue)); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-
 }
 
 var (

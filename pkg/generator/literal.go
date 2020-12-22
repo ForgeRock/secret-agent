@@ -32,10 +32,10 @@ func (literal *Literal) LoadReferenceData(data map[string][]byte) error {
 }
 
 // LoadSecretFromManager populates Literal data from secret manager
-func (literal *Literal) LoadSecretFromManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+func (literal *Literal) LoadSecretFromManager(context context.Context, sm secretsmanager.SecretManager, namespace, secretName string) error {
 	var err error
 	literalFmt := fmt.Sprintf("%s_%s_%s", namespace, secretName, literal.Name)
-	literal.Value, err = secretsmanager.LoadSecret(context, config, literalFmt)
+	literal.Value, err = sm.LoadSecret(context, literalFmt)
 	if err != nil {
 		return err
 	}
@@ -43,10 +43,10 @@ func (literal *Literal) LoadSecretFromManager(context context.Context, config *v
 }
 
 // EnsureSecretManager populates secrets manager from Literal data
-func (literal *Literal) EnsureSecretManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+func (literal *Literal) EnsureSecretManager(context context.Context, sm secretsmanager.SecretManager, namespace, secretName string) error {
 	var err error
 	literalFmt := fmt.Sprintf("%s_%s_%s", namespace, secretName, literal.Name)
-	err = secretsmanager.EnsureSecret(context, config, literalFmt, literal.Value)
+	err = sm.EnsureSecret(context, literalFmt, literal.Value)
 	if err != nil {
 		return err
 	}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
+	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
 )
 
 const (
@@ -29,8 +30,8 @@ var (
 type KeyMgr interface {
 	References() ([]string, []string)
 	LoadReferenceData(data map[string][]byte) error
-	LoadSecretFromManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error
-	EnsureSecretManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error
+	LoadSecretFromManager(context context.Context, sm secretsmanager.SecretManager, namespace, secretName string) error
+	EnsureSecretManager(context context.Context, sm secretsmanager.SecretManager, namespace, secretName string) error
 	Generate() error
 	LoadFromData(secData map[string][]byte)
 	IsEmpty() bool
@@ -38,14 +39,15 @@ type KeyMgr interface {
 	InSecret(secObject *corev1.Secret) bool
 }
 
-// GenConfig a container for runtime secret object generation
+// GenConfig container for runtime secret object generation
 type GenConfig struct {
-	SecObject *corev1.Secret
-	Log       logr.Logger
-	Namespace string
-	AppConfig *v1alpha1.AppConfig
-	KeysToGen []*v1alpha1.KeyConfig
-	Client    client.Client
+	SecObject     *corev1.Secret
+	Log           logr.Logger
+	Namespace     string
+	AppConfig     *v1alpha1.AppConfig
+	KeysToGen     []*v1alpha1.KeyConfig
+	Client        client.Client
+	SecretManager secretsmanager.SecretManager
 }
 
 // KeyGenConfig container for runtime generation of keys
@@ -112,7 +114,7 @@ func (g *GenConfig) GenKeys(ctx context.Context) error {
 			// Ensure Secret Manager and Secret Object are in a generated state
 			if err := keyGenerator.syncKeys(ctx); err != nil {
 				// return with a retry
-				log.Error(err, "could't generate to secret manager, will retry")
+				log.Error(err, "couldn't generate to secret manager, will retry")
 				return err
 			}
 			log.V(1).Info("key completed")
@@ -187,7 +189,7 @@ func (k *keyGenConfig) syncKeys(ctx context.Context) error {
 		return err
 	}
 	if k.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone {
-		err := k.keyMgr.EnsureSecretManager(ctx, k.AppConfig, k.Namespace, k.SecObject.Name)
+		err := k.keyMgr.EnsureSecretManager(ctx, k.SecretManager, k.Namespace, k.SecObject.Name)
 		if err != nil {
 			log.Error(err, "couldn't write to secret manager")
 			return err
@@ -253,14 +255,14 @@ func (k *keyGenConfig) configureDependencies(ctx context.Context) (bool, error) 
 	return true, nil
 }
 
-// cretManagerHasData load from secret manager and detetermine and empty
+// secretManagerHasData load from secret manager and determine if empty
 func (k *keyGenConfig) secretManagerHasData(ctx context.Context) (bool, error) {
 	log := k.Log.WithValues(
 		"data_key", k.key.Name,
 		"secret_type", string(k.key.Type))
 	if k.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone {
 		log.V(1).Info("loading secret from secret-manager")
-		if err := k.keyMgr.LoadSecretFromManager(ctx, k.AppConfig, k.Namespace, k.SecObject.Name); err != nil {
+		if err := k.keyMgr.LoadSecretFromManager(ctx, k.SecretManager, k.Namespace, k.SecObject.Name); err != nil {
 			log.Error(err, "could not load secret from manager")
 			return false, errors.Wrap(err, "failed api call to secret manager")
 		}

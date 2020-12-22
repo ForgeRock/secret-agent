@@ -13,6 +13,7 @@ import (
 	"software.sslmate.com/src/go-pkcs12"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
 )
 
 func parseRootChain(bundle []byte) []*x509.Certificate {
@@ -77,13 +78,13 @@ func (ts *TrustStore) LoadReferenceData(data map[string][]byte) error {
 	return nil
 }
 
-// LoadSecretFromManager load from secrete manager
-func (ts *TrustStore) LoadSecretFromManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+// LoadSecretFromManager load from secret manager
+func (ts *TrustStore) LoadSecretFromManager(context context.Context, sm secretsmanager.SecretManager, namespace, secretName string) error {
 	return nil
 }
 
 // EnsureSecretManager adds  to secret manager
-func (ts *TrustStore) EnsureSecretManager(context context.Context, config *v1alpha1.AppConfig, namespace, secretName string) error {
+func (ts *TrustStore) EnsureSecretManager(context context.Context, sm secretsmanager.SecretManager, namespace, secretName string) error {
 	return nil
 }
 
