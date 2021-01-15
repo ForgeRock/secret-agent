@@ -58,6 +58,10 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	updateK8sSecrets := false
 
 	ctx := context.Background()
+	d := time.Now().Add(time.Duration(20 * time.Minute))
+	ctx, cancel := context.WithDeadline(ctx, d)
+	defer cancel()
+
 	log := reconciler.Log.WithValues(
 		"secretagentconfiguration", req.Name,
 		"namespace", req.NamespacedName,
@@ -82,7 +86,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	cloudCredNS := reconciler.CloudSecretsNamespace
 
 	// Create new Secret Manager object
-	if ctx, sm, err = secretsmanager.NewSecretManager(ctx, &instance, cloudCredNS, reconciler.Client); err != nil {
+	if sm, err = secretsmanager.NewSecretManager(ctx, &instance, cloudCredNS, reconciler.Client); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -126,6 +130,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			SecretManager: sm,
 		}
 		// generate this secrets keys
+
 		err = gen.GenKeys(ctx)
 		if err != nil {
 			// report err and retry

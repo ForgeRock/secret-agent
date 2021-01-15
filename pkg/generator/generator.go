@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -60,6 +61,8 @@ type keyGenConfig struct {
 // GenKeys load secrets from a secret manager or generate them and save to a secret manager
 // GenKeys generates keys until there's an error or a dependency that can't be set.
 func (g *GenConfig) GenKeys(ctx context.Context) error {
+	keyCtx, cancel := context.WithTimeout(ctx, 40*time.Second)
+	defer cancel()
 	// setup a working copy of all keys for a secret
 	// keysToWork is all the keys that need to be generated
 	keysToWork := append(g.KeysToGen[:0:0], g.KeysToGen...)
@@ -84,7 +87,7 @@ func (g *GenConfig) GenKeys(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			empty, err := keyGenerator.secretManagerHasData(ctx)
+			empty, err := keyGenerator.secretManagerHasData(keyCtx)
 			if err != nil {
 				log.Error(err, "skipping key")
 				return err
@@ -93,7 +96,7 @@ func (g *GenConfig) GenKeys(ctx context.Context) error {
 			if empty {
 				log.V(0).Info("secret needs to be generated")
 				log.V(1).Info("gathering dependencies")
-				completed, err := keyGenerator.configureDependencies(ctx)
+				completed, err := keyGenerator.configureDependencies(keyCtx)
 				if k8serror.IsNotFound(err) {
 					log.V(0).Info("has unmet dependencies will retry")
 					return err

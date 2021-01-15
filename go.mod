@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go v0.57.0
 	github.com/Azure/azure-sdk-for-go v42.2.0+incompatible
 	github.com/Azure/go-autorest/autorest v0.10.1
-	github.com/Azure/go-autorest/autorest/azure/auth v0.4.2 // indirect
+	github.com/Azure/go-autorest/autorest/azure/auth v0.4.2
 	github.com/Azure/go-autorest/autorest/to v0.3.0 // indirect
 	github.com/Azure/go-autorest/autorest/validation v0.2.0 // indirect
 	github.com/aws/aws-sdk-go v1.34.15
@@ -19,6 +19,7 @@ require (
 	go.uber.org/zap v1.10.0
 	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
+	google.golang.org/api v0.22.0
 	google.golang.org/genproto v0.0.0-20200511104702-f5ebc3bea380
 	google.golang.org/grpc v1.29.1
 	k8s.io/api v0.17.8
