@@ -55,6 +55,11 @@ func (r *SecretAgentConfiguration) Default() {
 		*r.Spec.AppConfig.BackOffSecs = 2
 	}
 
+	if r.Spec.AppConfig.SecretTimeout == nil {
+		r.Spec.AppConfig.SecretTimeout = new(int)
+		*r.Spec.AppConfig.SecretTimeout = 40
+	}
+
 	for secretIndex, secret := range r.Spec.Secrets {
 		for keysIndex, key := range secret.Keys {
 			// If we're processing passwords and received no Spec, create a new spec.

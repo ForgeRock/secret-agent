@@ -266,6 +266,7 @@ The following tables list the configurable parameters of the secret agent config
 Parameter | Description | Default
 --- | --- | ---
 `spec.appConfig.createKubernetesObjects` | Create Kubernetes secrets for each generated secret.  | true
+`spec.appConfig.secretTimeout` | Set the timeout in seconds for generating each individual secret | 40
 `spec.appConfig.secretsManager` | Select the cloud provider to target. If "none", secrets will not be backed up in any cloud secret manager.  | none
 `spec.appConfig.secretsManagerPrefix` | Prefix added to the name of the secrets stored in the cloud secret manager. | ""
 `spec.appConfig.credentialsSecretName` | Name of the Kubernetes secret containing the credentials to access the cloud provider. | ""

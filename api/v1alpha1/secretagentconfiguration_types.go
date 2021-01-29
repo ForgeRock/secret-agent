@@ -191,6 +191,9 @@ type AppConfig struct {
 	AWSRegion             string         `json:"awsRegion,omitempty"`
 	AzureVaultName        string         `json:"azureVaultName,omitempty"`
 
+	// Optional timeout value to generate a individual secret. Defaults to 40
+	SecretTimeout *int `json:"secretTimeout,omitempty"`
+
 	// Optional number of times the operator will attempt to generate secrets. Defaults to 3
 	MaxRetries *int `json:"maxRetries,omitempty"`
 

@@ -61,7 +61,10 @@ type keyGenConfig struct {
 // GenKeys load secrets from a secret manager or generate them and save to a secret manager
 // GenKeys generates keys until there's an error or a dependency that can't be set.
 func (g *GenConfig) GenKeys(ctx context.Context) error {
-	keyCtx, cancel := context.WithTimeout(ctx, 40*time.Second)
+	// set timeout for generating each secret
+	timeout := g.AppConfig.SecretTimeout
+
+	keyCtx, cancel := context.WithTimeout(ctx, (time.Duration(*timeout) * time.Second))
 	defer cancel()
 	// setup a working copy of all keys for a secret
 	// keysToWork is all the keys that need to be generated
