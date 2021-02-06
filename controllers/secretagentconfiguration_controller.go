@@ -18,6 +18,8 @@ package controllers
 
 import (
 	"context"
+	"reflect"
+	"sort"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -29,12 +31,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
-
 	"github.com/ForgeRock/secret-agent/pkg/generator"
 	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
 	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
 	corev1 "k8s.io/api/core/v1"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // SecretAgentConfigurationReconciler reconciles a SecretAgentConfiguration object
@@ -55,7 +57,6 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	// status flags
 	rescheduleRetry := false
 	errorFound := false
-	updateK8sSecrets := false
 
 	ctx := context.Background()
 	d := time.Now().Add(time.Duration(20 * time.Minute))
@@ -64,7 +65,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 
 	log := reconciler.Log.WithValues(
 		"secretagentconfiguration", req.Name,
-		"namespace", req.NamespacedName,
+		"namespace", req.Namespace,
 	)
 
 	var instance v1alpha1.SecretAgentConfiguration
@@ -100,6 +101,14 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			return ctrl.Result{}, err
 		}
 	}
+	ownedSecretList, err := reconciler.getOwnedSecrets(ctx, &instance)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	var toDeleteSecretNames = make(map[string]bool)
+	for _, secret := range ownedSecretList.Items {
+		toDeleteSecretNames[secret.Name] = true
+	}
 	for _, secretReq := range instance.Spec.Secrets {
 		// load from secret k8s or creates a new one
 		secObject, err := k8ssecrets.LoadSecret(reconciler.Client, secretReq.Name, instance.Namespace)
@@ -111,6 +120,8 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			rescheduleRetry, errorFound = true, true
 			return ctrl.Result{}, err
 		}
+		// Remove this secret from the toDelete list
+		delete(toDeleteSecretNames, secretReq.Name)
 		// secret will either be empty or will will have data. If it has data skip.
 		if len(secObject.Data) != 0 {
 			// TODO this should have a check on ownership and throw a warrning if the object isn't owned by secret agent
@@ -134,7 +145,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		err = gen.GenKeys(ctx)
 		if err != nil {
 			// report err and retry
-			rescheduleRetry = true
+			rescheduleRetry, errorFound = true, true
 			continue
 		}
 		log.V(0).Info("applying to kubernetes")
@@ -152,18 +163,19 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 				"method", op)
 			rescheduleRetry, errorFound = true, true
 			continue
-
 		}
-		updateK8sSecrets = true
+	}
+	// delete any secrets in the toDelete list (if any)
+	// Any secret in the list is present in the k8s api but not in the SAC
+	for n := range toDeleteSecretNames {
+		log := log.WithValues("secret_name", n)
+		log.V(0).Info("deleting from kubernetes")
+		k8ssecrets.DeleteSecret(reconciler.Client, n, instance.Namespace)
 	}
 
-	// Only update the instance's status if there was a k8s operation.
-	// No k8s operation happen in the last reconcile loop. Update to "completed" if no updates and no errors occurred
-	if updateK8sSecrets || rescheduleRetry || errorFound {
-		if err := reconciler.updateStatus(ctx, &instance, rescheduleRetry, errorFound); err != nil {
-			log.Error(err, "Failed to update status")
-			return ctrl.Result{}, err
-		}
+	if err := reconciler.updateStatus(ctx, &instance, rescheduleRetry, errorFound); err != nil {
+		log.Error(err, "Failed to update status")
+		return ctrl.Result{}, err
 	}
 	if rescheduleRetry {
 		log.V(1).Info("Reconcile loop failed. Retry rescheduled")
@@ -177,43 +189,59 @@ func labelsForSecretAgent(name string) map[string]string {
 	return map[string]string{"managed-by-secret-agent": "true", "secret-agent-configuration-name": name}
 }
 
-func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.Context, instance *v1alpha1.SecretAgentConfiguration, inProgress, errorFound bool) error {
-	// Update the SecretAgentConfiguration status with the object names
-	secretList := &corev1.SecretList{}
+func (reconciler *SecretAgentConfigurationReconciler) getOwnedSecrets(ctx context.Context, instance *v1alpha1.SecretAgentConfiguration) (*corev1.SecretList, error) {
+	ownedSecretList := &corev1.SecretList{}
 	listOpts := []client.ListOption{
 		client.InNamespace(instance.Namespace),
 		client.MatchingLabels(labelsForSecretAgent(instance.Name)),
 	}
-	if err := reconciler.List(ctx, secretList, listOpts...); err != nil {
+	if err := reconciler.List(ctx, ownedSecretList, listOpts...); err != nil {
+		return nil, err
+	}
+	return ownedSecretList, nil
+}
+
+func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.Context, instance *v1alpha1.SecretAgentConfiguration, inProgress, errorFound bool) error {
+	// Update the SecretAgentConfiguration status with the object names
+	ownedSecretList, err := reconciler.getOwnedSecrets(ctx, instance)
+	if err != nil {
 		return err
 	}
 	var secretNames []string
-	for _, secret := range secretList.Items {
+	for _, secret := range ownedSecretList.Items {
 		secretNames = append(secretNames, secret.Name)
 	}
 	totalManagedObjects := len(secretNames) // TODO Need to add AWS + GCP resources
 	// Always Update status.k8sSecrets
-	instance.Status.ManagedK8sSecrets = secretNames
-	instance.Status.TotalManagedObjects = totalManagedObjects
+
+	var status v1alpha1.SecretAgentConfigurationStatus
+	status.ManagedK8sSecrets = secretNames
+	status.TotalManagedObjects = totalManagedObjects
 
 	if errorFound {
 		if inProgress {
-			instance.Status.State = v1alpha1.SecretAgentConfigurationErrorRetry
+			status.State = v1alpha1.SecretAgentConfigurationErrorRetry
 		} else {
-			instance.Status.State = v1alpha1.SecretAgentConfigurationError
+			status.State = v1alpha1.SecretAgentConfigurationError
 		}
 	} else if inProgress {
-		instance.Status.State = v1alpha1.SecretAgentConfigurationInProgress
+		status.State = v1alpha1.SecretAgentConfigurationInProgress
 	} else {
-		instance.Status.State = v1alpha1.SecretAgentConfigurationCompleted
+		status.State = v1alpha1.SecretAgentConfigurationCompleted
 	}
-
-	if err := reconciler.Status().Update(ctx, instance); err != nil {
-		return err
+	sort.Strings(status.ManagedK8sSecrets)
+	sort.Strings(instance.Status.ManagedK8sSecrets)
+	sort.Strings(status.ManagedAWSSecrets)
+	sort.Strings(status.ManagedGCPSecrets)
+	sort.Strings(status.ManagedAzureSecrets)
+	sort.Strings(instance.Status.ManagedAWSSecrets)
+	sort.Strings(instance.Status.ManagedGCPSecrets)
+	sort.Strings(instance.Status.ManagedAzureSecrets)
+	if !reflect.DeepEqual(status, instance.Status) {
+		reconciler.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, instance)
+		instance.Status = status
+		return reconciler.Status().Update(ctx, instance)
 	}
-	// Updating the instance will trigger a reconcile loop. This only happens at the end of the reconcile loop
-	// Give enough time for the api to update
-	time.Sleep(200 * time.Millisecond)
 	return nil
 }
 

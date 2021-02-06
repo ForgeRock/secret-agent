@@ -192,12 +192,15 @@ type AppConfig struct {
 	AzureVaultName        string         `json:"azureVaultName,omitempty"`
 
 	// Optional timeout value to generate a individual secret. Defaults to 40
+	// +kubebuilder:default:=40
 	SecretTimeout *int `json:"secretTimeout,omitempty"`
 
 	// Optional number of times the operator will attempt to generate secrets. Defaults to 3
+	// +kubebuilder:default:=3
 	MaxRetries *int `json:"maxRetries,omitempty"`
 
 	// Optional backoff time in seconds before retrying secret generation. Defaults to 2
+	// +kubebuilder:default:=2
 	BackOffSecs *int `json:"backOffSecs,omitempty"`
 }
 

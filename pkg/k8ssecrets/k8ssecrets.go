@@ -65,3 +65,13 @@ func ApplySecrets(rclient client.Client, secret *corev1.Secret) (string, error) 
 
 	return operation, nil
 }
+
+// DeleteSecret deletes the secret from the Kubernetes API
+func DeleteSecret(rclient client.Client, secretName, namespace string) (*corev1.Secret, error) {
+	k8sSecret, err := LoadSecret(rclient, secretName, namespace)
+	if err != nil {
+		return k8sSecret, err
+	}
+	err = rclient.Delete(context.TODO(), k8sSecret, client.PropagationPolicy("Background"))
+	return k8sSecret, nil
+}
