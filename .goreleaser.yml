@@ -29,7 +29,7 @@ changelog:
 release:
   prerelease: auto
   draft: true
-  name_template: "{{.ProjectName}}-v{{.Version}}"
+  name_template: "{{.Tag}}"
   extra_files:
     - glob: ./secret-agent.yaml
     - glob: ./secret-agent-ha.yaml
