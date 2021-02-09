@@ -11,10 +11,6 @@ builds:
       - arm64
     goos:
       - linux
-    ldflags:
-      - -X github.com/ForgeRock/secret-agent/pkg/version.GitCommit={{.Env.GIT_COMMIT}}{{.Env.GIT_DIRTY}} 
-      - -X github.com/ForgeRock/secret-agent/pkg/version.Version={{.Env.TAG_NAME}} 
-      - -X github.com/ForgeRock/secret-agent/pkg/version.BuildDate={{.Env.BUILD_DATE}}
 archives:
   - replacements:
       linux: Linux

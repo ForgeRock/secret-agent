@@ -63,7 +63,6 @@ jobs:
     - name: Set Go Releaser Environment
       run: |
         echo "GIT_DIRTY="$(test -n "`git status --porcelain`" && echo "+CHANGES" || true) >> $GITHUB_ENV
-        echo "VERSION="$(grep "var Version " pkg/version/version.go | awk -F " = " -F '"' '{ print $2 }') >> $GITHUB_ENV
         echo "BUILD_DATE="$(date '+%Y-%m-%d-%H:%M:%S') >> $GITHUB_ENV
     - name: Build Snapshot
       if: ${{ github.event_name == 'pull_request' }}
@@ -73,7 +72,7 @@ jobs:
         args: --snapshot --rm-dist
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        TAG_NAME: ${{ env.VERSION }}-pr.${{ github.event.pull_request.number }}
+        TAG_NAME: ${{ env.BUILD_DATE }}-pr.${{ github.event.pull_request.number }}
         GIT_COMMIT: ${{ github.sha }} 
         IMAGE_NAME: "forgerock/secret-agent"
  
