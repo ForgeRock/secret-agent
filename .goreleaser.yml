@@ -1,0 +1,39 @@
+before:
+  hooks:
+    # You may remove this if you don't use go modules.
+    - go mod download
+builds:
+  - env:
+      - CGO_ENABLED=0
+    binary: forgeops
+    goarch:
+      - amd64
+      - arm64
+    goos:
+      - linux
+    ldflags:
+      - -X github.com/ForgeRock/secret-agent/pkg/version.GitCommit={{.Env.GIT_COMMIT}}{{.Env.GIT_DIRTY}} 
+      - -X github.com/ForgeRock/secret-agent/pkg/version.Version={{.Env.TAG_NAME}} 
+      - -X github.com/ForgeRock/secret-agent/pkg/version.BuildDate={{.Env.BUILD_DATE}}
+archives:
+  - replacements:
+      linux: Linux
+      amd64: x86_64
+    name_template:  "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}"
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ .Tag }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+release:
+  prerelease: auto
+  draft: true
+  name_template: "{{.ProjectName}}-v{{.Version}}"
+  extra_files:
+    - glob: ./secret-agent.yaml
+    - glob: ./secret-agent-ha.yaml
