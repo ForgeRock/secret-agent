@@ -54,7 +54,7 @@ func main() {
 	var lvl uberzap.AtomicLevel
 	var cloudSecretsNamespace string
 
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to. Set to 0 to disable metrics")
 	flag.StringVar(&healthzAddr, "health-addr", ":8081", "The address the healthz/readyz endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+

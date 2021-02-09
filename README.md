@@ -322,6 +322,17 @@ Parameter | Description | Default
 `sourcePath` | Used when the keystore cmd is importcert, importpassword or importkeystore. Specify the path to the secret in the SAC to import into the alias in the form `secretname/keyname`. Note: importcert only imports the public key. importkeystore must be used to import a key pair. | ""
 `isKeyPair` | If importing a keypair using importkeystore, must be set to true. | false
 
+## Runtime Arguments
+
+Argument | Description | Default
+--- | --- | ---
+`--metrics-addr` | The address the metric endpoint binds to. Set to 0 to disable metrics. | ":8080"
+`--health-addr` | The address the healthz/readyz endpoint binds to. | ":8081"
+`--enable-leader-election` | Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager. | "false"
+`--cert-dir` | Directory where to store/read the webhook certs. | "/tmp/k8s-webhook-server/serving-certs"
+`--cloud-secrets-namespace` | Namespace where the cloud credentials secrets are located. Defaults to the SAC namespace. | SAC's `metadata.namespace`
+`--debug` | Enable debug logs. | "false"
+
 ## Running Tests
 
 Tests can be run using `make tests`. Some of the tests exercise parts of the code that uses `keytool`, and `kubebuilder`tools. Those must be installed locally in order to run the tests. Another option is to use docker:
