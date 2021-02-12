@@ -36,14 +36,12 @@ type SecretAgentConfigurationSpec struct {
 
 // SecretAgentConfigurationStatus defines the observed state of SecretAgentConfiguration
 type SecretAgentConfigurationStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	State               SecretAgentConfState `json:"state,omitempty"`
-	TotalManagedObjects int                  `json:"totalManagedObjects,omitempty"`
-	ManagedK8sSecrets   []string             `json:"managedK8sSecrets,omitempty"`
-	ManagedAWSSecrets   []string             `json:"managedAWSSecrets,omitempty"`
-	ManagedGCPSecrets   []string             `json:"managedGCPSecrets,omitempty"`
-	ManagedAzureSecrets []string             `json:"managedAzureSecrets,omitempty"`
+	State                       SecretAgentConfState `json:"state,omitempty"`
+	TotalManagedSecrets         int                  `json:"totalManagedSecrets,omitempty"`
+	TotalKubeSecrets            int                  `json:"totalKubeSecrets,omitempty"`
+	TotalSecretManagerSecrets   int                  `json:"totalSecretManagerSecrets,omitempty"`
+	ManagedKubeSecrets          []string             `json:"managedKubeSecrets,omitempty"`
+	ManagedSecretManagerSecrets []string             `json:"managedSecretManagerSecrets,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -51,8 +49,10 @@ type SecretAgentConfigurationStatus struct {
 // +kubebuilder:resource:path=secretagentconfigurations,scope=Namespaced
 // +kubebuilder:resource:shortName=sac
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.state",description="SAC State"
-// +kubebuilder:printcolumn:name="TotalNumObjects",type="integer",JSONPath=".status.totalManagedObjects",description="Total no. of objects managed"
-// +kubebuilder:printcolumn:name="K8sSecrets",type="string",priority=1,JSONPath=".status.managedK8sSecrets",description="All K8s managed secrets"
+// +kubebuilder:printcolumn:name="NumSecrets",type="integer",JSONPath=".status.totalManagedSecrets",description="Total no. of secrets managed by the sac"
+// +kubebuilder:printcolumn:name="NumK8sSecrets",type="integer",JSONPath=".status.totalKubeSecrets",description="Total no. of k8s secrets created"
+// +kubebuilder:printcolumn:name="NumSMSecrets",type="integer",priority=1,JSONPath=".status.totalSecretManagerSecrets",description="Total no. of SM secrets created"
+// +kubebuilder:printcolumn:name="K8sSecrets",type="string",priority=1,JSONPath=".status.managedKubeSecrets",description="All K8s managed secrets"
 
 // SecretAgentConfiguration is the Schema for the secretagentconfigurations API
 type SecretAgentConfiguration struct {
@@ -207,8 +207,7 @@ type AppConfig struct {
 // SecretConfig is the configuration for a specific Kubernetes secret
 type SecretConfig struct {
 	// +kubebuilder:validation:Required
-	Name      string `json:"name"`
-	Namespace string `json:"-"`
+	Name string `json:"name"`
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	Keys []*KeyConfig `json:"keys" validate:"dive,unique=Name"`

@@ -137,6 +137,10 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 	config := sl.Current().Interface().(SecretAgentConfigurationSpec)
 
 	switch config.AppConfig.SecretsManager {
+	case SecretsManagerNone:
+		if !config.AppConfig.CreateKubernetesObjects {
+			sl.ReportError(config.AppConfig.CreateKubernetesObjects, "createKubernetesObjects", "CreateKubernetesObjects", "SecretManagerOrK8sObjectsRequired", "")
+		}
 	case SecretsManagerGCP:
 		if config.AppConfig.GCPProjectID == "" {
 			sl.ReportError(config.AppConfig.GCPProjectID, "gcpProjectID", "GCPProjectID", "emptyGCPProjectID", "")

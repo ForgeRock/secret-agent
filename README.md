@@ -50,7 +50,9 @@ The `secret-agent` supports the following cloud providers:
 * AWS Secrets Manager
 * Azure Key Vault
 
-It is possible to run the `secret-agent` without setting up a cloud provider. This is useful when debugging or testing applications. To disable cloud provider support, set `spec.appConfig.secretsManager` to “none”.
+It is possible to run the `secret-agent` without setting up a cloud provider. This is useful when debugging or testing applications. To disable cloud provider support, set `spec.appConfig.secretsManager` to “none”. This is only possible if `spec.appConfig.createKubernetesObjects` is set to true.
+
+In addition, it is possible to configure the `secret-agent` to store secrets in the secret manager without creating local Kubernetes secrets. This is useful if your applications can access the cloud secret manager directly and the `secret-agent` is only used to generate such secrets. To achieve this, set `spec.appConfig.createKubernetesObjects` to false. Do note that `spec.appConfig.secretsManager` cannot be set to "none".
 
 In order to fetch and store secrets in the AWS Secrets Manager, the user must provide credentials with the necessary permissions.
 
@@ -265,9 +267,9 @@ The following tables list the configurable parameters of the secret agent config
 
 Parameter | Description | Default
 --- | --- | ---
-`spec.appConfig.createKubernetesObjects` | Create Kubernetes secrets for each generated secret.  | true
+`spec.appConfig.createKubernetesObjects` | Create Kubernetes secrets for each generated secret. Can't be set to false if `spec.appConfig.secretsManager` is set to "none" | true
 `spec.appConfig.secretTimeout` | Set the timeout in seconds for generating each individual secret | 40
-`spec.appConfig.secretsManager` | Select the cloud provider to target. If "none", secrets will not be backed up in any cloud secret manager.  | none
+`spec.appConfig.secretsManager` | Select the cloud provider to target. If "none", secrets will not be backed up in any cloud secret manager. Can't be set to "none" if `spec.appConfig.createKubernetesObjects` is false| none
 `spec.appConfig.secretsManagerPrefix` | Prefix added to the name of the secrets stored in the cloud secret manager. | ""
 `spec.appConfig.credentialsSecretName` | Name of the Kubernetes secret containing the credentials to access the cloud provider. | ""
 `spec.appConfig.gcpProjectID` | When using GCP as the secret mgr, specify the project ID.  | ""

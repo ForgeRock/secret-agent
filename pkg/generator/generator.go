@@ -212,6 +212,9 @@ func (k *keyGenConfig) syncKeys(ctx context.Context) error {
 func (k *keyGenConfig) configureDependencies(ctx context.Context) (bool, error) {
 	var err error = nil
 	keyRefSecrets := make(map[string][]byte)
+	var val []byte
+	var ok bool
+
 	log := k.Log.WithValues(
 		"data_key", k.key.Name,
 		"secret_type", string(k.key.Type))
@@ -227,6 +230,14 @@ func (k *keyGenConfig) configureDependencies(ctx context.Context) (bool, error) 
 		if ref == k.SecObject.Name {
 			secRefObject = k.SecObject
 			selfReference = true
+			// add reference data to map
+			val, ok = secRefObject.Data[dataKey]
+		} else if !k.AppConfig.CreateKubernetesObjects {
+			val, err = k.loadRefFromManager(ctx, ref, dataKey)
+			if err != nil {
+				return false, err
+			}
+			ok = len(val) > 0
 		} else {
 			secRefObject, err = k8ssecrets.LoadSecret(k.Client, ref, k.Namespace)
 			if k8serror.IsNotFound(err) {
@@ -237,9 +248,10 @@ func (k *keyGenConfig) configureDependencies(ctx context.Context) (bool, error) 
 				log.Error(err, "error calling kubernetes api")
 				return false, err
 			}
+			// add reference data to map
+			val, ok = secRefObject.Data[dataKey]
 		}
-		// add reference data to map
-		val, ok := secRefObject.Data[dataKey]
+
 		if !ok && selfReference {
 			// STOP a dependency does't exist but might exist after other keys are generated
 			log.V(1).Info(fmt.Sprintf("missing self reference: %s", dataKey))
@@ -274,6 +286,16 @@ func (k *keyGenConfig) secretManagerHasData(ctx context.Context) (bool, error) {
 		}
 	}
 	return k.keyMgr.IsEmpty(), nil
+}
+
+// loadRefFromManager load ref from secret manager
+func (k *keyGenConfig) loadRefFromManager(ctx context.Context, refName, refKey string) ([]byte, error) {
+	nameFmt := fmt.Sprintf("%s_%s_%s", k.Namespace, refName, refKey)
+	value, err := k.SecretManager.LoadSecret(ctx, nameFmt)
+	if err != nil {
+		return []byte{}, err
+	}
+	return value, err
 }
 
 func handleRefPath(path string) (string, string) {

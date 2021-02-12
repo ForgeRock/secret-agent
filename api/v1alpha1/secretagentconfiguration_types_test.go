@@ -373,13 +373,13 @@ func TestConfigurationStructLevelValidatorDuplicateKeytoolAlias(t *testing.T) {
 func getConfig() *SecretAgentConfigurationSpec {
 	return &SecretAgentConfigurationSpec{
 		AppConfig: AppConfig{
-			SecretsManager: SecretsManagerNone,
+			SecretsManager:          SecretsManagerNone,
+			CreateKubernetesObjects: true,
 		},
 		Secrets: []*SecretConfig{
 			{
-				Name:      "asdfSecret",
-				Namespace: "default",
-				Keys:      []*KeyConfig{},
+				Name: "asdfSecret",
+				Keys: []*KeyConfig{},
 			},
 		},
 	}

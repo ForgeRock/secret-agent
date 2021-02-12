@@ -148,7 +148,6 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			rescheduleRetry, errorFound = true, true
 			continue
 		}
-		log.V(0).Info("applying to kubernetes")
 
 		secObject.Labels = labelsForSecretAgent(instance.Name)
 		// Set SecretAgentConfiguration instance as the owner and controller of the k8ssecret
@@ -157,12 +156,15 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 			rescheduleRetry = true
 			continue
 		}
-		op, err := k8ssecrets.ApplySecrets(reconciler.Client, secObject)
-		if err != nil {
-			log.Error(err, "couldnt apply secret",
-				"method", op)
-			rescheduleRetry, errorFound = true, true
-			continue
+		if instance.Spec.AppConfig.CreateKubernetesObjects {
+			log.V(0).Info("applying to kubernetes")
+			op, err := k8ssecrets.ApplySecrets(reconciler.Client, secObject)
+			if err != nil {
+				log.Error(err, "couldnt apply secret",
+					"method", op)
+				rescheduleRetry, errorFound = true, true
+				continue
+			}
 		}
 	}
 	// delete any secrets in the toDelete list (if any)
@@ -211,12 +213,13 @@ func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.C
 	for _, secret := range ownedSecretList.Items {
 		secretNames = append(secretNames, secret.Name)
 	}
-	totalManagedObjects := len(secretNames) // TODO Need to add AWS + GCP resources
+	totalCreatedK8sObjects := len(secretNames) // TODO Need to add AWS + GCP resources
 	// Always Update status.k8sSecrets
 
 	var status v1alpha1.SecretAgentConfigurationStatus
-	status.ManagedK8sSecrets = secretNames
-	status.TotalManagedObjects = totalManagedObjects
+	status.TotalManagedSecrets = len(instance.Spec.Secrets)
+	status.TotalKubeSecrets = totalCreatedK8sObjects
+	status.ManagedKubeSecrets = secretNames
 
 	if errorFound {
 		if inProgress {
@@ -229,14 +232,10 @@ func (reconciler *SecretAgentConfigurationReconciler) updateStatus(ctx context.C
 	} else {
 		status.State = v1alpha1.SecretAgentConfigurationCompleted
 	}
-	sort.Strings(status.ManagedK8sSecrets)
-	sort.Strings(instance.Status.ManagedK8sSecrets)
-	sort.Strings(status.ManagedAWSSecrets)
-	sort.Strings(status.ManagedGCPSecrets)
-	sort.Strings(status.ManagedAzureSecrets)
-	sort.Strings(instance.Status.ManagedAWSSecrets)
-	sort.Strings(instance.Status.ManagedGCPSecrets)
-	sort.Strings(instance.Status.ManagedAzureSecrets)
+	sort.Strings(status.ManagedKubeSecrets)
+	sort.Strings(instance.Status.ManagedKubeSecrets)
+	sort.Strings(status.ManagedSecretManagerSecrets)
+	sort.Strings(instance.Status.ManagedSecretManagerSecrets)
 	if !reflect.DeepEqual(status, instance.Status) {
 		reconciler.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, instance)
 		instance.Status = status
