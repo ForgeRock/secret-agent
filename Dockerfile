@@ -11,10 +11,11 @@ ARG GO_VERSION
 ARG GO_PACKAGE_SHA256
 ARG KUBEBUILDER_VERSION
 
-ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64 DEBIAN_FRONTEND=noninteractive 
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y curl git-core make && \
+    apt-get install --no-install-recommends -y curl git-core make && \
     apt-get clean all
+
 RUN curl -LO https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     SUM=$(sha256sum go${GO_VERSION}.linux-amd64.tar.gz | awk '{print $1}') && \
     if [ "${SUM}" != "${GO_PACKAGE_SHA256}" ]; then echo "Failed checksum"; exit 1; fi && \
@@ -60,6 +61,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -ldflags "-s -
 
 FROM openjdk:11-jre-slim as release
 
+RUN apt-get update && \                                                                               
+    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y curl lsof net-tools && \ 
+    apt-get clean all                                                                                 
 RUN addgroup --gid 11111 secret-agent && \
     adduser --shell /bin/bash --home /home/secret-agent --uid 11111 --disabled-password --ingroup root --gecos secret-agent secret-agent && \
     chown -R secret-agent:root /home/secret-agent
