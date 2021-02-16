@@ -123,7 +123,8 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 		// Remove this secret from the toDelete list
 		delete(toDeleteSecretNames, secretReq.Name)
 		// secret will either be empty or will will have data. If it has data skip.
-		if len(secObject.Data) != 0 {
+		// the len of data maybe more than the keys because keypairs generates more that one so len is not accurate.
+		if len(secObject.Data) >= len(secretReq.Keys) {
 			// TODO this should have a check on ownership and throw a warrning if the object isn't owned by secret agent
 			log.V(1).Info("secret found to have data, skipping")
 			continue

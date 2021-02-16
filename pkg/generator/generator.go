@@ -66,9 +66,16 @@ func (g *GenConfig) GenKeys(ctx context.Context) error {
 
 	keyCtx, cancel := context.WithTimeout(ctx, (time.Duration(*timeout) * time.Second))
 	defer cancel()
-	// setup a working copy of all keys for a secret
+
+	// only generate keys that dont exist in the secret
+	keysNotInSecret := []*v1alpha1.KeyConfig{}
+	for _, keyToGen := range g.KeysToGen {
+		if _, ok := g.SecObject.Data[keyToGen.Name]; !ok {
+			keysNotInSecret = append(keysNotInSecret, keyToGen)
+		}
+	}
 	// keysToWork is all the keys that need to be generated
-	keysToWork := append(g.KeysToGen[:0:0], g.KeysToGen...)
+	keysToWork := append(g.KeysToGen[:0:0], keysNotInSecret...)
 	// track the number of times we've tried to generate a key
 	// attempts can't exceed the number of keys we are supposed to generate
 	attempts := 0
@@ -113,9 +120,6 @@ func (g *GenConfig) GenKeys(ctx context.Context) error {
 					keysToWork = append(keysToWork, key)
 					continue
 				}
-				// add key to queue if the missing dependency is in the queue
-				//	enqueuer(reEnqueuForKey, key); err != nil {
-				// not found
 			}
 			// Ensure Secret Manager and Secret Object are in a generated state
 			if err := keyGenerator.syncKeys(ctx); err != nil {
