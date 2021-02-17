@@ -24,7 +24,10 @@ import (
 
 	"github.com/go-logr/logr"
 	"golang.org/x/time/rate"
+	corev1 "k8s.io/api/core/v1"
+	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,9 +37,6 @@ import (
 	"github.com/ForgeRock/secret-agent/pkg/generator"
 	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
 	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
-	corev1 "k8s.io/api/core/v1"
-	k8serror "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 // SecretAgentConfigurationReconciler reconciles a SecretAgentConfiguration object
@@ -97,6 +97,10 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	// set the SAC status to inProgress only the first time around.
 	if instance.Status.State == "" {
 		if err := reconciler.updateStatus(ctx, &instance, true, false); err != nil {
+			if k8serror.IsConflict(err) {
+				log.Info("Conflict on status update, retrying", "instance.name", instance.Name)
+				return ctrl.Result{Requeue: true}, nil
+			}
 			log.Error(err, "Failed to update status", "instance.name", instance.Name)
 			return ctrl.Result{}, err
 		}
@@ -177,6 +181,10 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request
 	}
 
 	if err := reconciler.updateStatus(ctx, &instance, rescheduleRetry, errorFound); err != nil {
+		if k8serror.IsConflict(err) {
+			log.Info("Conflict on status update, retrying", "instance.name", instance.Name)
+			return ctrl.Result{Requeue: true}, nil
+		}
 		log.Error(err, "Failed to update status")
 		return ctrl.Result{}, err
 	}
