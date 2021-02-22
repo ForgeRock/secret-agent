@@ -90,6 +90,11 @@ func (ts *TrustStore) EnsureSecretManager(context context.Context, sm secretsman
 
 // Generate  and all of its aliases
 func (ts *TrustStore) Generate() error {
+	// PEM certs - only support adding trusstore paths
+	if ts.V1Spec.PEMFormat {
+		ts.Value = append(ts.Value, ts.refData...)
+		return nil
+	}
 	systemBundle, err := ioutil.ReadFile("/etc/ssl/certs/ca-certificates.crt")
 	if err != nil {
 		return errors.WithMessage(err, "error occurred when attempting to read system trust store")
@@ -104,7 +109,6 @@ func (ts *TrustStore) Generate() error {
 	if err != nil {
 		return errors.WithStack(err)
 	}
-
 	return nil
 }
 

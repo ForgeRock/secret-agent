@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"encoding/pem"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"software.sslmate.com/src/go-pkcs12"
 )
 
+// dev notes: next addition to this should refactor to a test table
 func TestTrustStore(t *testing.T) {
 	rootCAConfig := &v1alpha1.KeyConfig{
 		Type: v1alpha1.KeyConfigTypeCA,
@@ -48,5 +50,31 @@ func TestTrustStore(t *testing.T) {
 	lastCert := parsed[len(parsed)-1]
 	if lastCert.Subject.CommonName != "foo" {
 		t.Errorf("expected to find cert with common name of 'foobar' but found %+v", lastCert.Subject.CommonName)
+	}
+	pemKey := &v1alpha1.KeyConfig{
+		Name: "myname",
+		Type: v1alpha1.KeyConfigTypeTrustStore,
+		Spec: &v1alpha1.KeySpec{
+			TruststoreImportPaths: []string{"testConfig/ca"},
+			PEMFormat:             true,
+		},
+	}
+	pemtsMgr := NewTrustStore(pemKey)
+	if empty := pemtsMgr.IsEmpty(); !empty {
+		t.Fatalf("expected trust store to not be empty")
+	}
+	pemtsMgr.References()
+	pemtsMgr.LoadReferenceData(map[string][]byte{
+		"testConfig/ca.pem": testSecret.Data[rootCA.Name+".pem"],
+	})
+	pemtsMgr.Generate()
+	pemtestSecret := &corev1.Secret{}
+	pemtsMgr.ToKubernetes(pemtestSecret)
+	value, ok := pemtestSecret.Data["myname"]
+	if ok {
+		block, _ := pem.Decode(value)
+		if block == nil || block.Type != "CERTIFICATE" {
+			t.Fatal("failed to decode PEM block containing certificate")
+		}
 	}
 }

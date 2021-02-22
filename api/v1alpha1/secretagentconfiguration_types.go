@@ -237,6 +237,7 @@ type KeySpec struct {
 	Duration              *metav1.Duration   `json:"duration,omitempty"`
 	UseBinaryCharacters   bool               `json:"useBinaryCharacters,omitempty"`
 	IsBase64              bool               `json:"isBase64,omitempty"`
+	PEMFormat             bool               `json:"pemFormat,omitempty"`
 
 	// +kubebuilder:validation:Minimun=16
 	Length *int `json:"length,omitempty"`
