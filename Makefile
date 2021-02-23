@@ -33,9 +33,9 @@ unit-test: generate fmt vet manifests
 int-test: generate fmt vet manifests
 	go test ./... -tags=integration -coverprofile cover.html
 
-# Run unit and integration and cloud-provider tests
+# Run unit and integration and cloudprovider tests
 cloud-test: generate fmt vet manifests
-	go test ./... -tags=integration,cloud-provider -coverprofile cover.html
+	go test ./... -tags=integration,cloudprovider -coverprofile cover.html
 
 # Build manager binary
 manager: generate fmt vet
