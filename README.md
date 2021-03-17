@@ -116,7 +116,11 @@ Please refer to the [GCP Documentation](https://cloud.google.com/secret-manager/
 
 Workload Identity is the recommended way to access Google Cloud services from applications running within GKE. For more information on how to enable workload identity see [GCP Documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity#gcloud_1).
 
-In general, once the Google service account has been created with the proper role attached and workload identity has been enabled for your GKE cluster and nodes, you can run the following commands to enable workload identity for the `secret-agent`:
+In general, the user creates a Google Cloud service account with the proper role attached and
+[enables workload identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity#enable_on_cluster) in their GKE cluster.
+The Kubernetes services account is already created for you during the `secret-agent` deployment.
+
+Run the following commands to enable workload identity for the `secret-agent` deployment:
 
 ```bash
 PROJECTID=myproject #GCP project ID
