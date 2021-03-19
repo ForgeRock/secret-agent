@@ -120,6 +120,8 @@ func (g *GenConfig) GenKeys(ctx context.Context) error {
 					keysToWork = append(keysToWork, key)
 					continue
 				}
+			} else {
+				log.V(0).Info("loaded from secret manager")
 			}
 			// Ensure Secret Manager and Secret Object are in a generated state
 			if err := keyGenerator.syncKeys(ctx); err != nil {
@@ -188,7 +190,7 @@ func (k *keyGenConfig) syncKeys(ctx context.Context) error {
 		"secret_type", string(k.key.Type))
 
 	if !k.keyMgr.IsEmpty() {
-		log.V(0).Info("already generated, preparing secret")
+		log.V(1).Info("secret data found, preparing k8s secret")
 		// we don't need to do anything, just update the secret object
 		k.keyMgr.ToKubernetes(k.SecObject)
 		return nil
@@ -206,7 +208,7 @@ func (k *keyGenConfig) syncKeys(ctx context.Context) error {
 		}
 		log.V(1).Info("added to secret manager")
 	}
-	log.V(0).Info("preparing secret")
+	log.V(1).Info("preparing k8s secret")
 	k.keyMgr.ToKubernetes(k.SecObject)
 	return nil
 }
