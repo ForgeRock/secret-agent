@@ -13,6 +13,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/keyvault/keyvault"
 	azauth "github.com/Azure/azure-sdk-for-go/services/keyvault/auth"
 	"github.com/Azure/go-autorest/autorest"
+	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -273,6 +274,7 @@ func newAzure(config *v1alpha1.AppConfig, rClient client.Client, cloudCredNS str
 
 		// Create am authorizer with supplied credentials
 		credentialsAuthorizer := auth.NewClientCredentialsConfig(clientID, clientSecret, tenantID)
+		credentialsAuthorizer.Resource = azure.PublicCloud.ResourceIdentifiers.KeyVault
 		authorizer, authErr = credentialsAuthorizer.Authorizer()
 	} else {
 		// set default authorizer
@@ -469,13 +471,6 @@ func (sm *secretManagerAWS) LoadSecret(ctx context.Context, secretName string) (
 func (sm *secretManagerAzure) CloseClient() {}
 
 var azureVaultURLFmt string = "https://%s.vault.azure.net/"
-
-// newAzureClient create an Azure client with an authorizer from the environment
-func newAzureClient(authorizer autorest.Authorizer) *keyvault.BaseClient {
-	client := keyvault.New()
-	client.Authorizer = authorizer
-	return &client
-}
 
 // EnsureSecret ensures a single secret is stored in AWS Secret Manager
 func (sm *secretManagerAzure) EnsureSecret(ctx context.Context, secretName string, value []byte) error {
