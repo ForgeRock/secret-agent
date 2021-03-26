@@ -2,6 +2,8 @@ package secretsmanager
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -33,6 +35,13 @@ import (
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
+)
+
+var (
+	// 25 kb
+	keyvaultMaxBytes = 25 * 1000
+	// 65kb
+	awssecretsManagerMaxBytes = 65 * 1000
 )
 
 func idSafe(value string) string {
@@ -401,6 +410,9 @@ func (sm *secretManagerAWS) CloseClient() {}
 // EnsureSecret saves secret to AWS secret manager
 func (sm *secretManagerAWS) EnsureSecret(ctx context.Context, secretName string, value []byte) error {
 	// get secret ID
+	if binary.Size(value) > awssecretsManagerMaxBytes {
+		return errors.WithStack(fmt.Errorf("unable to write %s to AWS secret manager size exceeds 65kb", secretName))
+	}
 	secretID := getSecretID(sm.secretsManagerPrefix, secretName)
 
 	// check if exists
@@ -478,7 +490,10 @@ func (sm *secretManagerAzure) EnsureSecret(ctx context.Context, secretName strin
 	secretID := getSecretID(sm.secretsManagerPrefix, secretName)
 
 	var secParams keyvault.SecretSetParameters
-	stringValue := string(value)
+	stringValue := base64.StdEncoding.EncodeToString(value)
+	if binary.Size(stringValue) > keyvaultMaxBytes {
+		return errors.WithStack(fmt.Errorf("unable to write %s to azure vault secret exceeds 25kb", secretID))
+	}
 	secParams.Value = &stringValue
 	_, err := sm.client.SetSecret(ctx, fmt.Sprintf(azureVaultURLFmt, sm.azureVaultName), secretID, secParams)
 	if err != nil {
@@ -503,7 +518,8 @@ func (sm *secretManagerAzure) LoadSecret(ctx context.Context, secretName string)
 	if response.Value == nil {
 		return []byte{}, errors.WithStack(fmt.Errorf("no secret found for %s", secretID))
 	}
-	return []byte(*response.Value), nil
+	value, err := base64.StdEncoding.DecodeString(*response.Value)
+	return []byte(value), err
 }
 
 // No Secret Manager Client
