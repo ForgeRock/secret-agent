@@ -70,9 +70,6 @@ func configureExpire(certTemplate *x509.Certificate, d *metav1.Duration) {
 
 func configureUsage(certTemplate *x509.Certificate) {
 	if certTemplate.IsCA {
-		certTemplate.ExtKeyUsage = []x509.ExtKeyUsage{
-			x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth,
-		}
 		certTemplate.KeyUsage = x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign
 		return
 	}
@@ -88,7 +85,7 @@ func configureUsage(certTemplate *x509.Certificate) {
 	}
 	// default configuration of usage
 	certTemplate.KeyUsage = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
-	certTemplate.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+	certTemplate.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth}
 
 }
 
