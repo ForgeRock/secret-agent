@@ -15,7 +15,7 @@ jobs:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.14
+        go-version: ^1.16
       id: go
 
     - name: Check out code into the Go module directory
@@ -26,10 +26,7 @@ jobs:
 
     - name: Check for uncommited formatting
       run: if [ -n "$(git status --untracked-files=no --porcelain)" ]; then echo "There are uncommitted changes"; exit 1; fi
-    
-    - name: Run unit tests
-      run: go test ./... -cover
-    
+
   integration-tests:
     name: Run integration-tests
     needs: basic-checks
@@ -37,7 +34,7 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
-       
+
     - name: Build Test Image
       run: docker build -t secret-agent-tester --target=tester .
 
@@ -57,7 +54,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.14
+        go-version: ^1.16
       id: go
 
     - name: Set Go Releaser Environment
@@ -73,9 +70,9 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TAG_NAME: ${{ env.BUILD_DATE }}-pr.${{ github.event.pull_request.number }}
-        GIT_COMMIT: ${{ github.sha }} 
+        GIT_COMMIT: ${{ github.sha }}
         IMAGE_NAME: "forgerock/secret-agent"
- 
+
     - name: Upload Artifacts
       uses: actions/upload-artifact@v2
       with:

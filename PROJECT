@@ -1,7 +1,19 @@
 domain: secrets.forgerock.io
+layout:
+- go.kubebuilder.io/v3
+projectName: secret-agent-migrate
 repo: github.com/ForgeRock/secret-agent
 resources:
-- group: secret-agent
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: secrets.forgerock.io
+  group: secret-agent
   kind: SecretAgentConfiguration
+  path: github.com/ForgeRock/secret-agent/api/v1alpha1
   version: v1alpha1
-version: "2"
+  webhooks:
+    validation: true
+    webhookVersion: v1
+version: "3"

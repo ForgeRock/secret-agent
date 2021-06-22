@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: system
   labels:
     control-plane: controller-manager
+  name: system
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -22,36 +22,46 @@ spec:
       labels:
         control-plane: controller-manager
     spec:
-      serviceAccountName: manager-service-account
+      securityContext:
+        runAsNonRoot: true
       containers:
       - command:
         - /manager
         args:
-        - --enable-leader-election
         - --keytoolPath=/usr/local/openjdk-11/bin/keytool
         - --opensslPath=/usr/bin/openssl
         - --webhook-service-ns=$(SERVICE_NAMESPACE)
         - --webhook-service-name=$(SERVICE_NAME)
-        - --webhook-secret-name=webhook-server-cert
         - --validating-webhook-name=$(VALIDATING_WEBHOOK_CONFIGURATION_NAME)
         - --mutating-webhook-name=$(MUTATING_WEBHOOK_CONFIGURATION_NAME)
+        - --webhook-secret-name=webhook-server-cert
         - --cloud-secrets-namespace=$(SERVICE_NAMESPACE)
+        - --debug
         image: controller:latest
         name: manager
+        imagePullPolicy: IfNotPresent
         ports:
         - name: webhook-server
           containerPort: 9443
           protocol: TCP
-        readinessProbe:
-          httpGet:
-            path: /readyz
-            port: 8081
-          initialDelaySeconds: 5
-          periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /healthz
             port: 8081
           initialDelaySeconds: 15
           periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+      serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

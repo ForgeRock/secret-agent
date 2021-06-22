@@ -38,7 +38,7 @@ func (r *SecretAgentConfiguration) SetupWebhookWithManager(mgr ctrl.Manager) err
 		Complete()
 }
 
-// +kubebuilder:webhook:path=/mutate-secret-agent-secrets-forgerock-io-v1alpha1-secretagentconfiguration,mutating=true,failurePolicy=fail,groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations,verbs=create;update,versions=v1alpha1,name=msecretagentconfiguration.kb.io
+// +kubebuilder:webhook:path=/mutate-secret-agent-secrets-forgerock-io-v1alpha1-secretagentconfiguration,mutating=true,admissionReviewVersions=v1,sideEffects=none,failurePolicy=fail,groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations,verbs=create;update,versions=v1alpha1,name=msecretagentconfiguration.kb.io
 
 var _ webhook.Defaulter = &SecretAgentConfiguration{}
 
@@ -98,7 +98,7 @@ func cleanUpPaths(p string) string {
 }
 
 // change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-// +kubebuilder:webhook:verbs=create;update,path=/validate-secret-agent-secrets-forgerock-io-v1alpha1-secretagentconfiguration,mutating=false,failurePolicy=fail,groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations,versions=v1alpha1,name=vsecretagentconfiguration.kb.io
+// +kubebuilder:webhook:verbs=create;update,path=/validate-secret-agent-secrets-forgerock-io-v1alpha1-secretagentconfiguration,mutating=false,sideEffects=none,admissionReviewVersions=v1,failurePolicy=fail,groups=secret-agent.secrets.forgerock.io,resources=secretagentconfigurations,versions=v1alpha1,name=vsecretagentconfiguration.kb.io
 
 var _ webhook.Validator = &SecretAgentConfiguration{}
 

@@ -30,6 +30,7 @@ var (
 	webhookSecretName                  = flag.String("webhook-secret-name", "", "K8s secret to store/read webhook certificates")
 	validatingWebhookConfigurationName = flag.String("validating-webhook-name", "", "Name of the validatingWebhookConfiguration")
 	mutatingWebhookConfigurationName   = flag.String("mutating-webhook-name", "", "Name of the mutatingWebhookConfiguration")
+	log                                = ctrl.Log.WithName("Initialize Webhook Certs")
 )
 
 // InitWebhookCertificates creates and injects req certs by the k8s webhooks
@@ -42,6 +43,7 @@ func InitWebhookCertificates(certDir string) error {
 
 	if len(*webhookSecretName) == 0 || len(*webhookNamespace) == 0 || len(*validatingWebhookConfigurationName) == 0 ||
 		len(*mutatingWebhookConfigurationName) == 0 || len(sans) == 0 {
+		log.Info("No webhook configuration args were supplied")
 		return errors.New("If ENABLE_WEBHOOKS is true, must provide: " +
 			"--webhook-secret-name, --webhook-service-name, --webhook-service-namespace, " +
 			"--validating-webhook-name, --mutating-webhook-name")
@@ -55,6 +57,7 @@ func InitWebhookCertificates(certDir string) error {
 	rootCAPem, certPEM, keyPEM, err := getWebhookSecret(k8sClient, *webhookSecretName, *webhookNamespace)
 	if err != nil || len(rootCAPem) == 0 || len(certPEM) == 0 || len(keyPEM) == 0 {
 		// If we couldn't obtain the certs from the k8s secret, generate the certs and patch the k8s secret for future use
+		log.Info("No certificate found, generating")
 		rootCA, leafCert, err := generateCertificates(sans)
 		if err != nil {
 			// Unable to create secret
@@ -62,8 +65,10 @@ func InitWebhookCertificates(certDir string) error {
 		}
 
 		// Patching webhook secret
+		log.Info("Patching webhook secret")
 		if err := patchWebhookSecret(k8sClient, rootCA.CertPEM, leafCert.CertPEM,
 			leafCert.PrivateKeyPEM, *webhookSecretName, *webhookNamespace); err != nil {
+			log.Info("Patching webhook secret")
 			return err
 		}
 		rootCAPem = rootCA.CertPEM
@@ -176,7 +181,8 @@ func createWebhookSecret(k client.Client, secretName, namespace string) (err err
 	k8sSecret.Data["tls.key"] = []byte("")
 	k8sSecret.Data["ca.crt"] = []byte("")
 	if err = k.Create(context.TODO(), k8sSecret); err != nil {
-		return
+		log.Error(err, "Couldn't create secret object")
+		return err
 	}
 	return
 }

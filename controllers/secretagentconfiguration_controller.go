@@ -53,12 +53,11 @@ type SecretAgentConfigurationReconciler struct {
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=validatingwebhookconfigurations;mutatingwebhookconfigurations,verbs=get;update;patch
 
 // Reconcile reconcile loop for CRD controller
-func (reconciler *SecretAgentConfigurationReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (reconciler *SecretAgentConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// status flags
 	rescheduleRetry := false
 	errorFound := false
 
-	ctx := context.Background()
 	d := time.Now().Add(time.Duration(20 * time.Minute))
 	ctx, cancel := context.WithDeadline(ctx, d)
 	defer cancel()

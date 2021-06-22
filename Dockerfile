@@ -1,9 +1,9 @@
 # For building forgerock/secret-agent:tagname
 
 # Global build arguments
-ARG GO_VERSION="1.14.4"
-ARG GO_PACKAGE_SHA256="aed845e4185a0b2a3c3d5e1d0a35491702c55889192bb9c30e67a3de6849c067"
-ARG KUBEBUILDER_VERSION="2.3.1"
+ARG GO_VERSION="1.16.5"
+ARG GO_PACKAGE_SHA256="b12c23023b68de22f74c0524f10b753e7b08b1504cb7e417eccebdd3fae49061"
+ARG KUBEBUILDER_VERSION="3.1.0"
 
 FROM openjdk:11-jre-slim as tester
 
@@ -11,7 +11,7 @@ ARG GO_VERSION
 ARG GO_PACKAGE_SHA256
 ARG KUBEBUILDER_VERSION
 
-ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64 DEBIAN_FRONTEND=noninteractive 
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64 DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install --no-install-recommends -y curl git-core make && \
     apt-get clean all
@@ -24,10 +24,11 @@ RUN curl -LO https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
     mv go /usr/local && \
     rm go${GO_VERSION}.linux-amd64.tar.gz
 
-RUN curl -L https://go.kubebuilder.io/dl/${KUBEBUILDER_VERSION}/${GOOS}/${GOARCH} | tar -xz -C /tmp/ && \
-    mv /tmp/kubebuilder_${KUBEBUILDER_VERSION}_${GOOS}_${GOARCH} /usr/local/kubebuilder
+RUN curl -L -o kubebuilder https://go.kubebuilder.io/dl/${KUBEBUILDER_VERSION}/$(go env GOOS)/$(go env GOARCH) \
+        && install kubebuilder /usr/local/bin/kubebuilder \
+            && /usr/local/go/bin/go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.1
 
-ENV PATH="/usr/local/go/bin:${PATH}:/usr/local/kubebuilder/bin" GOPATH="/root/go"
+ENV PATH="/usr/local/go/bin:${PATH}:/root/go/bin" GOPATH="/root/go"
 WORKDIR /root/go/src/github.com/ForgeRock/secret-agent
 
 CMD ["bash"]
@@ -61,9 +62,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -ldflags "-s -
 
 FROM openjdk:11-jre-slim as release
 
-RUN apt-get update && \                                                                               
-    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y curl lsof net-tools && \ 
-    apt-get clean all                                                                                 
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y curl lsof net-tools && \
+    apt-get clean all
 RUN addgroup --gid 11111 secret-agent && \
     adduser --shell /bin/bash --home /home/secret-agent --uid 11111 --disabled-password --ingroup root --gecos secret-agent secret-agent && \
     chown -R secret-agent:root /home/secret-agent
@@ -71,7 +72,7 @@ RUN addgroup --gid 11111 secret-agent && \
 WORKDIR /opt/gen
 COPY --from=builder --chown=secret-agent:root /workspace/manager /
 
-USER secret-agent
+USER 11111
 
 CMD ["bash"]
 

@@ -18,14 +18,14 @@ package main
 
 import (
 	"flag"
-	"net/http"
 	"os"
 
-	uberzap "go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
@@ -39,9 +39,10 @@ var (
 )
 
 func init() {
-	_ = clientgoscheme.AddToScheme(scheme)
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	_ = v1alpha1.AddToScheme(scheme)
+	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -51,7 +52,6 @@ func main() {
 	var enableLeaderElection bool
 	var certDir string
 	var debug bool
-	var lvl uberzap.AtomicLevel
 	var cloudSecretsNamespace string
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to. Set to 0 to disable metrics")
@@ -65,13 +65,12 @@ func main() {
 	flag.StringVar(&cloudSecretsNamespace, "cloud-secrets-namespace", "",
 		"Namespace where the cloud credentials secrets are located. Defaults to the SAC namespace")
 
-	flag.Parse()
-	if debug {
-		lvl = uberzap.NewAtomicLevelAt(uberzap.DebugLevel)
-	} else {
-		lvl = uberzap.NewAtomicLevelAt(uberzap.InfoLevel)
+	opts := zap.Options{
+		Development: true,
 	}
-	ctrl.SetLogger(zap.New(zap.UseDevMode(false), zap.Level(&lvl)))
+	opts.BindFlags(flag.CommandLine)
+	flag.Parse()
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
@@ -110,14 +109,12 @@ func main() {
 			os.Exit(1)
 		}
 	}
-
-	noop := func(_ *http.Request) error { return nil }
-	if err = mgr.AddReadyzCheck("ready", noop); err != nil {
-		setupLog.Error(err, "unable to add ready check")
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}
-	if err = mgr.AddHealthzCheck("healthy", noop); err != nil {
-		setupLog.Error(err, "unable to add health check")
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
 
