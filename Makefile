@@ -56,7 +56,7 @@ debug: generate fmt vet manifests
 	dlv debug -- ./main.$(GO) --debug
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
-	$(GO) run ./main.go
+	ENABLE_WEBHOOKS=false $(GO) run ./main.go
 
 # Install CRDs into a cluster
 install: manifests

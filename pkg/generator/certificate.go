@@ -191,8 +191,10 @@ func (kp *CertKeyPair) InSecret(secObject *corev1.Secret) bool {
 
 	publicPemKey := fmt.Sprintf("%s.pem", kp.Name)
 	privatePemKey := fmt.Sprintf("%s-private.pem", kp.Name)
+	combinedPemKey := fmt.Sprintf("%s-combined.pem", kp.Name)
 	if secObject.Data == nil || secObject.Data[publicPemKey] == nil ||
-		secObject.Data[privatePemKey] == nil || kp.IsEmpty() {
+		secObject.Data[privatePemKey] == nil || secObject.Data[combinedPemKey] == nil ||
+		kp.IsEmpty() {
 		return false
 	}
 	if bytes.Compare(secObject.Data[publicPemKey], kp.Cert.CertPEM) == 0 &&
@@ -359,8 +361,10 @@ func (kp *CertKeyPair) ToKubernetes(secObject *corev1.Secret) {
 	}
 	publicPemKey := fmt.Sprintf("%s.pem", kp.Name)
 	privatePemKey := fmt.Sprintf("%s-private.pem", kp.Name)
+	combinedPemKey := fmt.Sprintf("%s-combined.pem", kp.Name)
 	secObject.Data[publicPemKey] = kp.Cert.CertPEM
 	secObject.Data[privatePemKey] = kp.Cert.PrivateKeyPEM
+	secObject.Data[combinedPemKey] = append(kp.Cert.CertPEM, kp.Cert.PrivateKeyPEM...)
 	return
 }
 
