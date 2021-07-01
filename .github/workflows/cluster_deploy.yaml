@@ -1,0 +1,68 @@
+name: Cluster Deployment
+
+on: pull_request
+
+jobs:
+  create-cluster:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Kind and Create Cluster
+        run: |
+          set -o errexit
+          curl -o kind -L https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64
+          mkdir -p /opt/bin;
+          install kind /opt/bin/
+          /opt/bin/kind create cluster --image "kindest/node:v1.18.19"
+      - name: Build Secret Agent Image
+        run: docker build -t controller:latest .
+      - name: Load Secret Agent Image To Kind
+        run: /opt/bin/kind load docker-image controller:latest
+      - name: Deploy Secret Agent
+        run: |
+          set -x
+          mkdir -p /opt/bin \
+          	&& curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+          	&& cp kubectl /opt/bin  \
+          	&& curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"  | bash \
+          	&& cp kustomize /opt/bin \
+          	&& chmod a+rx /opt/bin/* \
+            && export PATH=$PATH:/opt/bin
+          kustomize build config/default | kubectl apply -f -
+          # until will fail if this is set, so make sure it's not
+          # It will fail because a pod will not be created immediately, so we retry a few times.
+          set +o errexit
+          declare -i COUNTER=0
+          until kubectl wait po --for=condition=Ready --timeout=2m --all-namespaces --selector app.kubernetes.io/name=secret-agent-manager -o name;
+          do
+             sleep 1
+             if [ $COUNTER -eq 5 ];
+             then
+                echo "Deployment failed to become healthy."
+                exit 1;
+              fi;
+              ((COUNTER++))
+              continue
+          done
+      - name: Deploy SecretAgentConfiguration
+        timeout-minutes: 10
+        run: |
+          # make shortcut
+          k=/opt/bin/kubectl
+          $k apply -f ./config/samples/secret-agent_v1alpha1_secretagentconfiguration.yaml
+          # Starting log the first time.
+          declare -i COUNTER=5
+          until [[ $($k get sac forgerock-sac -o jsonpath='{.status.state}') == "Completed" ]];
+          do
+            if (( COUNTER % 5 == 0 )); then echo "Secrets not ready yet"; fi
+            ((COUNTER++))
+            sleep 5
+          done
+          # make sure there's 13 secret objects.
+          if (( $($k get secrets -l managed-by-secret-agent=true -o name | wc -l) -ne 13 ));
+          then
+            echo "Couldn't find all the required secrets";
+            exit 1
+          fi
+          echo "All is well as best as we can tell."
