@@ -172,11 +172,11 @@ func (kt *KeyTool) LoadReferenceData(data map[string][]byte) error {
 }
 
 // LoadSecretFromManager  populates keytool data from secret manager
-func (kt *KeyTool) LoadSecretFromManager(ctx context.Context, sm secretsmanager.SecretManager, namespace, secretName string) error {
+func (kt *KeyTool) LoadSecretFromManager(ctx context.Context, sm secretsmanager.SecretManager, secretManagerKeyNamespace string) error {
 	var err error
-	keyToolFmt := fmt.Sprintf("%s_%s_%s", namespace, secretName, kt.Name)
-	storePassFmt := fmt.Sprintf("%s_%s_%s_storepass", namespace, secretName, kt.Name)
-	keyPasslFmt := fmt.Sprintf("%s_%s_%s_keypass", namespace, secretName, kt.Name)
+	keyToolFmt := fmt.Sprintf("%s_%s", secretManagerKeyNamespace, kt.Name)
+	storePassFmt := fmt.Sprintf("%s_%s_storepass", secretManagerKeyNamespace, kt.Name)
+	keyPasslFmt := fmt.Sprintf("%s_%s_keypass", secretManagerKeyNamespace, kt.Name)
 	kt.storeBytes, err = sm.LoadSecret(ctx, keyToolFmt)
 	if err != nil {
 		return err
@@ -195,12 +195,12 @@ func (kt *KeyTool) LoadSecretFromManager(ctx context.Context, sm secretsmanager.
 }
 
 // EnsureSecretManager adds keytool to secret manager
-func (kt *KeyTool) EnsureSecretManager(ctx context.Context, sm secretsmanager.SecretManager, namespace, secretName string) error {
+func (kt *KeyTool) EnsureSecretManager(ctx context.Context, sm secretsmanager.SecretManager, secretManagerKeyNamespace string) error {
 
 	var err error
-	keyToolFmt := fmt.Sprintf("%s_%s_%s", namespace, secretName, kt.Name)
-	storePassFmt := fmt.Sprintf("%s_%s_%s_storepass", namespace, secretName, kt.Name)
-	keyPasslFmt := fmt.Sprintf("%s_%s_%s_keypass", namespace, secretName, kt.Name)
+	keyToolFmt := fmt.Sprintf("%s_%s", secretManagerKeyNamespace, kt.Name)
+	storePassFmt := fmt.Sprintf("%s_%s_storepass", secretManagerKeyNamespace, kt.Name)
+	keyPasslFmt := fmt.Sprintf("%s_%s_keypass", secretManagerKeyNamespace, kt.Name)
 
 	err = sm.EnsureSecret(ctx, keyToolFmt, kt.storeBytes)
 	if err != nil {

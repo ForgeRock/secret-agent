@@ -222,9 +222,11 @@ All that is required is to provide a Kubernetes secret with the same name and sa
 There is a naming convention used by `secret-agent` to store and read secrets from the cloud secret managers. In general, the names follow the format:
 
 ```bash
-$prefix-$namespace-$secretName-$keyName [If secretsManagerPrefix is provided]
+$prefix-$secretName-$keyName [If secretsManagerPrefix is provided]
 $namespace-$secretName-$keyName [If no prefix is provided]
 ```
+
+When using a SecretsManagerPrefix writes to a secret manager doesn't use namespace, make sure your prefixes are unique.
 
 Due to cloud provider limitations, all `/`, `.` and `_` characters in secret names are replaced by `-` when accessing the cloud secret managers.
 
@@ -277,7 +279,7 @@ Parameter | Description | Default
 `spec.appConfig.createKubernetesObjects` | Create Kubernetes secrets for each generated secret. Can't be set to false if `spec.appConfig.secretsManager` is set to "none" | true
 `spec.appConfig.secretTimeout` | Set the timeout in seconds for generating each individual secret | 40
 `spec.appConfig.secretsManager` | Select the cloud provider to target. If "none", secrets will not be backed up in any cloud secret manager. Can't be set to "none" if `spec.appConfig.createKubernetesObjects` is false| none
-`spec.appConfig.secretsManagerPrefix` | Prefix added to the name of the secrets stored in the cloud secret manager. | ""
+`spec.appConfig.secretsManagerPrefix` | Prefix added to the name of the secrets stored in the cloud secret manager instead of the namespace. | ""
 `spec.appConfig.credentialsSecretName` | Name of the Kubernetes secret containing the credentials to access the cloud provider. | ""
 `spec.appConfig.gcpProjectID` | When using GCP as the secret mgr, specify the project ID.  | ""
 `spec.appConfig.awsRegion` | When using AWS  as the secret mgr, specify the region.  | ""

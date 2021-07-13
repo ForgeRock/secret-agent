@@ -153,10 +153,10 @@ func (kp *CertKeyPair) References() ([]string, []string) {
 }
 
 // LoadSecretFromManager populates RootCA data from secret manager
-func (kp *CertKeyPair) LoadSecretFromManager(ctx context.Context, sm secretsmanager.SecretManager, namespace, secretName string) error {
+func (kp *CertKeyPair) LoadSecretFromManager(ctx context.Context, sm secretsmanager.SecretManager, secretManagerKeyNamespace string) error {
 	var err error
-	publicPemKeyFmt := fmt.Sprintf("%s_%s_%s.pem", namespace, secretName, kp.Name)
-	privatePemKeyFmt := fmt.Sprintf("%s_%s_%s-private.pem", namespace, secretName, kp.Name)
+	publicPemKeyFmt := fmt.Sprintf("%s_%s.pem", secretManagerKeyNamespace, kp.Name)
+	privatePemKeyFmt := fmt.Sprintf("%s_%s-private.pem", secretManagerKeyNamespace, kp.Name)
 
 	kp.Cert.CertPEM, err = sm.LoadSecret(ctx, publicPemKeyFmt)
 	if err != nil {
@@ -170,10 +170,10 @@ func (kp *CertKeyPair) LoadSecretFromManager(ctx context.Context, sm secretsmana
 }
 
 // EnsureSecretManager populates secrete manager from RootCA data
-func (kp *CertKeyPair) EnsureSecretManager(ctx context.Context, sm secretsmanager.SecretManager, namespace, secretName string) error {
+func (kp *CertKeyPair) EnsureSecretManager(ctx context.Context, sm secretsmanager.SecretManager, secretManagerKeyNamespace string) error {
 	var err error
-	publicPemKeyFmt := fmt.Sprintf("%s_%s_%s.pem", namespace, secretName, kp.Name)
-	privatePemKeyFmt := fmt.Sprintf("%s_%s_%s-private.pem", namespace, secretName, kp.Name)
+	publicPemKeyFmt := fmt.Sprintf("%s_%s.pem", secretManagerKeyNamespace, kp.Name)
+	privatePemKeyFmt := fmt.Sprintf("%s_%s-private.pem", secretManagerKeyNamespace, kp.Name)
 	err = sm.EnsureSecret(ctx, publicPemKeyFmt, kp.Cert.CertPEM)
 	if err != nil {
 		return err

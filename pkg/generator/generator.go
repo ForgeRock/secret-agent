@@ -31,8 +31,8 @@ var (
 type KeyMgr interface {
 	References() ([]string, []string)
 	LoadReferenceData(data map[string][]byte) error
-	LoadSecretFromManager(context context.Context, sm secretsmanager.SecretManager, namespace, secretName string) error
-	EnsureSecretManager(context context.Context, sm secretsmanager.SecretManager, namespace, secretName string) error
+	LoadSecretFromManager(context context.Context, sm secretsmanager.SecretManager, secretManagerKeyNamespace string) error
+	EnsureSecretManager(context context.Context, sm secretsmanager.SecretManager, secretManagerKeyNamespace string) error
 	Generate() error
 	LoadFromData(secData map[string][]byte)
 	IsEmpty() bool
@@ -201,7 +201,7 @@ func (k *keyGenConfig) syncKeys(ctx context.Context) error {
 		return err
 	}
 	if k.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone {
-		err := k.keyMgr.EnsureSecretManager(ctx, k.SecretManager, k.Namespace, k.SecObject.Name)
+		err := k.keyMgr.EnsureSecretManager(ctx, k.SecretManager, k.secretManagerKeyNamespace())
 		if err != nil {
 			log.Error(err, "couldn't write to secret manager")
 			return err
@@ -246,14 +246,6 @@ func (k *keyGenConfig) configureDependencies(ctx context.Context) (bool, error) 
 			ok = len(val) > 0
 		} else {
 			secRefObject, err = k8ssecrets.LoadSecret(k.Client, ref, k.Namespace)
-			if k8serror.IsNotFound(err) {
-				log.V(0).Info("reference not found")
-				log.V(1).Info("skipping")
-				return false, err
-			} else if err != nil {
-				log.Error(err, "error calling kubernetes api")
-				return false, err
-			}
 			// add reference data to map
 			val, ok = secRefObject.Data[dataKey]
 		}
@@ -279,6 +271,14 @@ func (k *keyGenConfig) configureDependencies(ctx context.Context) (bool, error) 
 	return true, nil
 }
 
+func (k *keyGenConfig) secretManagerKeyNamespace() string {
+	if k.AppConfig.SecretsManagerPrefix != "" {
+		return k.SecObject.Name
+	} else {
+		return fmt.Sprintf("%s_%s", k.Namespace, k.SecObject.Name)
+	}
+}
+
 // secretManagerHasData load from secret manager and determine if empty
 func (k *keyGenConfig) secretManagerHasData(ctx context.Context) (bool, error) {
 	log := k.Log.WithValues(
@@ -286,7 +286,7 @@ func (k *keyGenConfig) secretManagerHasData(ctx context.Context) (bool, error) {
 		"secret_type", string(k.key.Type))
 	if k.AppConfig.SecretsManager != v1alpha1.SecretsManagerNone {
 		log.V(1).Info("loading secret from secret-manager")
-		if err := k.keyMgr.LoadSecretFromManager(ctx, k.SecretManager, k.Namespace, k.SecObject.Name); err != nil {
+		if err := k.keyMgr.LoadSecretFromManager(ctx, k.SecretManager, k.secretManagerKeyNamespace()); err != nil {
 			log.Error(err, "could not load secret from manager")
 			return false, errors.Wrap(err, "failed api call to secret manager")
 		}
@@ -296,7 +296,12 @@ func (k *keyGenConfig) secretManagerHasData(ctx context.Context) (bool, error) {
 
 // loadRefFromManager load ref from secret manager
 func (k *keyGenConfig) loadRefFromManager(ctx context.Context, refName, refKey string) ([]byte, error) {
-	nameFmt := fmt.Sprintf("%s_%s_%s", k.Namespace, refName, refKey)
+	var nameFmt string
+	if k.AppConfig.SecretsManagerPrefix != "" {
+		nameFmt = fmt.Sprintf("%s_%s", refName, refKey)
+	} else {
+		nameFmt = fmt.Sprintf("%s_%s_%s", k.Namespace, refName, refKey)
+	}
 	value, err := k.SecretManager.LoadSecret(ctx, nameFmt)
 	if err != nil {
 		return []byte{}, err
