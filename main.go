@@ -66,7 +66,7 @@ func main() {
 		"Namespace where the cloud credentials secrets are located. Defaults to the SAC namespace")
 
 	opts := zap.Options{
-		Development: true,
+		Development: debug,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
