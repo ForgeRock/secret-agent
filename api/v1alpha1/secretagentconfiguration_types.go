@@ -139,7 +139,7 @@ const (
 )
 
 // KeyConfigType Specifies which key type to use
-// +kubebuilder:validation:Enum=ca;literal;password;ssh;keyPair;truststore;keytool;
+// +kubebuilder:validation:Enum=ca;literal;password;ssh;keyPair;truststore;keytool;secret;
 type KeyConfigType string
 
 // Key Config Type Strings
@@ -151,6 +151,7 @@ const (
 	KeyConfigTypeKeyPair    KeyConfigType = "keyPair"
 	KeyConfigTypeTrustStore KeyConfigType = "truststore"
 	KeyConfigTypeKeytool    KeyConfigType = "keytool"
+	KeyConfigTypeSecret     KeyConfigType = "secret"
 )
 
 // KeytoolCmd Specifies the keytool command to use.

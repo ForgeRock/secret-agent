@@ -170,6 +170,8 @@ func newKeyGenerator(
 		}
 	case v1alpha1.KeyConfigTypeTrustStore:
 		keyInterface = NewTrustStore(key)
+	case v1alpha1.KeyConfigTypeSecret:
+		keyInterface = NewSecret(key)
 	default:
 		return &keyGenConfig{}, errors.New("couldn't find key generator type")
 	}
