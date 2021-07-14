@@ -22,3 +22,12 @@ bin
 *.swp
 *.swo
 *~
+
+/.project
+/.vscode/
+
+testConfiguration1.yaml
+testConfiguration2.yaml
+secret-agent.yaml
+secret-agent-ha.yaml
+

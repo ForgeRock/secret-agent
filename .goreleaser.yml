@@ -32,4 +32,3 @@ release:
   name_template: "{{.Tag}}"
   extra_files:
     - glob: ./secret-agent.yaml
-    - glob: ./secret-agent-ha.yaml
