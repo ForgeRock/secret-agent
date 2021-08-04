@@ -126,9 +126,9 @@ Run the following commands to enable workload identity for the `secret-agent` de
 PROJECTID=myproject #GCP project ID
 GSA_NAME=mygcpserviceaccount #GCP service account name
 # Create the GCP IAM policy binding
-gcloud iam service-accounts add-iam-policy-binding --role roles/iam.workloadIdentityUser --member "serviceAccount:${PROJECTID}.svc.id.goog[secret-agent-system/secret-agent-manager-service-account]" ${GSA_NAME}@${PROJECTID}.iam.gserviceaccount.com
+gcloud iam service-accounts add-iam-policy-binding --role roles/iam.workloadIdentityUser --member "serviceAccount:${PROJECTID}.svc.id.goog[secret-agent-system/secret-agent-controller-manager]" ${GSA_NAME}@${PROJECTID}.iam.gserviceaccount.com
 # Annotate the Kubernetes service account
-kubectl -n secret-agent-system annotate serviceaccounts secret-agent-manager-service-account iam.gke.io/gcp-service-account=${GSA_NAME}@${PROJECTID}.iam.gserviceaccount.com
+kubectl -n secret-agent-system annotate serviceaccounts secret-agent-controller-manager iam.gke.io/gcp-service-account=${GSA_NAME}@${PROJECTID}.iam.gserviceaccount.com
 ```
 
 **Note: in order to use workload identity, no `spec.appConfig.credentialsSecretName` should be provided**. If credentials are provided, `secret-agent` will use the provided credentials instead.
