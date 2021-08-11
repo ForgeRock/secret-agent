@@ -8,7 +8,7 @@ import (
 )
 
 func TestSecret(t *testing.T) {
-	value, err := NewPEMSecret(256)
+	value, err := NewGenericPEMKey(256)
 	if err != nil {
 		t.Error("Found an error when generating secret, not expected")
 	}
