@@ -8,29 +8,29 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
-	"github.com/ForgeRock/secret-agent/pkg/secret"
+	secretkey "github.com/ForgeRock/secret-agent/pkg/secret"
 	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
 )
 
-// Secret randomly generated of specified length
-type Secret struct {
+// SecretKey randomly generated of specified length
+type SecretKey struct {
 	Name   string
-	Length int
 	Value  []byte
+	V1Spec *v1alpha1.KeySpec
 }
 
 // References return names of secrets that should be looked up
-func (sec *Secret) References() ([]string, []string) {
+func (sec *SecretKey) References() ([]string, []string) {
 	return []string{}, []string{}
 }
 
 // LoadReferenceData loads references from data
-func (sec *Secret) LoadReferenceData(data map[string][]byte) error {
+func (sec *SecretKey) LoadReferenceData(data map[string][]byte) error {
 	return nil
 }
 
 // LoadSecretFromManager populates Secret data from secret manager
-func (sec *Secret) LoadSecretFromManager(context context.Context, sm secretsmanager.SecretManager, secretManagerKeyNamespace string) error {
+func (sec *SecretKey) LoadSecretFromManager(context context.Context, sm secretsmanager.SecretManager, secretManagerKeyNamespace string) error {
 	var err error
 	secFmt := fmt.Sprintf("%s_%s", secretManagerKeyNamespace, sec.Name)
 	sec.Value, err = sm.LoadSecret(context, secFmt)
@@ -41,7 +41,7 @@ func (sec *Secret) LoadSecretFromManager(context context.Context, sm secretsmana
 }
 
 // EnsureSecretManager populates secrets manager from Secret data
-func (sec *Secret) EnsureSecretManager(context context.Context, sm secretsmanager.SecretManager, secretManagerKeyNamespace string) error {
+func (sec *SecretKey) EnsureSecretManager(context context.Context, sm secretsmanager.SecretManager, secretManagerKeyNamespace string) error {
 	var err error
 	secFmt := fmt.Sprintf("%s_%s", secretManagerKeyNamespace, sec.Name)
 	err = sm.EnsureSecret(context, secFmt, sec.Value)
@@ -52,7 +52,7 @@ func (sec *Secret) EnsureSecretManager(context context.Context, sm secretsmanage
 }
 
 // InSecret return true if the key is one found in the secret
-func (sec *Secret) InSecret(secObject *corev1.Secret) bool {
+func (sec *SecretKey) InSecret(secObject *corev1.Secret) bool {
 	if secObject.Data == nil || secObject.Data[sec.Name] == nil || sec.IsEmpty() {
 		return false
 	}
@@ -64,8 +64,28 @@ func (sec *Secret) InSecret(secObject *corev1.Secret) bool {
 }
 
 // Generate generates data
-func (sec *Secret) Generate() error {
-	value, err := secret.NewPEMSecret(sec.Length)
+func (sec *SecretKey) Generate() error {
+	var err error
+	value := make([]byte, 0)
+	switch sec.V1Spec.Algorithm {
+	case v1alpha.AlgorithmReadableBits:
+		secretkey.NewSecretBits(*sec.V1Spec.Length, false)
+	case v1alpha.AlgorithmBinaryBits:
+		secretkey.NewSecretBits(*sec.V1Spec.Length, true)
+	case v1alpha.AlgorithmGenericPEM:
+		secretkey.NewGenericPEMKey(*sec.V1Spec.Length)
+	case v1alpha.AlgorithmAES128:
+		secretkey.NewAlgPEMKey(secretkey.AES128)
+	case v1alpha.AlgorithmAES192:
+		secretkey.NewAlgPEMKey(secretkey.AES192)
+	case v1alpha.AlgorithmAES256:
+		secretkey.NewAlgPEMKey(secretkey.AES256)
+	case v1alpha.AlgorithmHMACSHA256:
+		secretkey.NewAlgPEMKey(secretkey.HMACSHA256)
+	case v1alpha.AlgorithmHMACSHA512:
+		secretkey.NewAlgPEMKey(secretkey.HMACSHA512)
+
+	}
 	if err != nil {
 		return err
 	}
@@ -74,7 +94,7 @@ func (sec *Secret) Generate() error {
 }
 
 // IsEmpty boolean determines if the struct is empty
-func (sec *Secret) IsEmpty() bool {
+func (sec *SecretKey) IsEmpty() bool {
 	if len(sec.Value) == 0 {
 		return true
 	}
@@ -83,13 +103,13 @@ func (sec *Secret) IsEmpty() bool {
 }
 
 // LoadFromData loads data from kubernetes secret
-func (sec *Secret) LoadFromData(secData map[string][]byte) {
+func (sec *SecretKey) LoadFromData(secData map[string][]byte) {
 	sec.Value = secData[sec.Name]
 	return
 }
 
 // ToKubernetes "marshals" object to kubernetes object
-func (sec *Secret) ToKubernetes(secret *corev1.Secret) {
+func (sec *SecretKey) ToKubernetes(secret *corev1.Secret) {
 	// data could be nil
 	if secret.Data == nil {
 		secret.Data = make(map[string][]byte)
@@ -98,10 +118,10 @@ func (sec *Secret) ToKubernetes(secret *corev1.Secret) {
 }
 
 // NewSecret creates new Secret type for reconciliation
-func NewSecret(keyConfig *v1alpha1.KeyConfig) *Secret {
-	password := &Secret{
+func NewSecretKey(keyConfig *v1alpha1.KeyConfig) *Secret {
+	password := &SecretKey{
 		Name:   keyConfig.Name,
-		Length: *keyConfig.Spec.Length,
+		V1Spec: keyConfig,
 	}
 	return password
 }

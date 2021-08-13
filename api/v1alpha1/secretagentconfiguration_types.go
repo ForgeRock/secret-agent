@@ -118,13 +118,21 @@ const (
 )
 
 // AlgorithmType Specifies which keystore algorithm to use
-// +kubebuilder:validation:Enum=ECDSAWithSHA256;SHA256WithRSA
+// +kubebuilder:validation:Enum=ECDSAWithSHA256;SHA256WithRSA;ReadableKey;BinaryKey;GenericPEM;AES128PEM;AES192PEM;AES256PEM;HMACSHA256;HMACSHA512
 type AlgorithmType string
 
 // AlgorithmType strings
 const (
 	AlgorithmTypeECDSAWithSHA256 AlgorithmType = "ECDSAWithSHA256"
-	AlgorithmTypeSHA256WithRSA   AlgorithmType = "SHA256WithRSA"
+	AlgorithmTypeSHA256WithRSA                 = "SHA256WithRSA"
+	AlgorithmReadableBits                      = "ReadableKey"
+	AlgorithmBinaryBits                        = "BinaryKey"
+	AlgorithmGenericPEM                        = "GenericPEM"
+	AlgorithmAES128                            = "AES128PEM"
+	AlgorithmAES192                            = "AES192PEM"
+	AlgorithmAES256                            = "AES256PEM"
+	AlgorithmHMACSHA256                        = "HMACSHA256"
+	AlgorithmHMACSHA512                        = "HMACSHA512"
 )
 
 // StoreType Specifies which keystore store type to use
@@ -151,7 +159,7 @@ const (
 	KeyConfigTypeKeyPair    KeyConfigType = "keyPair"
 	KeyConfigTypeTrustStore KeyConfigType = "truststore"
 	KeyConfigTypeKeytool    KeyConfigType = "keytool"
-	KeyConfigTypeSecret     KeyConfigType = "secret"
+	KeyConfigTypeSecret     KeyConfigType = "secretkey"
 )
 
 // KeytoolCmd Specifies the keytool command to use.
@@ -230,13 +238,10 @@ type KeySpec struct {
 	DistinguishedName     *DistinguishedName `json:"distinguishedName,omitempty"`
 	SignedWithPath        string             `json:"signedWithPath,omitempty"`
 	StoreType             StoreType          `json:"storeType,omitempty"`
-	StorePassPath         string             `json:"storePassPath,omitempty"`
-	KeyPassPath           string             `json:"keyPassPath,omitempty"`
 	Sans                  []string           `json:"sans,omitempty"`
 	TruststoreImportPaths []string           `json:"truststoreImportPaths,omitempty"`
 	SelfSigned            bool               `json:"selfSigned,omitempty"`
 	Duration              *metav1.Duration   `json:"duration,omitempty"`
-	UseBinaryCharacters   bool               `json:"useBinaryCharacters,omitempty"`
 	IsBase64              bool               `json:"isBase64,omitempty"`
 	PEMFormat             bool               `json:"pemFormat,omitempty"`
 
@@ -245,6 +250,12 @@ type KeySpec struct {
 
 	// +kubebuilder:validation:MinItems=1
 	KeytoolAliases []*KeytoolAliasConfig `json:"keytoolAliases,omitempty" validate:"dive,unique=Name"`
+
+	// deprecating
+	// used for password, we dont need this anymore.
+	UseBinaryCharacters bool   `json:"useBinaryCharacters,omitempty"`
+	StorePassPath       string `json:"storePassPath,omitempty"`
+	KeyPassPath         string `json:"keyPassPath,omitempty"`
 }
 
 // KeytoolAliasConfig is the configuration for a keystore alias

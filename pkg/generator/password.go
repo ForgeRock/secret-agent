@@ -3,17 +3,13 @@ package generator
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"fmt"
-	"math/big"
-
-	b64 "encoding/base64"
 
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
+	secretkey "github.com/ForgeRock/secret-agent/pkg/secret"
 	"github.com/ForgeRock/secret-agent/pkg/secretsmanager"
-	"github.com/pkg/errors"
 )
 
 // Password randomly generated of specified length
@@ -70,32 +66,11 @@ func (pwd *Password) InSecret(secObject *corev1.Secret) bool {
 
 // Generate generates data
 func (pwd *Password) Generate() error {
-	var max *big.Int
-	alphanumericBytes := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	bytes := make([]byte, pwd.Length)
-	for i := range bytes {
-		if pwd.BinaryMode {
-			max = big.NewInt(int64(255))
-		} else {
-			max = big.NewInt(int64(len(alphanumericBytes)))
-		}
-
-		randInt, err := rand.Int(rand.Reader, max)
-		if err != nil {
-			return errors.WithStack(err)
-		}
-		if pwd.BinaryMode {
-			bytes[i] = uint8(randInt.Int64())
-		} else {
-			bytes[i] = alphanumericBytes[int(randInt.Int64())]
-		}
+	bytes, err := secretkey.NewSecretBits(pwd.Length, pwd.BinaryMode)
+	if err != nil {
+		return err
 	}
-	if pwd.BinaryMode {
-		pwd.Value = []byte(b64.StdEncoding.EncodeToString(bytes))
-		return nil
-	}
-	pwd.Value = bytes
-	return nil
+	return bytes
 }
 
 // IsEmpty boolean determines if the struct is empty
