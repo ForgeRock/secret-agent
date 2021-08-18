@@ -251,10 +251,9 @@ func ConfigurationStructLevelValidator(sl validator.StructLevel) {
 					return
 				}
 
-				for aliasIndex, alias := range key.Spec.TruststoreImportPaths {
+				for _, alias := range key.Spec.TruststoreImportPaths {
 					if !pathExistsInSecretAgentConfiguration(alias, config.Secrets) {
-						sl.ReportError(config.Secrets[secretIndex].Keys[keyIndex].Spec.TruststoreImportPaths[aliasIndex], name,
-							"truststoreImportPaths", "truststoreImportPathsNotFound", "")
+						log.Info(fmt.Sprintf("%s not configured in the current SAC object, assuming that it's an external secret.", alias))
 						return
 					}
 

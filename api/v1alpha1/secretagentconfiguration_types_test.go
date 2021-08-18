@@ -163,7 +163,7 @@ func TestConfigurationStructLevelValidatorTrustStore(t *testing.T) {
 		Name: "fdsaKey",
 		Type: KeyConfigTypeTrustStore,
 		Spec: &KeySpec{
-			TruststoreImportPaths: []string{"asdfSecret/badKey"},
+			TruststoreImportPaths: []string{"asdfSecret/externalKey"},
 		},
 	}
 	config := getConfig()
@@ -172,8 +172,8 @@ func TestConfigurationStructLevelValidatorTrustStore(t *testing.T) {
 	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
 	// Missing PrivateKeyPath
 	err := validate.Struct(config)
-	if err == nil {
-		t.Error("Missing PrivateKeyPath: Expected error, got none")
+	if err != nil {
+		t.Errorf("Used external secret Expected no error, got one %+v", err)
 	}
 
 	// Valid path
