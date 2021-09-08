@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -241,7 +241,7 @@ func patchWebhookSecret(k client.Client, rootCAPem, certPEM, keyPEM []byte, name
 // patchValidatingWebhookConfiguration patches the given ValidatingWebhookConfiguration with the caBuncle
 func patchValidatingWebhookConfiguration(k client.Client, rootCAPem []byte, name string) (err error) {
 
-	webhookConfiguration := &admissionregistrationv1beta1.ValidatingWebhookConfiguration{}
+	webhookConfiguration := &admissionregistrationv1.ValidatingWebhookConfiguration{}
 	if err = k.Get(context.TODO(), types.NamespacedName{Name: name}, webhookConfiguration); err != nil {
 		return
 	}
@@ -257,7 +257,7 @@ func patchValidatingWebhookConfiguration(k client.Client, rootCAPem []byte, name
 // patchMutatingWebhookConfiguration patches the given MutatingWebhookConfiguration with the caBuncle
 func patchMutatingWebhookConfiguration(k client.Client, rootCAPem []byte, name string) (err error) {
 
-	webhookConfiguration := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
+	webhookConfiguration := &admissionregistrationv1.MutatingWebhookConfiguration{}
 	if err = k.Get(context.TODO(), types.NamespacedName{Name: name}, webhookConfiguration); err != nil {
 		return
 	}
