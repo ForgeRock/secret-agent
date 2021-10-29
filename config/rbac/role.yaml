@@ -23,7 +23,7 @@ rules:
   resources:
   - secrets/finalizers
   verbs:
-  - update
+  - '*'
 - apiGroups:
   - admissionregistration.k8s.io
   resources:
@@ -50,7 +50,7 @@ rules:
   resources:
   - secretagentconfigurations/finalizers
   verbs:
-  - update
+  - '*'
 - apiGroups:
   - secret-agent.secrets.forgerock.io
   resources:
