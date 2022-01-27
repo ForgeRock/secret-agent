@@ -6,6 +6,17 @@
 
 The `secret-agent` is a Kubernetes operator that generates the secrets required by the ForgeRock® Identity Platform. The secrets are stored in-cluster as Kubernetes secrets and can also be stored in a cloud secret manager.
 
+## Roadmap
+
+Secret agent is now feature complete. Future updates will be limited to bug fixes.
+
+Secret agent was originally designed to fulfill a short term obective to create and manage secrets for the ForgeRock platform running on Kubernetes.
+The longer term roadmap for platform secrets management is centered around:
+
+* Direct integration with cloud secret management (GCP Secret Manager, Vault, etc.) using ForgeRock's commons secrets API.
+* Management of certificates using https://certmanager.io. Cert-manager is the defacto Kubernetes standard for certificate management.
+* Backup and restore of Kubernetes secrets using cloud native technologies such as https://velero.io, or vendor provided backup services (Backup for GKE).
+
 ## Installation
 
 To install the latest `secret-agent` release in a Kubernetes environment, run:
