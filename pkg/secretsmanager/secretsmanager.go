@@ -509,8 +509,17 @@ func (sm *secretManagerAzure) LoadSecret(ctx context.Context, secretName string)
 
 	response, err := sm.client.GetSecret(ctx, fmt.Sprintf(azureVaultURLFmt, sm.azureVaultName), secretID, "")
 	if err != nil {
-		if e, ok := err.(autorest.DetailedError); ok && e.StatusCode.(int) == 404 {
-			return []byte{}, nil
+		// We can ignore some errors
+		if de, ok := err.(autorest.DetailedError); ok {
+			if re, ok := de.Original.(*azure.RequestError); ok {
+				if re.ServiceError.Code == "SecretNotFound" {
+					// Secret not existing is fine, as that means we will create a new secret
+					return []byte{}, nil
+				} else if code, ok := re.ServiceError.InnerError["code"].(string); ok && code == "SecretDisabled" {
+					// Disabled secret also fine, as it means we will create a new version of the secret
+					return []byte{}, nil
+				}
+			}
 		}
 		return []byte{}, err
 	}
