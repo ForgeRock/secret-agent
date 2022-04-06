@@ -237,8 +237,9 @@ func newAWS(config *v1alpha1.AppConfig, rClient client.Client, cloudCredNS strin
 	// secretCtx, cancel := context.WithTimeout(ctx, 40*time.Second)
 
 	return &secretManagerAWS{
-		client: client,
-		region: config.AWSRegion,
+		client:               client,
+		secretsManagerPrefix: config.SecretsManagerPrefix,
+		region:               config.AWSRegion,
 		// cancel: cancel,
 	}, nil
 }
