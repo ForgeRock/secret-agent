@@ -55,7 +55,7 @@ type SecretManager interface {
 	CloseClient()
 }
 
-//  secretManagerGCP container for GCP secret manager properties
+// secretManagerGCP container for GCP secret manager properties
 type secretManagerGCP struct {
 	client               *secretmanager.Client
 	secretsManagerPrefix string
@@ -68,6 +68,7 @@ type secretManagerAWS struct {
 	region               string
 	secretsManagerPrefix string
 	cancel               context.CancelFunc
+	config               v1alpha1.AppConfig
 }
 
 // secretManagerAzure container for Azure secret manager properties
@@ -240,6 +241,7 @@ func newAWS(config *v1alpha1.AppConfig, rClient client.Client, cloudCredNS strin
 		client:               client,
 		secretsManagerPrefix: config.SecretsManagerPrefix,
 		region:               config.AWSRegion,
+		config:               *config,
 		// cancel: cancel,
 	}, nil
 }
@@ -429,6 +431,9 @@ func (sm *secretManagerAWS) EnsureSecret(ctx context.Context, secretName string,
 			preExists = false
 			input := &awssecretsmanager.CreateSecretInput{
 				Name: aws.String(secretID),
+			}
+			if sm.config.AWSKmsKeyId != "" {
+				input.KmsKeyId = aws.String(sm.config.AWSKmsKeyId)
 			}
 			_, err = sm.client.CreateSecret(input)
 			if err != nil {

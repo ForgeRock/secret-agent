@@ -294,6 +294,7 @@ Parameter | Description | Default
 `spec.appConfig.credentialsSecretName` | Name of the Kubernetes secret containing the credentials to access the cloud provider. | ""
 `spec.appConfig.gcpProjectID` | When using GCP as the secret mgr, specify the project ID.  | ""
 `spec.appConfig.awsRegion` | When using AWS  as the secret mgr, specify the region.  | ""
+`spec.appConfig.awsKmsKeyId` | When using AWS  as the secret mgr, you can specifiy the KMS Key Id else will use the default AWS managed KMS key, which poses some limitations on the secret.  | ""
 `spec.appConfig.azureVaultName` | When using Azure as the secret mgr, specify the vault name. | ""
 `spec.secrets` | List of Kubernetes secrets to create. See [Secret Config](#secret-config). | []
 
