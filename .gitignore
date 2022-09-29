@@ -31,3 +31,5 @@ testConfiguration2.yaml
 secret-agent.yaml
 secret-agent-ha.yaml
 
+# vendor
+vendor/

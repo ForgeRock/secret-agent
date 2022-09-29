@@ -189,6 +189,7 @@ type AppConfig struct {
 	CredentialsSecretName string         `json:"credentialsSecretName,omitempty"`
 	GCPProjectID          string         `json:"gcpProjectID,omitempty"`
 	AWSRegion             string         `json:"awsRegion,omitempty"`
+	AWSKmsKeyId           string         `json:"awsKmsKeyId,omitempty"`
 	AzureVaultName        string         `json:"azureVaultName,omitempty"`
 
 	// Optional timeout value to generate a individual secret. Defaults to 40
