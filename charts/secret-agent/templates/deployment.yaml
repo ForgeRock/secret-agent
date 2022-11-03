@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "secret-agent.fullname" . }}
+  labels:
+    {{- include "secret-agent.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "secret-agent.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "secret-agent.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "secret-agent.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /manager
+          args:
+            - --keytoolPath=/usr/local/openjdk-11/bin/keytool
+            - --opensslPath=/usr/bin/openssl
+            - --webhook-service-ns={{ .Release.Namespace }}
+            - --webhook-service-name={{ include "secret-agent.fullname" . }}
+            - --validating-webhook-name={{ include "secret-agent.fullname" . }}
+            - --mutating-webhook-name={{ include "secret-agent.fullname" . }}
+            - --webhook-secret-name=webhook-server-cert
+            - --cloud-secrets-namespace={{ .Release.Namespace }}
+          ports:
+            - name: webhook
+              containerPort: 9443
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            {{- with .Values.livenessProbe }}
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            {{- with .Values.readinessProbe }}
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        - name: {{ .Chart.Name }}-kube-rbac-proxy
+          image: "gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --secure-listen-address=0.0.0.0:8443
+            - --upstream=http://127.0.0.1:8080/
+            - --logtostderr=true
+            - --v=10
+          ports:
+            - name: metrics
+              containerPort: 8443
+              protocol: TCP
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
