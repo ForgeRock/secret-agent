@@ -1,0 +1,26 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "secret-agent.fullname" . }}
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: {{ include "secret-agent.fullname" . }}
+      namespace: {{ .Release.Namespace | quote }}
+      path: /mutate-secret-agent-secrets-forgerock-io-v1alpha1-secretagentconfiguration
+  failurePolicy: Fail
+  name: msecretagentconfiguration.kb.io
+  rules:
+  - apiGroups:
+    - secret-agent.secrets.forgerock.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - secretagentconfigurations
+  sideEffects: None
+
