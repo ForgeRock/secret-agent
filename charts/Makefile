@@ -7,7 +7,7 @@ ifndef CHART_NAME
 CHART_NAME=secret-agent
 endif
 ifndef CHART_VERSION
-CHART_VERSION=v1.1.6
+CHART_VERSION=$(shell grep ^version: $(CHART_NAME)/Chart.yaml | awk '{print $$2}')
 endif
 CHART_PACKAGE=$(CHART_NAME)-$(CHART_VERSION).tgz
 
