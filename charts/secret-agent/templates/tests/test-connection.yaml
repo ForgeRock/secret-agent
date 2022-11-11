@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "secret-agent.fullname" . }}-test-connection"
+  labels:
+    {{- include "secret-agent.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget-webhook
+      image: busybox
+      command: ['wget']
+      args: ['{{ include "secret-agent.fullname" . }}:{{ .Values.service.ports.webhook.port }}']
+    - name: wget-metrics
+      image: busybox
+      command: ['wget']
+      args: ['{{ include "secret-agent.fullname" . }}:{{ .Values.service.ports.metrics.port }}']
+  restartPolicy: Never
