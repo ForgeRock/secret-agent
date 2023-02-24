@@ -11,10 +11,10 @@ jobs:
       - name: Install Kind and Create Cluster
         run: |
           set -o errexit
-          curl -o kind -L https://kind.sigs.k8s.io/dl/v0.11.1/kind-linux-amd64
+          curl -o kind -L https://kind.sigs.k8s.io/dl/v0.17.0/kind-linux-amd64
           mkdir -p /opt/bin;
           install kind /opt/bin/
-          /opt/bin/kind create cluster --image "kindest/node:v1.18.19"
+          /opt/bin/kind create cluster --image "kindest/node:v1.25.3"
       - name: Build Secret Agent Image
         run: docker build -t controller:latest .
       - name: Load Secret Agent Image To Kind
