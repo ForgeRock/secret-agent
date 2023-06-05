@@ -33,3 +33,6 @@ secret-agent-ha.yaml
 
 # vendor
 vendor/
+
+# Github Actions generated files
+*.json
