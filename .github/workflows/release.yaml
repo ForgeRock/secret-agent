@@ -9,18 +9,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3.5.2
       with:
         fetch-depth: 0
 
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v4.0.1
       with:
         go-version: ^1.16
       id: go
 
     - name: Setup Kustomize
-      uses: imranismail/setup-kustomize@v1
+      uses: imranismail/setup-kustomize@v2.0.0
       with:
         kustomize-version: "3.9.3"
     - name: Set Go Releaser Environment
@@ -45,12 +45,12 @@ jobs:
     
     - name: Extract metadata (tags, labels) for Docker
       id: meta
-      uses: docker/metadata-action@v3.4.1
+      uses: docker/metadata-action@v4.4.0
       with:
         images: forgerock/secret-agent
     
     - name: Build and push Docker image
-      uses: docker/build-push-action@v2.6.1
+      uses: docker/build-push-action@v4
       with:
         context: .
         push: true
@@ -58,7 +58,7 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
 
     - name: Create Release
-      uses: goreleaser/goreleaser-action@v2
+      uses: goreleaser/goreleaser-action@v4.2.0
       with:
         version: latest
         args: release --rm-dist
@@ -68,7 +68,7 @@ jobs:
         IMAGE_NAME: "forgerock/secret-agent"
 
     - name: Upload Artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3.1.2
       with:
         name: artifacts
         path: dist/*.tar.gz
