@@ -66,7 +66,7 @@ jobs:
       uses: goreleaser/goreleaser-action@v2
       with:
         version: latest
-        args: --snapshot --rm-dist
+        args: --snapshot --clean
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TAG_NAME: ${{ env.BUILD_DATE }}-pr.${{ github.event.pull_request.number }}
