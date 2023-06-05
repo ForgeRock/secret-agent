@@ -32,7 +32,7 @@ jobs:
     - name: Kustomize Build
       run: |
         cd config/manager
-        kustomize edit set image controller=${{ variables.CONTAINER_REGISTRY }}:${TAG_NAME}
+        kustomize edit set image controller=${{ vars.CONTAINER_REGISTRY }}:${TAG_NAME}
         cd ../../
         kustomize build config/default > secret-agent.yaml
         git checkout -- config/manager/kustomization.yaml
@@ -41,7 +41,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v4.4.0
       with:
-        images: ${{ variables.CONTAINER_REGISTRY }}
+        images: ${{ vars.CONTAINER_REGISTRY }}
     
     - name: Build and push Docker image
       uses: docker/build-push-action@v4
@@ -59,7 +59,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GIT_COMMIT: ${{ github.sha }}
-        IMAGE_NAME: ${{ variables.CONTAINER_REGISTRY }}
+        IMAGE_NAME: ${{ vars.CONTAINER_REGISTRY }}
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v3.1.2
