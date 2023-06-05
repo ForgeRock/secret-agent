@@ -37,6 +37,20 @@ jobs:
         kustomize build config/default > secret-agent.yaml
         git checkout -- config/manager/kustomization.yaml
     
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v0.6.0'
+      with:
+        credentials_json: '${{ secrets.ARTIFACT_REGISTRY_KEY }}'
+        token_format: 'access_token'
+
+    - uses: 'docker/login-action@v1'
+      name: 'Docker login'
+      with:
+        registry: '${{ vars.CONTAINER_REGISTRY }}'
+        username: 'oauth2accesstoken'
+        password: '${{ steps.auth.outputs.access_token }}'
+
     - name: Extract metadata (tags, labels) for Docker
       id: meta
       uses: docker/metadata-action@v4.4.0
