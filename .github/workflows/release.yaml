@@ -59,7 +59,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GIT_COMMIT: ${{ github.sha }}
-        IMAGE_NAME: "forgerock/secret-agent"
+        IMAGE_NAME: ${{ variables.CONTAINER_REGISTRY }}
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v3.1.2
