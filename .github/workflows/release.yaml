@@ -32,22 +32,16 @@ jobs:
     - name: Kustomize Build
       run: |
         cd config/manager
-        kustomize edit set image controller=forgerock/secret-agent:${TAG_NAME}
+        kustomize edit set image controller=${{ variables.CONTAINER_REGISTRY }}:${TAG_NAME}
         cd ../../
         kustomize build config/default > secret-agent.yaml
         git checkout -- config/manager/kustomization.yaml
-
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v1.10.0
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
     
     - name: Extract metadata (tags, labels) for Docker
       id: meta
       uses: docker/metadata-action@v4.4.0
       with:
-        images: forgerock/secret-agent
+        images: ${{ variables.CONTAINER_REGISTRY }}
     
     - name: Build and push Docker image
       uses: docker/build-push-action@v4
@@ -65,7 +59,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GIT_COMMIT: ${{ github.sha }}
-        IMAGE_NAME: "forgerock/secret-agent"
+        IMAGE_NAME: ${{ variables.CONTAINER_REGISTRY }}
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v3.1.2
