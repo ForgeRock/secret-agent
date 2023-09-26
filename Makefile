@@ -1,6 +1,15 @@
+#
+ifndef DEFAULT_BUILDX_BUILDER
+DEFAULT_BUILDX_BUILDER=default
+endif
 
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+DEFAULT_IMG_REGISTRY=us-docker.pkg.dev
+DEFAULT_IMG_REPOSITORY=forgeops-public/images
+ifndef DEFAULT_IMG_TAG
+DEFAULT_IMG_TAG=latest
+endif
+IMG ?= controller:${DEFAULT_IMG_TAG}
 VERSION=$(shell echo $(IMG) | awk -F ':' '{print $$2}')
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 #CRD_OPTIONS ?= "crd:trivialVersions=false"
@@ -102,6 +111,9 @@ docker-build: int-test
 # Push the docker image
 docker-push:
 	docker push ${IMG}
+
+docker-buildx-bake:
+	REGISTRY=${DEFAULT_IMG_REGISTRY} REPOSITORY=${DEFAULT_IMG_REPOSITORY} BUILD_TAG=${DEFAULT_IMG_TAG} docker buildx bake --file=docker-bake.hcl --builder=${DEFAULT_BUILDX_BUILDER}
 
 # find or download controller-gen
 # download controller-gen if necessary
