@@ -5,7 +5,7 @@ ARG GO_VERSION="1.16.5"
 ARG GO_PACKAGE_SHA256="b12c23023b68de22f74c0524f10b753e7b08b1504cb7e417eccebdd3fae49061"
 ARG KUBEBUILDER_VERSION="3.1.0"
 
-FROM openjdk:21-ea-23-jdk-slim as tester
+FROM openjdk:22-ea-15-jdk-slim-bullseye as tester
 
 ARG GO_VERSION
 ARG GO_PACKAGE_SHA256
@@ -61,7 +61,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH GO111MODULE=on go build -ldflags
 
 
 
-FROM openjdk:21-ea-23-jdk-slim as release
+FROM openjdk:22-ea-15-jdk-slim-bullseye as release
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y lsof net-tools && \
