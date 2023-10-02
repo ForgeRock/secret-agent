@@ -63,7 +63,7 @@ jobs:
         echo "BUILD_DATE="$(date '+%Y-%m-%d-%H:%M:%S') >> $GITHUB_ENV
     - name: Build Snapshot
       if: ${{ github.event_name == 'pull_request' }}
-      uses: goreleaser/goreleaser-action@v2
+      uses: goreleaser/goreleaser-action@v5
       with:
         version: latest
         args: --snapshot --clean

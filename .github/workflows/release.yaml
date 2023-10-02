@@ -66,7 +66,7 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
 
     - name: Create Release
-      uses: goreleaser/goreleaser-action@v4.2.0
+      uses: goreleaser/goreleaser-action@v5
       with:
         version: latest
         args: release --clean

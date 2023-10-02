@@ -10,19 +10,20 @@ FROM openjdk:21-ea-23-jdk-slim as tester
 ARG GO_VERSION
 ARG GO_PACKAGE_SHA256
 ARG KUBEBUILDER_VERSION
+ARG TARGETARCH
 
-ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64 DEBIAN_FRONTEND=noninteractive
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install --no-install-recommends -y curl git-core make && \
     apt-get clean all
 
-RUN curl -LO https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz && \
-    SUM=$(sha256sum go${GO_VERSION}.linux-amd64.tar.gz | awk '{print $1}') && \
+RUN curl -LO https://dl.google.com/go/go${GO_VERSION}.linux-$TARGETARCH.tar.gz && \
+    SUM=$(sha256sum go${GO_VERSION}.linux-$TARGETARCH.tar.gz | awk '{print $1}') && \
     if [ "${SUM}" != "${GO_PACKAGE_SHA256}" ]; then echo "Failed checksum"; exit 1; fi && \
-    tar xf go${GO_VERSION}.linux-amd64.tar.gz && \
+    tar xf go${GO_VERSION}.linux-$TARGETARCH.tar.gz && \
     chown -R root:root ./go && \
     mv go /usr/local && \
-    rm go${GO_VERSION}.linux-amd64.tar.gz
+    rm go${GO_VERSION}.linux-$TARGETARCH.tar.gz
 
 RUN curl -L -o kubebuilder https://go.kubebuilder.io/dl/${KUBEBUILDER_VERSION}/$(go env GOOS)/$(go env GOARCH) \
         && install kubebuilder /usr/local/bin/kubebuilder \
@@ -46,7 +47,7 @@ RUN go mod download
 # Copy the go source
 COPY . .
 # Build with "-s -w" linker flags to omit the symbol table, debug information and the DWARF table
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -ldflags "-s -w" -a -o manager main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH GO111MODULE=on go build -ldflags "-s -w" -a -o manager main.go
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
