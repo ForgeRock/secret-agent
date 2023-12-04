@@ -8,6 +8,12 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
 
+kubeRbacProxy:
+  image:
+    repository: gcr.io/kubebuilder/kube-rbac-proxy
+    pullPolicy: IfNotPresent
+    tag: "v0.8.0"
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
@@ -26,6 +32,8 @@ rbac:
   create: true
 
 podAnnotations: {}
+
+podLabels: {}
 
 podSecurityContext:
   runAsNonRoot: true
