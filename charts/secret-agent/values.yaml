@@ -65,6 +65,9 @@ readinessProbe:
 
 nodeSelector: {}
 
-tolerations: []
+tolerations:
+  - key: kubernetes.io/arch
+    operator: Exists
+    effect: NoSchedule
 
 affinity: {}
