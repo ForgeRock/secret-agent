@@ -41,7 +41,7 @@ jobs:
       run: docker build -t secret-agent-tester --target=tester .
 
     - name: Test
-      run: docker run -i --rm -v ${GITHUB_WORKSPACE}:/root/go/src/github.com/ForgeRock/secret-agent secret-agent-tester make citest
+      run: docker run -i -e GOFLAGS --rm -v ${GITHUB_WORKSPACE}:/root/go/src/github.com/ForgeRock/secret-agent secret-agent-tester make citest
 
   build:
     name: Build Pull Request Binaries
