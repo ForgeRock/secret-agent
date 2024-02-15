@@ -123,7 +123,7 @@ ifeq (, $(shell which controller-gen))
 	set -e ;\
 	$(GO) install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.1 ;\
 	}
-CONTROLLER_GEN=$(GOBIN)/controller-gen -buildvcs=false
+CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
-CONTROLLER_GEN=$(shell which controller-gen) -buildvcs=false
+CONTROLLER_GEN=$(shell which controller-gen)
 endif
