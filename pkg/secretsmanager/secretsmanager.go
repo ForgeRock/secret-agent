@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 
@@ -133,7 +132,7 @@ func newGCP(ctx context.Context, config *v1alpha1.AppConfig, rClient client.Clie
 		}
 
 		// Create temporary dir for gcp credentials if needed
-		dir, err := ioutil.TempDir("", "cloud_credentials-*")
+		dir, err := os.MkdirTemp("", "cloud_credentials-*")
 		if err != nil {
 			log.Error(err, "couldn't create a temporary credentials dir")
 			return &secretManagerGCP{}, err
