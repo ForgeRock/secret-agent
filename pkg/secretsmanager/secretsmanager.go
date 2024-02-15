@@ -17,14 +17,12 @@ import (
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	awssecretsmanager "github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 	"github.com/prometheus/common/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/aws/aws-sdk-go/aws/session"
-	awssecretsmanager "github.com/aws/aws-sdk-go/service/secretsmanager"
 
 	"github.com/pkg/errors"
 	"google.golang.org/api/option"
@@ -62,9 +60,15 @@ type secretManagerGCP struct {
 	projectID            string
 }
 
+type secretsMgrApi interface {
+	GetSecretValue(ctx context.Context, params *awssecretsmanager.GetSecretValueInput, optFns ...func(*awssecretsmanager.Options)) (*awssecretsmanager.GetSecretValueOutput, error)
+	CreateSecret(ctx context.Context, params *awssecretsmanager.CreateSecretInput, optFns ...func(*awssecretsmanager.Options)) (*awssecretsmanager.CreateSecretOutput, error)
+	PutSecretValue(ctx context.Context, params *awssecretsmanager.PutSecretValueInput, optFns ...func(*awssecretsmanager.Options)) (*awssecretsmanager.PutSecretValueOutput, error)
+}
+
 // secretManagerAWS container for AWS secret manager properties
 type secretManagerAWS struct {
-	client               *awssecretsmanager.SecretsManager
+	client               secretsMgrApi
 	region               string
 	secretsManagerPrefix string
 	cancel               context.CancelFunc
@@ -104,7 +108,7 @@ func NewSecretManager(ctx context.Context, instance *v1alpha1.SecretAgentConfigu
 			return nil, err
 		}
 	case v1alpha1.SecretsManagerAWS:
-		sm, err = newAWS(config, rClient, cloudCredNS)
+		sm, err = newAWS(ctx, config, rClient, cloudCredNS)
 	case v1alpha1.SecretsManagerAzure:
 		sm, err = newAzure(config, rClient, cloudCredNS)
 	case v1alpha1.SecretsManagerNone:
@@ -196,12 +200,15 @@ func newGCP(ctx context.Context, config *v1alpha1.AppConfig, rClient client.Clie
 }
 
 // newAWS configures a AWS secret manager object
-func newAWS(config *v1alpha1.AppConfig, rClient client.Client, cloudCredNS string) (*secretManagerAWS, error) {
+func newAWS(ctx context.Context, config *v1alpha1.AppConfig, rClient client.Client, cloudCredNS string) (*secretManagerAWS, error) {
 	var accessKey string
 	var secretAccessKey string
-	var client *awssecretsmanager.SecretsManager
 
 	// if credentials secret is provided
+	// This should be considered a legacy method
+	//
+	// Prefer to use service account on the deployment
+	// hence the AWS_WEB_ID_TOKEN_FILE method provided in the chain
 	if config.CredentialsSecretName != "" {
 		// load credentials secret from Kubernetes secret
 		secObject, err := LoadCredentialsSecret(rClient, config, cloudCredNS)
@@ -223,26 +230,29 @@ func newAWS(config *v1alpha1.AppConfig, rClient client.Client, cloudCredNS strin
 			return &secretManagerAWS{}, fmt.Errorf(fmt.Sprintf("Can't read %s. Cloud credentials secret must contain a secret access key", v1alpha1.SecretsManagerAwsSecretAccessKey))
 		}
 
-		// create secrets manager client
-		client = awssecretsmanager.New(session.New(&aws.Config{
-			Region:      aws.String(config.AWSRegion),
-			Credentials: credentials.NewStaticCredentials(accessKey, secretAccessKey, ""),
-		}))
-	} else {
-		// create secrets manager client
-		client = awssecretsmanager.New(session.New(&aws.Config{
-			Region: aws.String(config.AWSRegion),
-		}))
+		// statically add AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+		// so that the default credentials will automatically take them
+		// as this is in process os.SetEnv it will not be leaked to the parent process
+		//
+		os.Setenv("AWS_ACCESS_KEY_ID", accessKey)
+		os.Setenv("AWS_SECRET_ACCESS_KEY", secretAccessKey)
 	}
 
-	// secretCtx, cancel := context.WithTimeout(ctx, 40*time.Second)
+	wrappedCtx, cancel := context.WithCancel(ctx)
+
+	cfg, err := awsconfig.LoadDefaultConfig(wrappedCtx)
+
+	if err != nil {
+		log.Errorf("unable to load SDK config, %v", err)
+		return nil, err
+	}
 
 	return &secretManagerAWS{
-		client:               client,
+		client:               awssecretsmanager.NewFromConfig(cfg),
 		secretsManagerPrefix: config.SecretsManagerPrefix,
 		region:               config.AWSRegion,
 		config:               *config,
-		// cancel: cancel,
+		cancel:               cancel,
 	}, nil
 }
 
@@ -421,12 +431,10 @@ func (sm *secretManagerAWS) EnsureSecret(ctx context.Context, secretName string,
 	// check if exists
 	preExists := true
 	request := &awssecretsmanager.GetSecretValueInput{SecretId: aws.String(secretID)}
-	_, err := sm.client.GetSecretValue(request)
+	_, err := sm.client.GetSecretValue(ctx, request)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			if aerr.Code() != awssecretsmanager.ErrCodeResourceNotFoundException {
-				return errors.WithStack(err)
-			}
+		var nf *types.ResourceNotFoundException
+		if errors.As(err, &nf) {
 			// doesn't exist, create
 			preExists = false
 			input := &awssecretsmanager.CreateSecretInput{
@@ -435,13 +443,12 @@ func (sm *secretManagerAWS) EnsureSecret(ctx context.Context, secretName string,
 			if sm.config.AWSKmsKeyId != "" {
 				input.KmsKeyId = aws.String(sm.config.AWSKmsKeyId)
 			}
-			_, err = sm.client.CreateSecret(input)
-			if err != nil {
+			if _, err := sm.client.CreateSecret(ctx, input); err != nil {
 				return errors.WithStack(err)
 			}
-		} else {
-			return errors.WithStack(err)
+			return nil
 		}
+		return errors.WithStack(err)
 	}
 
 	// only add new version if secret was created this round, because
@@ -455,11 +462,9 @@ func (sm *secretManagerAWS) EnsureSecret(ctx context.Context, secretName string,
 		SecretId:     aws.String(secretID),
 		SecretBinary: value,
 	}
-	_, err = sm.client.PutSecretValue(input)
-	if err != nil {
+	if _, err := sm.client.PutSecretValue(ctx, input); err != nil {
 		return errors.WithStack(err)
 	}
-
 	return nil
 }
 
@@ -469,17 +474,14 @@ func (sm *secretManagerAWS) LoadSecret(ctx context.Context, secretName string) (
 	secretID := getSecretID(sm.secretsManagerPrefix, secretName)
 
 	request := &awssecretsmanager.GetSecretValueInput{SecretId: aws.String(secretID)}
-	result, err := sm.client.GetSecretValue(request)
+	result, err := sm.client.GetSecretValue(ctx, request)
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			if aerr.Code() == awssecretsmanager.ErrCodeResourceNotFoundException {
-				// doesn't exist
-				return []byte{}, nil
-			}
+		var nf *types.ResourceNotFoundException
+		if errors.As(err, &nf) {
+			return []byte{}, nil
 		}
 		return []byte{}, errors.WithStack(err)
 	}
-
 	return result.SecretBinary, nil
 }
 
