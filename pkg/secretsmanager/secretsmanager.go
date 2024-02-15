@@ -203,10 +203,11 @@ func newAWS(ctx context.Context, config *v1alpha1.AppConfig, rClient client.Clie
 	var accessKey string
 	var secretAccessKey string
 
-	// if credentials secret is provided
+	// if credentials are provided via a Kubernetes secret
+	//
 	// This should be considered a legacy method
 	//
-	// Prefer to use service account on the deployment
+	// Prefer to use service account on the deployment _WHEN_ running in AWS
 	// hence the AWS_WEB_ID_TOKEN_FILE method provided in the chain
 	if config.CredentialsSecretName != "" {
 		// load credentials secret from Kubernetes secret
@@ -443,9 +444,9 @@ func (sm *secretManagerAWS) EnsureSecret(ctx context.Context, secretName string,
 			if _, err := sm.client.CreateSecret(ctx, input); err != nil {
 				return errors.WithStack(err)
 			}
-			return nil
+		} else {
+			return errors.WithStack(err)
 		}
-		return errors.WithStack(err)
 	}
 
 	// only add new version if secret was created this round, because
