@@ -238,9 +238,7 @@ func newAWS(ctx context.Context, config *v1alpha1.AppConfig, rClient client.Clie
 		os.Setenv("AWS_SECRET_ACCESS_KEY", secretAccessKey)
 	}
 
-	wrappedCtx, cancel := context.WithCancel(ctx)
-
-	cfg, err := awsconfig.LoadDefaultConfig(wrappedCtx)
+	cfg, err := awsconfig.LoadDefaultConfig(ctx)
 
 	if err != nil {
 		log.Errorf("unable to load SDK config, %v", err)
@@ -252,7 +250,7 @@ func newAWS(ctx context.Context, config *v1alpha1.AppConfig, rClient client.Clie
 		secretsManagerPrefix: config.SecretsManagerPrefix,
 		region:               config.AWSRegion,
 		config:               *config,
-		cancel:               cancel,
+		// cancel:               cancel,
 	}, nil
 }
 
