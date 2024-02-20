@@ -12,6 +12,7 @@ import (
 	awssecretsmanager "github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 	"github.com/aws/smithy-go"
+	"github.com/go-logr/logr"
 )
 
 type mockSecretsApi struct {
@@ -79,6 +80,7 @@ func Test_Ensure_secret_AWS_SM_succeeds(t *testing.T) {
 	for name, tt := range ttests {
 		t.Run(name, func(t *testing.T) {
 			awsSecMgr := &secretManagerAWS{
+				log:    logr.Logger{},
 				client: tt.awsSecretsApi(t),
 			}
 			err := awsSecMgr.EnsureSecret(context.TODO(), tt.awsSecretName, tt.awsSecretVal)
@@ -157,6 +159,7 @@ func Test_EnsureSecret_should_fail(t *testing.T) {
 	for name, tt := range ttests {
 		t.Run(name, func(t *testing.T) {
 			awsSecMgr := &secretManagerAWS{
+				log:    logr.Logger{},
 				client: tt.awsSecretsApi(t),
 			}
 			err := awsSecMgr.EnsureSecret(context.TODO(), tt.awsSecretName, tt.awsSecretVal)
