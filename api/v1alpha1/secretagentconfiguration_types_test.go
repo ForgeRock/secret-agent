@@ -7,6 +7,9 @@ import (
 )
 
 func TestConfigurationStructLevelValidatorCA(t *testing.T) {
+	validate := validator.New()
+	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
+
 	key := &KeyConfig{
 		Name: "foo",
 		Type: KeyConfigTypeCA,
@@ -19,8 +22,6 @@ func TestConfigurationStructLevelValidatorCA(t *testing.T) {
 	}
 	config := getConfig()
 	config.Secrets[0].Keys = append(config.Secrets[0].Keys, key)
-	validate := validator.New()
-	validate.RegisterStructValidation(ConfigurationStructLevelValidator, SecretAgentConfigurationSpec{})
 	err := validate.Struct(config)
 	if err != nil {
 		t.Errorf("Expected no error, got: %+v", err)
