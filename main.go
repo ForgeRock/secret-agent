@@ -78,6 +78,10 @@ func main() {
 		Metrics: metricsserver.Options{
 			BindAddress: metricsAddr,
 		},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port:    9443,
+			CertDir: certDir,
+		}),
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "f8e4a0d9.secrets.forgerock.io",
 		HealthProbeBindAddress: healthzAddr,
@@ -87,16 +91,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create a webhook server.
-	webhookServer := webhook.NewServer(webhook.Options{
-		Port:    9443,
-		CertDir: certDir,
-	})
-
-	if err := mgr.Add(webhookServer); err != nil {
-		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
-	}
 	if err = (&controllers.SecretAgentConfigurationReconciler{
 		Client:                mgr.GetClient(),
 		Log:                   ctrl.Log.WithName("controllers").WithName("SecretAgentConfiguration"),
