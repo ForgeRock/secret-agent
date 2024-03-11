@@ -36,3 +36,7 @@ vendor/
 
 # Github Actions generated files
 *.json
+
+# local
+.coverage
+*.tar

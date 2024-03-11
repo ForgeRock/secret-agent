@@ -86,7 +86,6 @@ type azKvApi interface {
 
 // secretManagerAzure container for Azure secret manager properties
 type secretManagerAzure struct {
-	// client               *keyvault.BaseClient
 	client               azKvApi
 	secretsManagerPrefix string
 	cancel               context.CancelFunc
