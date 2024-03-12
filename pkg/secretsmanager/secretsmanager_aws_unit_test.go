@@ -218,6 +218,7 @@ func Test_LoadSecret_should_succeed(t *testing.T) {
 	}
 }
 
+// LoadSecret Fail Scenarios
 func Test_LoadSecret_should_fail(t *testing.T) {
 	ttests := map[string]struct {
 		awsSecretsApi func(t *testing.T) secretsMgrApi
