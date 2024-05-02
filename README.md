@@ -69,21 +69,16 @@ In order to fetch and store secrets in the AWS Secrets Manager, the user must pr
 
 #### Set up Cloud Backup With AWS Secret Manager
 
-The `secret-agent` expects credentials to be discoverable via standard [AWS mechanisms](https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/#specifying-credentials). These credentials can be provided in a number of ways as per the link.
+The `secret-agent` expects credentials to be discoverable via standard [AWS mechanisms](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html#specifying-credentials). These credentials can be provided in a number of ways, for example:
 
-However, when running inside AWS the _preferred_ method should be to attach a serviceAccount to the deployment with properly scope policies on the role.
-
-* Environment Variables:
-  - _AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY_, _AWS_SESSION_TOKEN_
-  - _AWS_WEB_IDENTITY_TOKEN_FILE_  -> this will be handled by the IAM controller for each deployment correctly set up annotations on the serviceAccount.
+* Environment Variables: _AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY_
 * Shared Credentials file: _~/.aws/credentials_
-* Shared Configuration file: _~/.aws/config_
-* EC2 Instance Metadata_v2: _Obtains credentials from 169.254.169.254_
-  - This is not ideal as all the pods on the node will have access to the same policy, _this_ may not be a desired outcome if topologySkew are not properly segragating workloads across different nodes/node pools.
+* Shared Configuration file: _(~/.aws/config_
+* EC2 Instance Metadata (preferred): _Obtains credentials from 169.254.169.254_
 
 Refer to [AWS documentation](https://docs.aws.amazon.com/secretsmanager/latest/userguide/auth-and-access_overview.html) for instructions on how to obtain credentials and grant necessary permissions to access the AWS Secrets Manager. The `secret-agent` needs to access read/write secrets. This can be achieved by allowing access to the `arn:aws:iam::aws:policy/SecretsManagerReadWrite` AWS managed policy.
 
-When running outside of AWS environments it is possible to provide custom credentials via a Kubernetes secret. The secret reference is provided in the SAC in `spec.appConfig.credentialsSecretName`. In the default `secret-agent` deployment, the user is expected to publish the cloud credentials' secret in the same namespace as the operator. This target namespace can be changed by changing the runtime argument `--cloud-secrets-namespace=[NS_NAME]` located in the operator's [manifest](/config/manager/manager.yaml). If this argument is omitted completely, the namespace will default to the namespace of each SAC.
+Even though the recommended way to obtain credentials is to use the EC2 Instance Metadata service, it is possible to provide custom credentials via a Kubernetes secret. The secret reference is provided in the SAC in `spec.appConfig.credentialsSecretName`. In the default `secret-agent` deployment, the user is expected to publish the cloud credentials' secret in the same namespace as the operator. This target namespace can be changed by changing the runtime argument `--cloud-secrets-namespace=[NS_NAME]` located in the operator's [manifest](/config/manager/manager.yaml). If this argument is omitted completely, the namespace will default to the namespace of each SAC.
 
 Once these credentials are posted to a Kubernetes secret, the next step is to configure the AWS Secret Manager using the `SecretAgentConfiguration`.
 
