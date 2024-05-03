@@ -1,4 +1,3 @@
-//go:build cloudprovider
 // +build cloudprovider
 
 package secretsmanager
@@ -10,9 +9,11 @@ import (
 	"os"
 	"testing"
 
-	secretmanager "cloud.google.com/go/secretmanager/apiv1"
+	secretmanager "cloud.google.com/go/secretmanager/apiv1beta1"
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/keyvault/keyvault"
 	azauth "github.com/Azure/azure-sdk-for-go/services/keyvault/auth"
+	secretspb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1beta1"
+
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 )
 

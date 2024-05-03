@@ -26,7 +26,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // log is for logging in this package.
@@ -104,21 +103,21 @@ func cleanUpPaths(p string) string {
 var _ webhook.Validator = &SecretAgentConfiguration{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *SecretAgentConfiguration) ValidateCreate() (admission.Warnings, error) {
+func (r *SecretAgentConfiguration) ValidateCreate() error {
 	log.Info("Validating new SecretAgentConfiguration", "name", r.Name)
-	return []string{}, r.ValidateSecretConfiguration()
+	return r.ValidateSecretConfiguration()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *SecretAgentConfiguration) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
+func (r *SecretAgentConfiguration) ValidateUpdate(old runtime.Object) error {
 	log.Info("Validating existing SecretAgentConfiguration", "name", r.Name)
-	return []string{}, r.ValidateSecretConfiguration()
+	return r.ValidateSecretConfiguration()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *SecretAgentConfiguration) ValidateDelete() (admission.Warnings, error) {
+func (r *SecretAgentConfiguration) ValidateDelete() error {
 	//We're not using this function atm. Keeping it here in case we do want to start using it later.
-	return []string{}, nil
+	return nil
 }
 
 // ValidateSecretConfiguration Validates the SecretAgentConfiguration object

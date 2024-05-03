@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 // Package v1alpha1 contains API Schema definitions for the secret-agent v1alpha1 API group
-// +kubebuilder:object:generate=true
-// +groupName=secret-agent.secrets.forgerock.io
+//+kubebuilder:object:generate=true
+//+groupName=secret-agent.secrets.forgerock.io
 package v1alpha1
 
 import (
