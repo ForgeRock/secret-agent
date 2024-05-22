@@ -11,7 +11,7 @@ import (
 
 	"strings"
 
-	secretmanager "cloud.google.com/go/secretmanager/apiv1beta1"
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/keyvault/keyvault"
 	azauth "github.com/Azure/azure-sdk-for-go/services/keyvault/auth"
 	"github.com/Azure/go-autorest/autorest"
@@ -20,7 +20,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/prometheus/common/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -28,13 +27,14 @@ import (
 
 	"github.com/pkg/errors"
 	"google.golang.org/api/option"
-	secretspb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1beta1"
+	secretspb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/ForgeRock/secret-agent/pkg/k8ssecrets"
+	log "github.com/golang/glog"
 )
 
 var (

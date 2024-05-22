@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	k8serror "k8s.io/apimachinery/pkg/api/errors"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,16 +35,16 @@ func TestLoadSecret(t *testing.T) {
 	}
 	scheme := runtime.NewScheme()
 	clientgoscheme.AddToScheme(scheme)
-	client := fake.NewFakeClientWithScheme(scheme, k8sSecret2)
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(k8sSecret2).Build()
 	// Secret is not present in the client, expect an error
 	found, err := LoadSecret(client, k8sSecret1.ObjectMeta.Name, k8sSecret1.ObjectMeta.Namespace)
-	if !k8serror.IsNotFound(err) {
+	if !k8serrors.IsNotFound(err) {
 		t.Fatalf("Expected not found error, got: %+v", err)
 	}
 	if len(found.Data) != 0 {
 		t.Fatalf("Expected an empty secret: %+v", found)
 	}
-	client = fake.NewFakeClientWithScheme(scheme, k8sSecret1, k8sSecret2)
+	client = fake.NewClientBuilder().WithScheme(scheme).WithObjects(k8sSecret1, k8sSecret2).Build()
 	// Secret should load this time
 	_, err = LoadSecret(client, k8sSecret1.ObjectMeta.Name, k8sSecret1.ObjectMeta.Namespace)
 	if err != nil {
@@ -76,7 +75,7 @@ func TestApplySecrets(t *testing.T) {
 
 	scheme := runtime.NewScheme()
 	clientgoscheme.AddToScheme(scheme)
-	client := fake.NewFakeClientWithScheme(scheme, k8sSecret2)
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(k8sSecret2).Build()
 	//k8sSecret1 should be created, k8sSecret2 should be updated
 	k8sSecret2.Data = map[string][]byte{"otherkey": []byte(`YWRtaW4=`)}
 	k8sSecrets := []*corev1.Secret{k8sSecret1, k8sSecret2}
