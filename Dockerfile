@@ -2,7 +2,7 @@
 
 # Global build arguments
 ARG GO_VERSION="1.22.2"
-ARG GO_PACKAGE_SHA256="f0b752eebfc1cd831e6b0b6e40335396e4cb2fc5c56aa6e0b58f5b0f5e67d301"
+ARG GO_PACKAGE_SHA256="5901c52b7a78002aeff14a21f93e0f064f74ce1360fce51c6ee68cd471216a17"
 ARG KUBEBUILDER_VERSION="3.1.0"
 
 FROM openjdk:22-ea-15-jdk-slim-bullseye as tester
