@@ -75,14 +75,14 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:		metricsserver.Options {
-						BindAddress: metricsAddr,
-					},
-		WebhookServer:		webhook.NewServer(webhook.Options{
-						Port:		9443,
-						CertDir:	certDir,
-					}),
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: metricsAddr,
+		},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port:    9443,
+			CertDir: certDir,
+		}),
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "f8e4a0d9.secrets.forgerock.io",
 		HealthProbeBindAddress: healthzAddr,
