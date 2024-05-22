@@ -27,7 +27,7 @@ RUN curl -LO https://dl.google.com/go/go${GO_VERSION}.linux-$TARGETARCH.tar.gz &
 
 RUN curl -L -o kubebuilder https://go.kubebuilder.io/dl/${KUBEBUILDER_VERSION}/$(go env GOOS)/$(go env GOARCH) \
         && install kubebuilder /usr/local/bin/kubebuilder \
-            && /usr/local/go/bin/go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.1
+            && /usr/local/go/bin/go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.15.0
 
 ENV PATH="/usr/local/go/bin:${PATH}:/root/go/bin" GOPATH="/root/go"
 WORKDIR /root/go/src/github.com/ForgeRock/secret-agent
