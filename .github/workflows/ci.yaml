@@ -15,7 +15,7 @@ jobs:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
       with:
-        go-version: 1.16
+        go-version: 1.22
       id: go
 
     - name: Check out code into the Go module directory
@@ -31,6 +31,8 @@ jobs:
     name: Run integration-tests
     needs: basic-checks
     runs-on: ubuntu-latest
+    env:
+      GOFLAGS: -buildvcs=false
     steps:
     - name: Checkout
       uses: actions/checkout@v2
@@ -39,7 +41,7 @@ jobs:
       run: docker build -t secret-agent-tester --target=tester .
 
     - name: Test
-      run: docker run -i --rm -v ${GITHUB_WORKSPACE}:/root/go/src/github.com/ForgeRock/secret-agent secret-agent-tester make citest
+      run: docker run -i -e GOFLAGS --rm -v ${GITHUB_WORKSPACE}:/root/go/src/github.com/ForgeRock/secret-agent secret-agent-tester make citest
 
   build:
     name: Build Pull Request Binaries
@@ -54,7 +56,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.16
+        go-version: 1.22
       id: go
 
     - name: Set Go Releaser Environment

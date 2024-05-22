@@ -30,6 +30,8 @@ import (
 
 	"github.com/ForgeRock/secret-agent/api/v1alpha1"
 	"github.com/ForgeRock/secret-agent/controllers"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -73,12 +75,16 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: metricsAddr,
+		},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port:    9443,
+			CertDir: certDir,
+		}),
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "f8e4a0d9.secrets.forgerock.io",
-		CertDir:                certDir,
 		HealthProbeBindAddress: healthzAddr,
 	})
 	if err != nil {

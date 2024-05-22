@@ -57,6 +57,13 @@ int-test: setup-test
 cloud-test: set-test generate fmt vet manifests
 	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; setup_envtest_env $(ENVTEST_ASSETS_DIR); $(GO) test ./... -tags=integration,cloudprovider -coverprofile cover.html
 
+unit-test-local:
+	mkdir -p .coverage && \
+	go test ./... -timeout 30s -v -mod=readonly -race -coverprofile=.coverage/out -tags='!cloudprovider,!integration' > .coverage/test-out
+
+show_coverage: unit-test-local
+	go tool cover -html=.coverage/out
+
 # Build manager binary
 manager: generate fmt vet
 	$(GO) build -o bin/manager main.go
@@ -121,7 +128,7 @@ controller-gen:
 ifeq (, $(shell which controller-gen))
 	@{ \
 	set -e ;\
-	$(GO) install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.6.1 ;\
+	$(GO) install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.15.0 ;\
 	}
 CONTROLLER_GEN=$(GOBIN)/controller-gen
 else
