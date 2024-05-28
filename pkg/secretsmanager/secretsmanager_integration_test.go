@@ -1,5 +1,4 @@
 //go:build cloudprovider
-// +build cloudprovider
 
 package secretsmanager
 
