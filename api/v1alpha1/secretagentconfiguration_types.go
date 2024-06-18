@@ -94,6 +94,7 @@ type DistinguishedName struct {
 	PostalCode         []string `json:"postalCode,omitempty"`
 	SerialNumber       string   `json:"serialNumber,omitempty"`
 	CommonName         string   `json:"commonName,omitempty"`
+	UserId             string   `json:"userId,omitempty"`
 }
 
 func init() {
@@ -324,6 +325,9 @@ func (dn *DistinguishedName) isEmpty() bool {
 		return false
 	}
 	if dn.CommonName == "" {
+		return false
+	}
+	if dn.UserId == "" {
 		return false
 	}
 	return true

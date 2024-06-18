@@ -10,6 +10,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/pem"
 	"fmt"
 	"log"
@@ -27,6 +28,7 @@ import (
 
 var (
 	errCertDecode error = errors.New("PEM data couldn't be decoded")
+	oidUid              = []int{0, 9, 2342, 19200300, 100, 1, 1}
 )
 
 // Certificate represents a certificate and its private key
@@ -94,7 +96,7 @@ func dnToPkixName(dn *v1alpha1.DistinguishedName) *pkix.Name {
 	if dn == nil {
 		return nil
 	}
-	return &pkix.Name{Country: dn.Country,
+	name := &pkix.Name{Country: dn.Country,
 		Organization:       dn.Organization,
 		OrganizationalUnit: dn.OrganizationalUnit,
 		Locality:           dn.Locality,
@@ -104,6 +106,17 @@ func dnToPkixName(dn *v1alpha1.DistinguishedName) *pkix.Name {
 		SerialNumber:       dn.SerialNumber,
 		CommonName:         dn.CommonName,
 	}
+	if dn.UserId != "" {
+		name.ExtraNames = append(name.ExtraNames, pkix.AttributeTypeAndValue{
+			Type: oidUid,
+			Value: asn1.RawValue{
+				Tag:   asn1.TagUTF8String,
+				Bytes: []byte(dn.UserId),
+			},
+		})
+	}
+
+	return name
 }
 
 func keyPairFromPemBytes(publicKeyPem []byte, privateKeyPem []byte) (*x509.Certificate, interface{}, error) {
