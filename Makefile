@@ -10,6 +10,8 @@ ifndef DEFAULT_IMG_TAG
 DEFAULT_IMG_TAG=latest
 endif
 IMG ?= controller:${DEFAULT_IMG_TAG}
+# Uncomment below for deploying to a external cluster
+# IMG=${DEFAULT_IMG_REGISTRY}/${DEFAULT_IMG_REPOSITORY}/controller:${DEFAULT_IMG_TAG}
 VERSION=$(shell echo $(IMG) | awk -F ':' '{print $$2}')
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 #CRD_OPTIONS ?= "crd:trivialVersions=false"
