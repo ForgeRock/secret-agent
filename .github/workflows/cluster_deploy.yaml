@@ -55,6 +55,7 @@ jobs:
           declare -i COUNTER=5
           until [[ $($k get sac forgerock-sac -o jsonpath='{.status.state}') == "Completed" ]];
           do
+            $k get secrets
             if (( COUNTER % 5 == 0 )); then echo "Secrets not ready yet"; fi
             ((COUNTER++))
             sleep 5
