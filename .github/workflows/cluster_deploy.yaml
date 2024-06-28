@@ -14,7 +14,7 @@ jobs:
           curl -o kind -L https://kind.sigs.k8s.io/dl/v0.17.0/kind-linux-amd64
           mkdir -p /opt/bin;
           install kind /opt/bin/
-          /opt/bin/kind create cluster --image "kindest/node:v1.25.3"
+          /opt/bin/kind create cluster --image "kindest/node:v1.25.16"
       - name: Build Secret Agent Image
         run: docker build -t controller:latest .
       - name: Load Secret Agent Image To Kind
