@@ -75,7 +75,9 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred())
 	Expect(k8sClient).ToNot(BeNil())
-})
+
+	close(done)
+}, 60)
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")

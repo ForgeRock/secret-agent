@@ -334,6 +334,7 @@ Parameter | Description | Default
 `spec.distinguishedName.postalCode` | Used when key type is `ca` or `keyPair`. Specify the postalCode. | ""
 `spec.distinguishedName.serialNumber` | Used when key type is `ca` or `keyPair`. Specify the serialNumber. | ""
 `spec.distinguishedName.commonName` | Used when key type is `ca` or `keyPair`. Specify the commonName for the certificate. | ""
+`spec.distinguishedName.userId` | Used when key type is `ca` or `keyPair`. Specify the userId for the certificate. | ""
 `spec.truststoreImportPaths` | Used when key type is `truststore`. List of paths of certificates in the form `secretname/keyname` that will be imported into the truststore. | ""
 `spec.storeType` | Used when key type is `keytool`. Specify the keystore type. Available values: pkcs12;jceks;jks. | ""
 `spec.storePassPath` | Used when key type is `keytool`. Specify the path to the secret in the SAC to use as the keystore password in the form `secretname/keyname`. | ""

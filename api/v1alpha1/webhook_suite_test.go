@@ -27,9 +27,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-
 	//+kubebuilder:scaffold:imports
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -52,6 +52,7 @@ var cancel context.CancelFunc
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
+
 	RunSpecs(t, "Webhook Suite")
 }
 
@@ -100,7 +101,6 @@ var _ = BeforeSuite(func() {
 		}),
 		LeaderElection: false,
 	})
-
 	Expect(err).NotTo(HaveOccurred())
 
 	err = (&SecretAgentConfiguration{}).SetupWebhookWithManager(mgr)

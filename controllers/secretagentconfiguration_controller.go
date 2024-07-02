@@ -88,7 +88,7 @@ func (reconciler *SecretAgentConfigurationReconciler) Reconcile(ctx context.Cont
 	cloudCredNS := reconciler.CloudSecretsNamespace
 
 	// Create new Secret Manager object
-	if sm, err = secretsmanager.NewSecretManager(ctx, &instance, cloudCredNS, reconciler.Client, log); err != nil {
+	if sm, err = secretsmanager.NewSecretManager(ctx, &instance, cloudCredNS, reconciler.Client); err != nil {
 		return ctrl.Result{}, err
 	}
 

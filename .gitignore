@@ -40,3 +40,4 @@ vendor/
 # local
 .coverage
 *.tar
+

@@ -239,4 +239,35 @@ func TestKeyPair(t *testing.T) {
 		t.Fatalf("expected no error when duration is not set %s", err)
 	}
 
+	// test uid is set when UserId is provided in dn
+	uidKey := &v1alpha1.KeyConfig{
+		Name: "myname",
+		Type: v1alpha1.KeyConfigTypeKeyPair,
+		Spec: &v1alpha1.KeySpec{
+			Duration:   &metav1.Duration{Duration: testDuration},
+			Algorithm:  v1alpha1.AlgorithmTypeSHA256WithRSA,
+			SelfSigned: true,
+			DistinguishedName: &v1alpha1.DistinguishedName{
+				UserId: "admin",
+			},
+		},
+	}
+	testKeyMgrUid, err := NewCertKeyPair(uidKey)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
+	err = testKeyMgrUid.Generate()
+	if err != nil {
+		t.Fatalf("Expected no error, got: %+v", err)
+	}
+
+	names := testKeyMgrUid.Cert.Cert.Subject.Names
+	oid := names[0].Type.String()
+	if "0.9.2342.19200300.100.1.1" != oid {
+		t.Fatalf("Expected 0.9.2342.19200300.100.1.1, got: %s", oid)
+	}
+	uid := names[0].Value
+	if "admin" != uid {
+		t.Fatalf("Expected admin, got: %s", uid)
+	}
 }
