@@ -7,9 +7,11 @@ endif
 DEFAULT_IMG_REGISTRY=us-docker.pkg.dev
 DEFAULT_IMG_REPOSITORY=forgeops-public/images
 ifndef DEFAULT_IMG_TAG
-DEFAULT_IMG_TAG=latest
+DEFAULT_IMG_TAG=jdk-v2
 endif
-IMG ?= controller:${DEFAULT_IMG_TAG}
+# IMG ?= controller:${DEFAULT_IMG_TAG}
+# Uncomment below when testing in an external cluster
+IMG=${DEFAULT_IMG_REGISTRY}/${DEFAULT_IMG_REPOSITORY}:${DEFAULT_IMG_TAG}
 VERSION=$(shell echo $(IMG) | awk -F ':' '{print $$2}')
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 #CRD_OPTIONS ?= "crd:trivialVersions=false"
@@ -112,7 +114,7 @@ generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 # Build the docker image
-docker-build: int-test
+docker-build:
 	docker build . -t ${IMG}
 
 # Push the docker image
