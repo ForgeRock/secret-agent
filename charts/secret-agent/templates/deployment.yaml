@@ -37,7 +37,7 @@ spec:
           command:
             - /manager
           args:
-            - --keytoolPath=/usr/local/openjdk-22/bin/keytool
+            - --keytoolPath=/usr/local/openjdk-23/bin/keytool
             - --opensslPath=/usr/bin/openssl
             - --webhook-service-ns={{ .Release.Namespace }}
             - --webhook-service-name={{ include "secret-agent.fullname" . }}
