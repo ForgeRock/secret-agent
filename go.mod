@@ -15,7 +15,7 @@ require (
 	github.com/aws/smithy-go v1.20.2
 	github.com/go-logr/logr v1.4.1
 	github.com/go-playground/validator/v10 v10.15.1
-	github.com/golang/glog v1.2.1
+	github.com/golang/glog v1.2.4
 	github.com/onsi/ginkgo/v2 v2.17.2
 	github.com/onsi/gomega v1.33.1
 	github.com/pkg/errors v0.9.1
