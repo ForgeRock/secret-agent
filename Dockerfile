@@ -5,7 +5,7 @@ ARG GO_VERSION="1.23.6"
 ARG GO_PACKAGE_SHA256="9379441ea310de000f33a4dc767bd966e72ab2826270e038e78b2c53c2e7802d"
 ARG KUBEBUILDER_VERSION="3.1.0"
 
-FROM openjdk:25-ea-jdk-slim-bullseye AS tester
+FROM openjdk:23-jdk-slim-bookworm AS tester
 
 ARG GO_VERSION
 ARG GO_PACKAGE_SHA256
@@ -14,6 +14,7 @@ ARG TARGETARCH
 
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install --no-install-recommends -y curl git-core make && \
     apt-get clean all
 
@@ -61,10 +62,12 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH GO111MODULE=on go build -ldflags
 
 
 
-FROM openjdk:25-ea-jdk-slim-bullseye AS release
+FROM openjdk:23-jdk-slim-bookworm AS release
 
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y lsof net-tools && \
+    apt-get upgrade -y && \
+    apt-get install --no-install-recommends -y lsof net-tools && \
     apt-get clean all
 RUN addgroup --gid 11111 secret-agent && \
     adduser --shell /bin/bash --home /home/secret-agent --uid 11111 --disabled-password --ingroup root --gecos secret-agent secret-agent && \
