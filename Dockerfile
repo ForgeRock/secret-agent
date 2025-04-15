@@ -62,7 +62,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH GO111MODULE=on go build -ldflags
 
 
 
-FROM openjdk:23-jdk-slim-bookworm AS release
+FROM openjdk:22-jdk-slim-bookworm AS release
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
