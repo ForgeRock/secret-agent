@@ -10,9 +10,9 @@ image:
 
 kubeRbacProxy:
   image:
-    repository: gcr.io/kubebuilder/kube-rbac-proxy
+    repository: quay.io/brancz/kube-rbac-proxy
     pullPolicy: IfNotPresent
-    tag: "v0.8.0"
+    tag: "v0.19.1"
 
 imagePullSecrets: []
 nameOverride: ""
