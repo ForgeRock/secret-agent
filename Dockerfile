@@ -5,7 +5,7 @@ ARG GO_VERSION="1.23.9"
 ARG GO_PACKAGE_SHA256="de03e45d7a076c06baaa9618d42b3b6a0561125b87f6041c6397680a71e5bb26"
 ARG KUBEBUILDER_VERSION="3.1.0"
 
-FROM openjdk:25-jdk-slim-trixie AS tester
+FROM openjdk:26-ea-slim-trixie AS tester
 
 ARG GO_VERSION
 ARG GO_PACKAGE_SHA256
@@ -62,7 +62,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH GO111MODULE=on go build -ldflags
 
 
 
-FROM openjdk:25-jdk-slim-trixie AS release
+FROM openjdk:26-ea-slim-trixie AS release
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
