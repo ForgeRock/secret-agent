@@ -11,10 +11,10 @@ jobs:
       - name: Install Kind and Create Cluster
         run: |
           set -o errexit
-          curl -o kind -L https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
+          curl -o kind -L https://kind.sigs.k8s.io/dl/v0.30.0/kind-linux-amd64
           mkdir -p /opt/bin;
           install kind /opt/bin/
-          /opt/bin/kind create cluster --image "kindest/node:v1.30.0"
+          /opt/bin/kind create cluster --image "kindest/node:v1.34.0"
       - name: Build Secret Agent Image
         run: docker build -t controller:latest .
       - name: Load Secret Agent Image To Kind
@@ -45,8 +45,9 @@ jobs:
               ((COUNTER++))
               continue
           done
+          sleep 10
       - name: Deploy SecretAgentConfiguration
-        timeout-minutes: 10
+        timeout-minutes: 4
         run: |
           # make shortcut
           k=/opt/bin/kubectl
@@ -55,7 +56,6 @@ jobs:
           declare -i COUNTER=5
           until [[ $($k get sac forgerock-sac -o jsonpath='{.status.state}') == "Completed" ]];
           do
-            if (( COUNTER % 5 == 0 )); then echo "Secrets not ready yet"; fi
             ((COUNTER++))
             sleep 5
           done
@@ -65,4 +65,4 @@ jobs:
             echo "Couldn't find all the required secrets";
             exit 1
           fi
-          echo "All is well as best as we can tell."
+          echo "All secrets are successfully provisioned."
