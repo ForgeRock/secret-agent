@@ -101,6 +101,10 @@ func (kt *KeyTool) baseCommand(execCmd string) func(cmdName string, args []strin
 		cmdArgs := []string{}
 		cmdArgs = append(cmdArgs, cmdName)
 		cmdArgs = append(cmdArgs, baseArgs...)
+		if (kt.V1Spec.StoreType) == v1alpha1.StoreTypeBcfks {
+			cmdArgs = append(cmdArgs, "-provider", "org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider")
+			cmdArgs = append(cmdArgs, "-providerpath", "/usr/local/openjdk-26/lib/bc-fips-*.jar")
+		}
 		cmdArgs = append(cmdArgs, args...)
 		return exec.Command(execCmd, cmdArgs...)
 	}

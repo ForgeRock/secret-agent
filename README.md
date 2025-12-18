@@ -336,7 +336,7 @@ Parameter | Description | Default
 `spec.distinguishedName.commonName` | Used when key type is `ca` or `keyPair`. Specify the commonName for the certificate. | ""
 `spec.distinguishedName.userId` | Used when key type is `ca` or `keyPair`. Specify the userId for the certificate. | ""
 `spec.truststoreImportPaths` | Used when key type is `truststore`. List of paths of certificates in the form `secretname/keyname` that will be imported into the truststore. | ""
-`spec.storeType` | Used when key type is `keytool`. Specify the keystore type. Available values: pkcs12;jceks;jks. | ""
+`spec.storeType` | Used when key type is `keytool`. Specify the keystore type. Available values: pkcs12;jceks;jks;bcfks. | ""
 `spec.storePassPath` | Used when key type is `keytool`. Specify the path to the secret in the SAC to use as the keystore password in the form `secretname/keyname`. | ""
 `spec.keyPassPath` | Used when key type is `keytool`. Specify the path to the secret in the SAC to use as the key password in the form `secretname/keyname`. | ""
 `spec.keytoolAliases` | Used when key type is `keytool`. Specify the aliases to include in the keystore. See [Keytool Aliases Config](#keytool-aliases-config). | []
