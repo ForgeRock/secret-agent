@@ -220,14 +220,14 @@ func newAWS(ctx context.Context, config *v1alpha1.AppConfig, rClient client.Clie
 		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAwsAccessKeyID)]; ok {
 			accessKey = string(keyValue)
 		} else {
-			return &secretManagerAWS{}, fmt.Errorf(fmt.Sprintf("Can't read %s. Cloud credentials secret must contain a access key ID", v1alpha1.SecretsManagerAwsAccessKeyID))
+			return &secretManagerAWS{}, fmt.Errorf("%s", fmt.Sprintf("Can't read %s. Cloud credentials secret must contain a access key ID", v1alpha1.SecretsManagerAwsAccessKeyID))
 		}
 
 		// extract AWS_SECRET_ACCESS_KEY from Kubernetes secret
 		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAwsSecretAccessKey)]; ok {
 			secretAccessKey = string(keyValue)
 		} else {
-			return &secretManagerAWS{}, fmt.Errorf(fmt.Sprintf("Can't read %s. Cloud credentials secret must contain a secret access key", v1alpha1.SecretsManagerAwsSecretAccessKey))
+			return &secretManagerAWS{}, fmt.Errorf("%s", fmt.Sprintf("Can't read %s. Cloud credentials secret must contain a secret access key", v1alpha1.SecretsManagerAwsSecretAccessKey))
 		}
 
 		// statically add AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
@@ -277,21 +277,21 @@ func newAzure(config *v1alpha1.AppConfig, rClient client.Client, cloudCredNS str
 		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAzureTenantID)]; ok {
 			tenantID = string(keyValue)
 		} else {
-			return &secretManagerAzure{}, fmt.Errorf(fmt.Sprintf("Can't read %s. Cloud credentials secret must contain a valid tenant ID", v1alpha1.SecretsManagerAzureTenantID))
+			return &secretManagerAzure{}, fmt.Errorf("%s", fmt.Sprintf("Can't read %s. Cloud credentials secret must contain a valid tenant ID", v1alpha1.SecretsManagerAzureTenantID))
 		}
 
 		// extract AZURE_CLIENT_ID from Kubernetes secret
 		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAzureClientID)]; ok {
 			clientID = string(keyValue)
 		} else {
-			return &secretManagerAzure{}, fmt.Errorf(fmt.Sprintf("Can't read %s. Cloud credentials secret must contain a valid client ID", v1alpha1.SecretsManagerAzureClientID))
+			return &secretManagerAzure{}, fmt.Errorf("%s", fmt.Sprintf("Can't read %s. Cloud credentials secret must contain a valid client ID", v1alpha1.SecretsManagerAzureClientID))
 		}
 
 		// extract AZURE_CLIENT_SECRET from Kubernetes secret
 		if keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerAzureClientSecret)]; ok {
 			clientSecret = string(keyValue)
 		} else {
-			return &secretManagerAzure{}, fmt.Errorf(fmt.Sprintf("Can't read %s. Cloud credentials secret must contain a valid client secret", v1alpha1.SecretsManagerAzureClientSecret))
+			return &secretManagerAzure{}, fmt.Errorf("%s", fmt.Sprintf("Can't read %s. Cloud credentials secret must contain a valid client secret", v1alpha1.SecretsManagerAzureClientSecret))
 		}
 
 		// Create am authorizer with supplied credentials
@@ -569,7 +569,7 @@ func getCredentialData(secObject *corev1.Secret) ([]byte, error) {
 	// get credential data
 	keyValue, ok := secObject.Data[string(v1alpha1.SecretsManagerGoogleApplicationCredentials)]
 	if !ok {
-		return keyValue, fmt.Errorf(fmt.Sprintf("%s must be provided in a credentials secret",
+		return keyValue, fmt.Errorf("%s", fmt.Sprintf("%s must be provided in a credentials secret",
 			v1alpha1.SecretsManagerGoogleApplicationCredentials))
 	}
 	return keyValue, nil

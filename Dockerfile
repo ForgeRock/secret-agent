@@ -1,8 +1,8 @@
 # For building forgerock/secret-agent:tagname
 
 # Global build arguments
-ARG GO_VERSION="1.23.9"
-ARG GO_PACKAGE_SHA256="de03e45d7a076c06baaa9618d42b3b6a0561125b87f6041c6397680a71e5bb26"
+ARG GO_VERSION="1.25.6"
+ARG GO_PACKAGE_SHA256="f022b6aad78e362bcba9b0b94d09ad58c5a70c6ba3b7582905fababf5fe0181a"
 ARG KUBEBUILDER_VERSION="3.1.0"
 
 FROM openjdk:26-ea-slim-trixie AS tester
@@ -28,7 +28,7 @@ RUN curl -LO https://dl.google.com/go/go${GO_VERSION}.linux-$TARGETARCH.tar.gz &
 
 RUN curl -L -o kubebuilder https://go.kubebuilder.io/dl/${KUBEBUILDER_VERSION}/$(go env GOOS)/$(go env GOARCH) \
         && install kubebuilder /usr/local/bin/kubebuilder \
-            && /usr/local/go/bin/go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.15.0
+            && /usr/local/go/bin/go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.20.0
 
 ENV PATH="/usr/local/go/bin:${PATH}:/root/go/bin" GOPATH="/root/go"
 WORKDIR /root/go/src/github.com/ForgeRock/secret-agent
