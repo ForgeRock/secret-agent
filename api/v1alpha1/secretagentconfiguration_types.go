@@ -129,7 +129,7 @@ const (
 )
 
 // StoreType Specifies which keystore store type to use
-// +kubebuilder:validation:Enum=pkcs12;jceks;jks
+// +kubebuilder:validation:Enum=pkcs12;jceks;jks;bcfks
 type StoreType string
 
 // StoreType strings
@@ -137,6 +137,7 @@ const (
 	StoreTypePkcs12 StoreType = "pkcs12"
 	StoreTypeJceks  StoreType = "jceks"
 	StoreTypeJks    StoreType = "jks"
+	StoreTypeBcfks  StoreType = "bcfks"
 )
 
 // KeyConfigType Specifies which key type to use

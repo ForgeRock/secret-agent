@@ -171,6 +171,32 @@ var _ = Describe("SecretAgentConfiguration", func() {
 								},
 							},
 						},
+						{
+							Name: "testkeyKeytoolBCFKS",
+							Keys: []*KeyConfig{
+								{
+									Name: "kt",
+									Type: "keytool",
+									Spec: &KeySpec{
+										StoreType:     "bcfks",
+										StorePassPath: "path/1",
+										KeyPassPath:   "path/2",
+										KeytoolAliases: []*KeytoolAliasConfig{
+											{
+												Name: "name1",
+												Cmd:  "genkeypair",
+												Args: []string{"arg1", "arg2"},
+											},
+											{
+												Name:       "name2",
+												Cmd:        "importcert",
+												SourcePath: "path/4",
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			}
