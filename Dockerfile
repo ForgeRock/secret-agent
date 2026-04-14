@@ -1,22 +1,21 @@
 # For building forgerock/secret-agent:tagname
 
 # Global build arguments
-ARG GO_VERSION="1.25.6"
-ARG GO_PACKAGE_SHA256="f022b6aad78e362bcba9b0b94d09ad58c5a70c6ba3b7582905fababf5fe0181a"
+ARG GO_VERSION="1.25.9"
+ARG GO_PACKAGE_SHA256="00859d7bd6defe8bf84d9db9e57b9a4467b2887c18cd93ae7460e713db774bc1"
 ARG KUBEBUILDER_VERSION="3.1.0"
 
-FROM openjdk:26-ea-slim-trixie AS tester
+FROM amazoncorretto:26-alpine3.23-jdk AS tester
 
 ARG GO_VERSION
 ARG GO_PACKAGE_SHA256
 ARG KUBEBUILDER_VERSION
 ARG TARGETARCH
 
-ENV CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install --no-install-recommends -y curl git-core make && \
-    apt-get clean all
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH
+
+RUN apk -U upgrade && \
+    apk add curl make tar gzip
 
 RUN curl -LO https://dl.google.com/go/go${GO_VERSION}.linux-$TARGETARCH.tar.gz && \
     SUM=$(sha256sum go${GO_VERSION}.linux-$TARGETARCH.tar.gz | awk '{print $1}') && \
@@ -33,11 +32,11 @@ RUN curl -L -o kubebuilder https://go.kubebuilder.io/dl/${KUBEBUILDER_VERSION}/$
 ENV PATH="/usr/local/go/bin:${PATH}:/root/go/bin" GOPATH="/root/go"
 WORKDIR /root/go/src/github.com/ForgeRock/secret-agent
 
-CMD ["bash"]
+CMD ["sh"]
 
 
 # Build the manager binary
-FROM golang:${GO_VERSION}-alpine AS builder
+FROM golang:${GO_VERSION}-alpine3.23 AS builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -61,14 +60,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH GO111MODULE=on go build -ldflags
 # ENTRYPOINT ["/manager"]
 
 
+FROM amazoncorretto:26-alpine3.23-jdk AS release
 
-FROM openjdk:26-ea-slim-trixie AS release
-
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install --no-install-recommends -y lsof net-tools adduser && \
-    apt-get clean all
 RUN addgroup --gid 11111 secret-agent && \
     adduser --shell /bin/bash --home /home/secret-agent --uid 11111 --disabled-password --ingroup root --gecos secret-agent secret-agent && \
     chown -R secret-agent:root /home/secret-agent
@@ -78,5 +71,4 @@ COPY --from=builder --chown=secret-agent:root /workspace/manager /
 
 USER 11111
 
-CMD ["bash"]
-
+CMD ["sh"]
