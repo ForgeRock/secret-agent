@@ -22,6 +22,15 @@ The longer term roadmap for platform secrets management is centered around:
 To install the latest `secret-agent` release in a Kubernetes environment, run:
 
 ```bash
+helm install secret-agent oci://us-docker.pkg.dev/forgeops-public/charts/secret-agent -n secret-agent \
+--set tolerations[0].'key'='kubernetes\.io/arch' \
+--set tolerations[0].'effect'='NoSchedule' \
+--set tolerations[0].'operator'='Exists'
+```
+
+### Deprecated install method
+
+```bash
 kubectl apply -f https://github.com/ForgeRock/secret-agent/releases/latest/download/secret-agent.yaml
 ```
 
