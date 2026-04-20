@@ -35,7 +35,6 @@ spec:
       - command:
         - /manager
         args:
-        - --opensslPath=/usr/bin/openssl
         - --webhook-service-ns=$(SERVICE_NAMESPACE)
         - --webhook-service-name=$(SERVICE_NAME)
         - --validating-webhook-name=$(VALIDATING_WEBHOOK_CONFIGURATION_NAME)

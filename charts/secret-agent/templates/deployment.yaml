@@ -37,7 +37,6 @@ spec:
           command:
             - /manager
           args:
-            - --opensslPath=/usr/bin/openssl
             - --webhook-service-ns={{ .Release.Namespace }}
             - --webhook-service-name={{ include "secret-agent.fullname" . }}
             - --validating-webhook-name={{ include "secret-agent.fullname" . }}

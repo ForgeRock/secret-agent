@@ -15,7 +15,7 @@ ARG TARGETARCH
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH
 
 RUN apk -U upgrade && \
-    apk add curl make tar gzip
+    apk add curl make tar gzip openssl git
 
 RUN curl -LO https://dl.google.com/go/go${GO_VERSION}.linux-$TARGETARCH.tar.gz && \
     SUM=$(sha256sum go${GO_VERSION}.linux-$TARGETARCH.tar.gz | awk '{print $1}') && \
@@ -68,6 +68,9 @@ RUN addgroup --gid 11111 secret-agent && \
 
 WORKDIR /opt/gen
 COPY --from=builder --chown=secret-agent:root /workspace/manager /
+
+RUN apk -U upgrade && \
+    apk add openssl
 
 USER 11111
 

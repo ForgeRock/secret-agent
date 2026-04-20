@@ -36,12 +36,11 @@ function header_text {
 
 function setup_envtest_env {
   header_text "setting up env vars"
-
-  # Setup env vars
-  KUBEBUILDER_ASSETS=${KUBEBUILDER_ASSETS:-""}
-  if [[ -z "${KUBEBUILDER_ASSETS}" ]]; then
-    export KUBEBUILDER_ASSETS=$1/bin
-  fi
+  k8s_version="${ENVTEST_K8S_VERSION:-1.35}"
+  echo "GOPATH=$GOPATH"
+  echo "Showing contents of GOPATH/bin"
+  ls $GOPATH/bin
+  eval $GOPATH/bin/setup-envtest use -p env
 }
 
 # fetch k8s API gen tools and make it available under envtest_root_dir/bin.
@@ -59,10 +58,7 @@ function fetch_envtest_tools {
     return 0
   fi
 
-  tmp_root=/tmp
-  envtest_root_dir=$tmp_root/envtest
-
-  k8s_version="${ENVTEST_K8S_VERSION:-1.34}"
+  envtest_tools_version="${ENVTEST_TOOLS_VERSION:-0.22}"
   goarch="$(go env GOARCH)"
   goos="$(go env GOOS)"
 
@@ -71,25 +67,6 @@ function fetch_envtest_tools {
     return 1
   fi
 
-  local dest_dir="${1}"
-
-  # use the pre-existing version in the temporary folder if it matches our k8s version
-  if [[ -x "${dest_dir}/bin/kube-apiserver" ]]; then
-    version=$("${dest_dir}"/bin/kube-apiserver --version)
-    if [[ $version == *"${k8s_version}"* ]]; then
-      header_text "Using cached envtest tools from ${dest_dir}"
-      return 0
-    fi
-  fi
-
-  header_text "fetching envtest tools@${k8s_version} (into '${dest_dir}')"
-  envtest_tools_archive_name="kubebuilder-tools-$k8s_version-$goos-$goarch.tar.gz"
-  envtest_tools_download_url="https://storage.googleapis.com/kubebuilder-tools/$envtest_tools_archive_name"
-
-  envtest_tools_archive_path="$tmp_root/$envtest_tools_archive_name"
-  if [ ! -f $envtest_tools_archive_path ]; then
-    curl -sL ${envtest_tools_download_url} -o "$envtest_tools_archive_path"
-  fi
-  mkdir -p "${dest_dir}"
-  tar -C "${dest_dir}" --strip-components=1 -zvxf "$envtest_tools_archive_path"
+  header_text "installing envtest tools@${envtest_tools_version}"
+  go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-$envtest_tools_version
 }
