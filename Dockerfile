@@ -1,8 +1,8 @@
 # For building forgerock/secret-agent:tagname
 
 # Global build arguments
-ARG GO_VERSION="1.25.9"
-ARG GO_PACKAGE_SHA256="00859d7bd6defe8bf84d9db9e57b9a4467b2887c18cd93ae7460e713db774bc1"
+ARG GO_VERSION="1.25.11"
+ARG GO_PACKAGE_SHA256="34f14304e856893f4ba30c2cacfe93906e9de7915c5f6aaaf3a81cdccd7ba30b"
 ARG KUBEBUILDER_VERSION="3.1.0"
 
 FROM amazoncorretto:26-alpine3.23-jdk AS tester
