@@ -1,6 +1,6 @@
 module github.com/ForgeRock/secret-agent
 
-go 1.25.9
+go 1.26.0
 
 require (
 	cloud.google.com/go/secretmanager v1.16.0
@@ -17,7 +17,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.17.2
 	github.com/onsi/gomega v1.33.1
 	github.com/pkg/errors v0.9.1
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 	golang.org/x/time v0.14.0
 	google.golang.org/api v0.264.0
 	google.golang.org/genproto v0.0.0-20260128011058-8636f8732409
