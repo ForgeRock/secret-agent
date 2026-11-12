@@ -1,11 +1,11 @@
 # For building forgerock/secret-agent:tagname
 
 # Global build arguments
-ARG GO_VERSION="1.25.11"
-ARG GO_PACKAGE_SHA256="34f14304e856893f4ba30c2cacfe93906e9de7915c5f6aaaf3a81cdccd7ba30b"
+ARG GO_VERSION="1.25.14"
+ARG GO_PACKAGE_SHA256="a21ae5633a269bcd7e90cf767e48225633795e99d831742cbf3397064fee7712"
 ARG KUBEBUILDER_VERSION="3.1.0"
 
-FROM amazoncorretto:26-alpine3.23-jdk AS tester
+FROM amazoncorretto:26-alpine3.24-jdk AS tester
 
 ARG GO_VERSION
 ARG GO_PACKAGE_SHA256
@@ -36,7 +36,7 @@ CMD ["sh"]
 
 
 # Build the manager binary
-FROM golang:${GO_VERSION}-alpine3.23 AS builder
+FROM golang:${GO_VERSION}-alpine3.24 AS builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -60,7 +60,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH GO111MODULE=on go build -ldflags
 # ENTRYPOINT ["/manager"]
 
 
-FROM amazoncorretto:26-alpine3.23-jdk AS release
+FROM amazoncorretto:26-alpine3.24-jdk AS release
 
 RUN addgroup --gid 11111 secret-agent && \
     adduser --shell /bin/bash --home /home/secret-agent --uid 11111 --disabled-password --ingroup root --gecos secret-agent secret-agent && \
